@@ -1,23 +1,36 @@
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-const ProtectedRoute = ({ allowedRoles }) => {
+/**
+ * Protects routes by role and optionally by KYC status.
+ * - allowedRoles: array of roles that can access (e.g. ['job_seeker', 'recruiter'])
+ * - requireKYC: if true, job_seeker/recruiter must have kycStatus === 'verified' to access
+ */
+const ProtectedRoute = ({ allowedRoles, requireKYC = false }) => {
     const { user, loading } = useAuth();
 
     if (loading) {
-        return <div className="flex justify-center items-center h-screen">Loading...</div>; // Simple loading spinner
+        return (
+            <div className="flex justify-center items-center h-screen">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+            </div>
+        );
     }
 
-    console.log("ProtectedRoute check:", { user, allowedRoles, role: user?.role });
-
     if (!user) {
-        console.warn("ProtectedRoute: No user found, redirecting to login.");
         return <Navigate to="/login" replace />;
     }
 
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
-        console.warn(`ProtectedRoute: Role mismatch. User role: ${user.role}, Allowed: ${allowedRoles}. Redirecting to unauthorized.`);
+    const roleAllowed = allowedRoles && allowedRoles.includes(user.role);
+    if (!roleAllowed) {
         return <Navigate to="/unauthorized" replace />;
+    }
+
+    // Access control: Job Seeker cannot apply for jobs unless verified; Recruiter cannot post/view applicants unless verified
+    if (requireKYC && (user.role === 'job_seeker' || user.role === 'jobseeker' || user.role === 'recruiter')) {
+        if (user.kycStatus !== 'verified') {
+            return <Navigate to="/kyc" replace />;
+        }
     }
 
     return <Outlet />;

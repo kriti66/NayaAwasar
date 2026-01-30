@@ -1,9 +1,15 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const Sidebar = () => {
     const { user, logout } = useAuth();
     const location = useLocation();
+    const navigate = useNavigate();
+
+    const handleLogout = () => {
+        logout();
+        window.location.replace('/');
+    };
 
     const isActive = (path) => {
         return location.pathname === path ? "bg-gray-900 text-white" : "text-gray-300 hover:bg-gray-700 hover:text-white";
@@ -14,6 +20,7 @@ const Sidebar = () => {
             { name: 'Dashboard', path: '/admin/dashboard' },
             { name: 'Manage Users', path: '/admin/users' },
             { name: 'Manage Jobs', path: '/admin/jobs' },
+            { name: 'Manage Location', path: '/admin/location' },
         ],
         recruiter: [
             { name: 'Dashboard', path: '/recruiter/dashboard' },
@@ -52,7 +59,7 @@ const Sidebar = () => {
             </div>
             <div className="p-4 border-t border-gray-700">
                 <button
-                    onClick={logout}
+                    onClick={handleLogout}
                     className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                 >
                     Logout

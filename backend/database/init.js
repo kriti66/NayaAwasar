@@ -18,9 +18,26 @@ const initDb = async () => {
             password TEXT NOT NULL,
             role TEXT NOT NULL DEFAULT 'jobseeker',
             kyc_status TEXT DEFAULT 'pending', -- pending, verified, rejected (mostly for recruiters)
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            reset_password_token TEXT,
+            reset_password_expires DATETIME
         );
+    `);
 
+    // Migration: Add columns if they don't exist (Handling existing DBs)
+    try {
+        await db.exec("ALTER TABLE users ADD COLUMN reset_password_token TEXT");
+    } catch (error) {
+        // Ignore error if columns already exist
+    }
+
+    try {
+        await db.exec("ALTER TABLE users ADD COLUMN reset_password_expires DATETIME");
+    } catch (error) {
+        // Ignore error if columns already exist
+    }
+
+    await db.exec(`
         CREATE TABLE IF NOT EXISTS profiles (
             user_id INTEGER PRIMARY KEY,
             resume_url TEXT,
@@ -63,7 +80,28 @@ const initDb = async () => {
             FOREIGN KEY(job_id) REFERENCES jobs(id),
             FOREIGN KEY(seeker_id) REFERENCES users(id)
         );
+
+        CREATE TABLE IF NOT EXISTS locations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            address TEXT,
+            latitude REAL,
+            longitude REAL,
+            phone TEXT,
+            email TEXT
+        );
+
     `);
+
+    // Insert default location if not exists
+    try {
+        const locationCount = await db.get('SELECT COUNT(*) as count FROM locations');
+        if (locationCount && locationCount.count === 0) {
+            await db.run(`INSERT INTO locations (address, latitude, longitude, phone, email) 
+                          VALUES ('Kathmandu, Nepal', 27.7172, 85.3240, '+977 1234567890', 'contact@nayaawasar.com')`);
+        }
+    } catch (err) {
+        console.warn("Could not seed default location:", err);
+    }
 
     console.log('Database initialized');
     return db;

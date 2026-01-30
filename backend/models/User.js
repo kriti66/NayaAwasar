@@ -1,0 +1,111 @@
+import mongoose from 'mongoose';
+
+const userSchema = new mongoose.Schema({
+    fullName: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+        lowercase: true,
+        trim: true
+    },
+    password: {
+        type: String,
+        required: true
+    },
+    role: {
+        type: String,
+        enum: ['job_seeker', 'recruiter', 'admin'],
+        default: 'job_seeker'
+    },
+    kycStatus: {
+        type: String,
+        enum: ['not_started', 'pending', 'verified', 'rejected'],
+        default: 'not_started'
+    },
+    kycCompletedAt: {
+        type: Date
+    },
+    phoneNumber: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    location: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    bio: {
+        type: String,
+        maxLength: 500,
+        default: ''
+    },
+    profileImage: {
+        type: String,
+        default: ''
+    },
+    profileStatus: {
+        type: String,
+        enum: ['Pending', 'Verified', 'Rejected'],
+        default: 'Pending'
+    },
+    profileCompletion: {
+        type: Number,
+        default: 0
+    },
+    professionalHeadline: {
+        type: String,
+        default: ''
+    },
+    linkedinUrl: {
+        type: String,
+        default: ''
+    },
+    portfolioUrl: {
+        type: String,
+        default: ''
+    },
+    workExperience: [
+        {
+            title: String,
+            company: String,
+            duration: String,
+            description: String
+        }
+    ],
+    education: [
+        {
+            degree: String,
+            institution: String,
+            year: String
+        }
+    ],
+    isPublic: {
+        type: Boolean,
+        default: true
+    },
+    skills: {
+        type: String,
+        default: ''
+    },
+    resume_url: {
+        type: String,
+        default: ''
+    },
+    lastPasswordChange: {
+        type: Date,
+        default: Date.now
+    },
+    resetOtp: { type: String, default: null },
+    resetOtpExpiry: { type: Date, default: null },
+    reset_password_token: { type: String, default: null },
+    reset_password_expires: { type: Date, default: null }
+}, { timestamps: true });
+
+const User = mongoose.model('User', userSchema);
+export default User;

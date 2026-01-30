@@ -9,31 +9,66 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        // Check for stored token on load
+    /**
+     * Fetches KYC status from backend and merges into current user state.
+     * Call after login or when KYC status may have changed (e.g. after submission or admin action).
+     */
+    const refreshUser = async () => {
         const token = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
+        if (!token || !storedUser) return;
 
+        try {
+            const res = await api.get('/kyc/status');
+            const { kycStatus, rejectionReason } = res.data;
+            const parsed = JSON.parse(storedUser);
+            const updated = { ...parsed, kycStatus: kycStatus ?? parsed.kycStatus, rejectionReason: rejectionReason ?? parsed.rejectionReason };
+            localStorage.setItem('user', JSON.stringify(updated));
+            setUser(updated);
+        } catch (err) {
+            // If 401/403, user may use SQLite auth; keep stored user and default kycStatus
+            const parsed = storedUser ? JSON.parse(storedUser) : null;
+            if (parsed && !parsed.kycStatus) {
+                const updated = { ...parsed, kycStatus: 'not_started', rejectionReason: null };
+                setUser(updated);
+                localStorage.setItem('user', JSON.stringify(updated));
+            }
+        }
+    };
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        const storedUser = localStorage.getItem('user');
         if (token && storedUser) {
             setUser(JSON.parse(storedUser));
-            // Optionally validate token with backend here
+            refreshUser();
         }
         setLoading(false);
     }, []);
 
-    const login = async (email, password, role) => {
+    const login = async (email, password) => {
         try {
             const response = await api.post('/auth/login', { email, password });
-            console.log("AuthContext: Login API Response:", response.data);
-            const { token, user } = response.data;
-
+            const { token, user: loginUser } = response.data;
             localStorage.setItem('token', token);
-            localStorage.setItem('user', JSON.stringify(user));
-            setUser(user);
+            localStorage.setItem('user', JSON.stringify(loginUser));
+            setUser(loginUser);
+            await refreshUser();
             return { success: true };
         } catch (error) {
             console.error("Login failed", error);
-            return { success: false, message: error.response?.data?.message || 'Login failed' };
+            let message = 'Login failed';
+            if (error.response) {
+                // Server responded with a status code outside 2xx
+                message = error.response.data?.message || 'Server error';
+            } else if (error.request) {
+                // The request was made but no response was received
+                message = 'Cannot connect to server. Is the backend running?';
+            } else {
+                // Something happened in setting up the request that triggered an Error
+                message = error.message;
+            }
+            return { success: false, message };
         }
     };
 
@@ -45,27 +80,52 @@ export const AuthProvider = ({ children }) => {
 
     const register = async (userData) => {
         try {
+            console.log("AuthContext: Registering user...", userData.email);
             const response = await api.post('/auth/register', userData);
-            // Auto login after register? Or just return success.
-            // If the backend returns a token on register, we can auto-login:
             const { token, user } = response.data;
             if (token && user) {
                 localStorage.setItem('token', token);
                 localStorage.setItem('user', JSON.stringify(user));
                 setUser(user);
+                await refreshUser();
             }
             return { success: true };
         } catch (error) {
-            return { success: false, message: error.response?.data?.message || 'Registration failed' };
+            console.error("Registration failed detail:", error);
+            let message = 'Registration failed';
+            if (error.response) {
+                message = error.response.data?.message || 'Server error';
+            } else if (error.request) {
+                message = 'Cannot connect to server. Ensure backend is running on Port 5001.';
+            } else {
+                message = error.message;
+            }
+            return { success: false, message };
         }
-    }
+    };
+<<<<<<< Current (Your changes)
+
+    const refreshUser = async () => {
+        try {
+            const response = await api.get('/users/me');
+            setUser(response.data);
+            localStorage.setItem('user', JSON.stringify(response.data));
+            return { success: true };
+        } catch (error) {
+            console.error("Failed to refresh user", error);
+            return { success: false };
+        }
+    };
+=======
+>>>>>>> Incoming (Background Agent changes)
 
     const value = {
         user,
         loading,
         login,
         logout,
-        register
+        register,
+        refreshUser
     };
 
     return (

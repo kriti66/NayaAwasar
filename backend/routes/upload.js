@@ -1,13 +1,25 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'path';
+import fs from 'fs';
+import Profile from '../models/Profile.js';
 
 const router = express.Router();
+
+// Ensure upload directories exist (secure file upload practice)
+const uploadDirs = ['uploads', 'uploads/avatars', 'uploads/cvs', 'uploads/kyc'];
+uploadDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
 
 // Configure storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, 'uploads/cvs');
+        let folder = 'uploads/';
+        if (file.fieldname === 'avatar') folder += 'avatars';
+        else if (file.fieldname === 'cv') folder += 'cvs';
+        else folder += 'kyc';
+        cb(null, folder);
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -15,45 +27,93 @@ const storage = multer.diskStorage({
     }
 });
 
-// Filter for PDF/Doc
+// Allowed MIME types for KYC and profile uploads (secure file upload)
+const allowedImageTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
+const allowedDocTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+
+const kycImageOnlyFields = ['avatar', 'selfieWithId', 'selfie', 'companyLogo'];
+const kycImageOrPdfFields = ['documentFront', 'documentBack', 'idFront', 'idBack', 'registrationDocument', 'taxDocument'];
+
 const fileFilter = (req, file, cb) => {
-    if (file.mimetype === 'application/pdf' || file.mimetype === 'application/msword' || file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        cb(null, true);
-    } else {
-        cb(new Error('Invalid file type. Only PDF and Word documents are allowed.'), false);
+    const name = file.fieldname;
+    const isImage = allowedImageTypes.includes(file.mimetype);
+    const isDoc = allowedDocTypes.includes(file.mimetype);
+
+    if (name === 'avatar' || kycImageOnlyFields.includes(name)) {
+        return isImage ? cb(null, true) : cb(new Error('Use JPEG, PNG, or WebP for ' + name), false);
     }
+    if (name === 'cv' || kycImageOrPdfFields.includes(name)) {
+        return (isDoc || isImage) ? cb(null, true) : cb(new Error('Use PDF or image for ' + name), false);
+    }
+    cb(null, true);
 };
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for KYC
     fileFilter: fileFilter
+});
+
+// Route to upload KYC documents
+router.post('/kyc', upload.any(), (req, res) => {
+    if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ message: 'No files uploaded' });
+    }
+
+    const fileUrls = {};
+    req.files.forEach(file => {
+        fileUrls[file.fieldname] = `/uploads/kyc/${file.filename}`;
+    });
+
+    res.json({
+        success: true,
+        message: 'KYC files uploaded successfully',
+        files: fileUrls
+    });
 });
 
 // Route to upload CV
 router.post('/cv', upload.single('cv'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ message: 'No file uploaded' });
-    }
+    console.log("📥 Received CV upload request");
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
-    const { user } = req; // Provided by auth middleware in server.js
+    const { user } = req;
     if (!user) return res.status(401).json({ message: 'Unauthorized' });
 
-    const cvUrl = `/uploads/${req.file.filename}`;
-    const db = req.app.locals.db;
+    const cvUrl = `/uploads/cvs/${req.file.filename}`;
 
     try {
-        // Upsert profile
-        const existingProfile = await db.get('SELECT user_id FROM profiles WHERE user_id = ?', [user.id]);
-        if (existingProfile) {
-            await db.run('UPDATE profiles SET resume_url = ? WHERE user_id = ?', [cvUrl, user.id]);
-        } else {
-            await db.run('INSERT INTO profiles (user_id, resume_url) VALUES (?, ?)', [user.id, cvUrl]);
-        }
-
+        await Profile.findOneAndUpdate(
+            { user_id: user.id },
+            { resume_url: cvUrl },
+            { upsert: true, new: true }
+        );
         res.json({ success: true, message: 'CV uploaded successfully', url: cvUrl });
     } catch (error) {
-        console.error(error);
+        console.error("CV upload error:", error);
+        res.status(500).json({ message: 'Error updating profile' });
+    }
+});
+
+// Route to upload Profile Picture
+router.post('/avatar', upload.single('avatar'), async (req, res) => {
+    console.log("📥 Received Avatar upload request");
+    if (!req.file) return res.status(400).json({ message: 'No image uploaded' });
+
+    const { user } = req;
+    if (!user) return res.status(401).json({ message: 'Unauthorized' });
+
+    const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+
+    try {
+        await Profile.findOneAndUpdate(
+            { user_id: user.id },
+            { profile_picture_url: avatarUrl },
+            { upsert: true, new: true }
+        );
+        res.json({ success: true, message: 'Profile picture updated successfully', url: avatarUrl });
+    } catch (error) {
+        console.error("Avatar upload error:", error);
         res.status(500).json({ message: 'Error updating profile' });
     }
 });

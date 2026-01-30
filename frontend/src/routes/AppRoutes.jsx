@@ -10,9 +10,13 @@ import NotFound from '../pages/public/NotFound';
 import JobListing from '../pages/public/JobListing';
 import JobDetails from '../pages/public/JobDetails';
 
+// KYC Pages (authenticated, role-based)
+import KYCStatus from '../pages/shared/KYC/KYCStatus';
+import JobSeekerKYC from '../pages/shared/KYC/JobSeekerKYC';
+import RecruiterKYC from '../pages/shared/KYC/RecruiterKYC';
+
 // Dashboards
 import SeekerDashboard from '../pages/seeker/SeekerDashboard';
-import SeekerProfile from '../pages/seeker/SeekerProfile';
 import SeekerApplications from '../pages/seeker/SeekerApplications';
 import RecruiterDashboard from '../pages/recruiter/RecruiterDashboard';
 import PostJob from '../pages/recruiter/PostJob';
@@ -21,6 +25,7 @@ import EditJob from '../pages/recruiter/EditJob';
 import RecruiterApplicants from '../pages/recruiter/RecruiterApplicants';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminUsers from '../pages/admin/AdminUsers';
+import AdminKYCPanel from '../pages/admin/AdminKYCPanel';
 
 const AppRoutes = () => {
     return (
@@ -33,15 +38,26 @@ const AppRoutes = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
 
-            {/* Protected Routes - Job Seeker */}
-            <Route element={<ProtectedRoute allowedRoles={['jobseeker']} />}>
+            {/* KYC Routes - require login; role determines which form */}
+            <Route element={<ProtectedRoute allowedRoles={['job_seeker', 'recruiter', 'admin']} requireKYC={false} />}>
+                <Route path="/kyc" element={<KYCStatus />} />
+                <Route path="/kyc/status" element={<KYCStatus />} />
+            </Route>
+            <Route element={<ProtectedRoute allowedRoles={['job_seeker']} requireKYC={false} />}>
+                <Route path="/kyc/job-seeker" element={<JobSeekerKYC />} />
+            </Route>
+            <Route element={<ProtectedRoute allowedRoles={['recruiter']} requireKYC={false} />}>
+                <Route path="/kyc/recruiter" element={<RecruiterKYC />} />
+            </Route>
+
+            {/* Protected Routes - Job Seeker (KYC verified required for full access) */}
+            <Route element={<ProtectedRoute allowedRoles={['job_seeker', 'jobseeker']} requireKYC />}>
                 <Route path="/seeker/dashboard" element={<SeekerDashboard />} />
-                <Route path="/seeker/profile" element={<SeekerProfile />} />
                 <Route path="/seeker/applications" element={<SeekerApplications />} />
             </Route>
 
-            {/* Protected Routes - Recruiter */}
-            <Route element={<ProtectedRoute allowedRoles={['recruiter']} />}>
+            {/* Protected Routes - Recruiter (KYC verified required) */}
+            <Route element={<ProtectedRoute allowedRoles={['recruiter']} requireKYC />}>
                 <Route path="/recruiter/dashboard" element={<RecruiterDashboard />} />
                 <Route path="/recruiter/post-job" element={<PostJob />} />
                 <Route path="/recruiter/jobs" element={<RecruiterJobs />} />
@@ -53,6 +69,7 @@ const AppRoutes = () => {
             <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
                 <Route path="/admin/dashboard" element={<AdminDashboard />} />
                 <Route path="/admin/users" element={<AdminUsers />} />
+                <Route path="/admin/kyc" element={<AdminKYCPanel />} />
             </Route>
 
             {/* Catch All */}

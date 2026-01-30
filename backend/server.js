@@ -1,11 +1,19 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import mongoose from 'mongoose';
 import initDb from './database/init.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+// MongoDB connection (for User, KYC, Job, Application models)
+if (process.env.MONGO_URI) {
+    mongoose.connect(process.env.MONGO_URI)
+        .then(() => console.log('MongoDB connected'))
+        .catch(err => console.error('MongoDB connection error:', err));
+}
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -40,6 +48,8 @@ import dashboardRoutes from './routes/dashboard.js';
 import uploadRoutes from './routes/upload.js';
 import userRoutes from './routes/users.js';
 import profileRoutes from './routes/profiles.js';
+import kycRoutes from './routes/kyc.js';
+import adminKycRoutes from './routes/adminKyc.js';
 import jwt from 'jsonwebtoken';
 
 // Auth Middleware
@@ -63,6 +73,8 @@ app.use('/api/dashboard', authenticateToken, dashboardRoutes);
 app.use('/api/upload', authenticateToken, uploadRoutes);
 app.use('/api/admin/users', authenticateToken, userRoutes);
 app.use('/api/profile', authenticateToken, profileRoutes);
+app.use('/api/kyc', authenticateToken, kycRoutes);
+app.use('/api/admin/kyc', authenticateToken, adminKycRoutes);
 
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
