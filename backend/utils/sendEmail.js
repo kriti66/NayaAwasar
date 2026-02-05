@@ -1,30 +1,46 @@
 import nodemailer from 'nodemailer';
-import dotenv from 'dotenv';
-
-dotenv.config();
 
 const sendEmail = async (options) => {
     try {
+        console.log("📨 Attempting to send email to:", options.to);
+
+        // Gmail SMTP configuration using App Password
+        const emailPass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : '';
+
+        if (!process.env.EMAIL_USER || !emailPass) {
+            throw new Error("Missing EMAIL_USER or EMAIL_PASS in environment variables");
+        }
+
         const transporter = nodemailer.createTransport({
-            service: 'gmail',
+            host: 'smtp.gmail.com',
+            port: 465,
+            secure: true, // use SSL
             auth: {
                 user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
+                pass: emailPass,
             },
         });
 
-        await transporter.sendMail({
-            from: `Naya Awasar <${process.env.EMAIL_USER}>`,
+        const mailOptions = {
+            from: `"Naya Awasar" <${process.env.EMAIL_USER}>`,
             to: options.to,
             subject: options.subject,
-            html: options.text,
-        });
+            html: options.text, // Treating text as HTML for formatting
+        };
 
-        console.log("✅ Email sent successfully");
+        const info = await transporter.sendMail(mailOptions);
+        console.log("✅ Email sent successfully! Message ID:", info.messageId);
+        return info;
 
     } catch (error) {
-        console.error("❌ Nodemailer error:", error);
+        console.error("❌ Nodemailer error detail:", {
+            message: error.message,
+            code: error.code,
+            command: error.command,
+            response: error.response
+        });
         throw error;
     }
 };
+
 export default sendEmail;

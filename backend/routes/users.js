@@ -1,17 +1,17 @@
 import express from 'express';
+import User from '../models/User.js';
 
 const router = express.Router();
 
 // Get all users (Admin only)
 router.get('/', async (req, res) => {
-    // Check admin role
     if (req.user?.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
 
-    const db = req.app.locals.db;
     try {
-        const users = await db.all('SELECT id, name, email, role, created_at FROM users');
+        const users = await User.find({ isActive: { $ne: false } }).select('-password');
         res.json(users);
     } catch (error) {
+        console.error("Fetch users error:", error);
         res.status(500).json({ message: 'Error fetching users' });
     }
 });
@@ -21,15 +21,13 @@ router.delete('/:id', async (req, res) => {
     if (req.user?.role !== 'admin') return res.status(403).json({ message: 'Forbidden' });
 
     const { id } = req.params;
-    const db = req.app.locals.db;
     try {
-        await db.run('DELETE FROM users WHERE id = ?', [id]);
-        // Also cleanup related data (cascading delete usually handles this if configured, but explicit is safe)
-        // For MVP, letting SQLite FK constraints handle it if ON DELETE CASCADE is set, else orphaned.
-        // My init.js didn't specify ON DELETE CASCADE explicitly in FKs, so might fail if entries exist.
-        // Let's add manual cleanups for safety or ignore for now as MVP.
-        res.json({ success: true, message: 'User deleted' });
+        const user = await User.findByIdAndUpdate(id, { isActive: false }, { new: true });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        res.json({ success: true, message: 'User deactivated successfully' });
     } catch (error) {
+        console.error("Delete user error:", error);
         res.status(500).json({ message: 'Error deleting user' });
     }
 });

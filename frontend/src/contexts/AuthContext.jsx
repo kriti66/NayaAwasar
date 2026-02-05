@@ -20,9 +20,15 @@ export const AuthProvider = ({ children }) => {
 
         try {
             const res = await api.get('/kyc/status');
-            const { kycStatus, rejectionReason } = res.data;
+            const { kycStatus, rejectionReason, isKycSubmitted, isKycVerified } = res.data;
             const parsed = JSON.parse(storedUser);
-            const updated = { ...parsed, kycStatus: kycStatus ?? parsed.kycStatus, rejectionReason: rejectionReason ?? parsed.rejectionReason };
+            const updated = {
+                ...parsed,
+                kycStatus: kycStatus ?? parsed.kycStatus,
+                rejectionReason: rejectionReason ?? parsed.rejectionReason,
+                isKycSubmitted: isKycSubmitted ?? parsed.isKycSubmitted,
+                isKycVerified: isKycVerified ?? parsed.isKycVerified
+            };
             localStorage.setItem('user', JSON.stringify(updated));
             setUser(updated);
         } catch (err) {
@@ -103,22 +109,6 @@ export const AuthProvider = ({ children }) => {
             return { success: false, message };
         }
     };
-<<<<<<< Current (Your changes)
-
-    const refreshUser = async () => {
-        try {
-            const response = await api.get('/users/me');
-            setUser(response.data);
-            localStorage.setItem('user', JSON.stringify(response.data));
-            return { success: true };
-        } catch (error) {
-            console.error("Failed to refresh user", error);
-            return { success: false };
-        }
-    };
-=======
->>>>>>> Incoming (Background Agent changes)
-
     const value = {
         user,
         loading,

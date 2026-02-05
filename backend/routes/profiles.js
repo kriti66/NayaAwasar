@@ -1,60 +1,71 @@
 import express from 'express';
+import User from '../models/User.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
 // Get My Profile
 router.get('/', async (req, res) => {
-    const { user } = req;
-    if (!user) return res.status(401).json({ message: 'Unauthorized' });
-
-    const db = req.app.locals.db;
     try {
-        const profile = await db.get(
-            `SELECT u.name, u.email, p.* 
-             FROM users u 
-             LEFT JOIN profiles p ON u.id = p.user_id 
-             WHERE u.id = ?`,
-            [user.id]
-        );
-        res.json(profile);
+        const user = await User.findById(req.user.id).select('-password').lean();
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        res.json(user);
     } catch (error) {
+        console.error("Fetch profile error:", error);
         res.status(500).json({ message: 'Error fetching profile' });
+    }
+});
+
+// Get specific user profile (public/preview)
+router.get('/user/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id).select('-password -resetOtp -resetOtpExpiry').lean();
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        res.json(user);
+    } catch (error) {
+        console.error("Fetch user profile error:", error);
+        res.status(500).json({ message: 'Error fetching user profile' });
     }
 });
 
 // Update Profile
 router.put('/', async (req, res) => {
-    const { user } = req;
-    if (!user) return res.status(401).json({ message: 'Unauthorized' });
-
-    const { name, email, bio, location, skills } = req.body;
-    const db = req.app.locals.db;
-
     try {
-        // Update user basics
-        if (name || email) {
-            await db.run('UPDATE users SET name = ?, email = ? WHERE id = ?', [name || user.name, email || user.email, user.id]);
-        }
+        const { id } = req.user;
+        const updates = req.body;
 
-        // Upsert profile details
-        const existingProfile = await db.get('SELECT user_id FROM profiles WHERE user_id = ?', [user.id]);
-        if (existingProfile) {
-            await db.run(
-                'UPDATE profiles SET bio = ?, location = ?, skills = ? WHERE user_id = ?',
-                [bio, location, skills, user.id]
-            );
-        } else {
-            await db.run(
-                'INSERT INTO profiles (user_id, bio, location, skills) VALUES (?, ?, ?, ?)',
-                [user.id, bio, location, skills]
-            );
-        }
+        // Fields allowed to be updated
+        const allowedFields = [
+            'fullName', 'professionalHeadline', 'bio',
+            'phoneNumber', 'linkedinUrl', 'portfolioUrl',
+            'workExperience', 'education', 'skills', 'isPublic'
+        ];
 
-        res.json({ success: true, message: 'Profile updated' });
+        const updateData = {};
+        allowedFields.forEach(field => {
+            if (updates[field] !== undefined) {
+                updateData[field] = updates[field];
+            }
+        });
+
+        const user = await User.findByIdAndUpdate(
+            id,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        ).select('-password');
+
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        // Log profile update activity
+        await logActivity('user_updated', 'User profile updated.', id);
+
+        res.json({ success: true, user, message: 'Profile updated successfully' });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Error updating profile' });
+        console.error("Update profile error:", error);
+        res.status(500).json({ message: 'Error updating profile', error: error.message });
     }
 });
 
 export default router;
+

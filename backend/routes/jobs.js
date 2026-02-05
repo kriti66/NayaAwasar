@@ -1,49 +1,131 @@
 import express from 'express';
+import Job from '../models/Job.js';
+import Application from '../models/Application.js';
+import Company from '../models/Company.js';
+import { requireAuth, requireKycApproved, requireAdmin, requireCompanyApproved } from '../middleware/auth.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
 
-// Middleware to verify token (simplified for now, ideally moved to middleware/auth.js)
-const authenticateToken = (req, res, next) => {
-    // Implementation needed, checking header
-    // For now assuming req.user is set by a middleware we'll ADD to server.js
-    next();
-};
-
-// Get all jobs
+// Get all jobs (Public - only approved)
 router.get('/', async (req, res) => {
-    const db = req.app.locals.db;
     try {
-        const jobs = await db.all('SELECT * FROM jobs ORDER BY posted_at DESC');
+        const jobs = await Job.find({
+            status: 'Active',
+            moderationStatus: 'Approved'
+        }).sort({ createdAt: -1 });
         res.json(jobs);
     } catch (error) {
+        console.error("Fetch jobs error:", error);
         res.status(500).json({ message: 'Error fetching jobs' });
+    }
+});
+
+// Get all jobs for Admin (including flagged/hidden)
+router.get('/admin/all', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const jobs = await Job.find({}).sort({ createdAt: -1 });
+        res.json(jobs);
+    } catch (error) {
+        console.error("Admin fetch jobs error:", error);
+        res.status(500).json({ message: 'Error fetching jobs' });
+    }
+});
+
+// Get recruiter specific jobs with applicant counts
+router.get('/my-jobs', requireAuth, async (req, res) => {
+    try {
+        const recruiter_id = req.user.id;
+        const jobs = await Job.find({ recruiter_id }).sort({ createdAt: -1 }).lean();
+
+        // Fetch applicant counts for each job
+        const jobsWithCounts = await Promise.all(jobs.map(async (job) => {
+            const count = await Application.countDocuments({ job_id: job._id });
+            return { ...job, applicantCount: count };
+        }));
+
+        res.json(jobsWithCounts);
+    } catch (error) {
+        console.error("Fetch recruiter jobs error:", error);
+        res.status(500).json({ message: 'Error fetching your jobs' });
+    }
+});
+
+// Recruiter Dashboard Stats
+router.get('/stats/recruiter', requireAuth, async (req, res) => {
+    try {
+        const recruiter_id = req.user.id;
+        const totalJobs = await Job.countDocuments({ recruiter_id });
+        const activeJobs = await Job.countDocuments({ recruiter_id, status: 'Active' });
+
+        // Find all job IDs for this recruiter to count total applications
+        const myJobs = await Job.find({ recruiter_id }).select('_id');
+        const jobIds = myJobs.map(j => j._id);
+        const totalApplications = await Application.countDocuments({ job_id: { $in: jobIds } });
+
+        res.json({
+            totalJobs,
+            activeJobs,
+            totalApplications
+        });
+    } catch (error) {
+        console.error("Fetch recruiter stats error:", error);
+        res.status(500).json({ message: 'Error fetching recruiter statistics' });
     }
 });
 
 // Get recommended jobs (placeholder logic)
 router.get('/recommended', async (req, res) => {
-    const db = req.app.locals.db;
     try {
-        const jobs = await db.all('SELECT * FROM jobs ORDER BY RANDOM() LIMIT 5');
+        const jobs = await Job.aggregate([
+            { $match: { status: 'Active', moderationStatus: 'Approved' } },
+            { $sample: { size: 5 } }
+        ]);
         res.json(jobs);
     } catch (error) {
+        console.error("Fetch recommended jobs error:", error);
         res.status(500).json({ message: 'Error fetching recommended jobs' });
     }
 });
 
-// Post a job
-router.post('/', async (req, res) => {
-    const { title, company_name, type, description, location, salary_range, requirements, recruiter_id } = req.body;
-    const db = req.app.locals.db;
+// Post a job (KYC-approved recruiters only; backend blocks if not approved)
+router.post('/', requireAuth, requireKycApproved, requireCompanyApproved, async (req, res) => {
+    const {
+        title, company_name, type, description, location,
+        salary_range, requirements, experience_level
+    } = req.body;
+    const recruiter_id = req.user.id;
 
     try {
-        const result = await db.run(
-            `INSERT INTO jobs (recruiter_id, title, company_name, type, description, location, salary_range, requirements)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [recruiter_id, title, company_name, type, description, location, salary_range, requirements]
-        );
-        res.status(201).json({ success: true, id: result.lastID });
+        // Automatically fetch recruiter's approved company
+        const company = await Company.findOne({ recruiters: recruiter_id, status: 'approved' });
+
+        if (!company && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Approved company profile required to post jobs' });
+        }
+
+        const job = new Job({
+            recruiter_id,
+            company_id: company?._id || req.body.company_id,
+            title,
+            company_name: company?.name || company_name,
+            type,
+            description,
+            location,
+            salary_range,
+            requirements,
+            experience_level,
+            company_logo: company?.logo || req.body.company_logo || '',
+            status: 'Active'
+        });
+
+        await job.save();
+
+        // Log job creation activity
+        await logActivity('job_added', `Job posting '${job.title}' added.`, recruiter_id);
+        res.status(201).json({ success: true, id: job._id });
     } catch (error) {
+        console.error("Create job error:", error);
         res.status(500).json({ message: 'Error creating job', error: error.message });
     }
 });
@@ -51,34 +133,115 @@ router.post('/', async (req, res) => {
 // Get specific job
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
-    const db = req.app.locals.db;
     try {
-        const job = await db.get('SELECT * FROM jobs WHERE id = ?', [id]);
+        const job = await Job.findById(id).populate('company_id');
         if (!job) return res.status(404).json({ message: 'Job not found' });
         res.json(job);
     } catch (error) {
+        console.error("Fetch specific job error:", error);
         res.status(500).json({ message: 'Error fetching job' });
     }
 });
 
-// Update specific job
-router.put('/:id', async (req, res) => {
+// Delete job (KYC-approved recruiters only)
+router.delete('/:id', requireAuth, requireKycApproved, requireCompanyApproved, async (req, res) => {
     const { id } = req.params;
-    // recuiter_id check needed? ideally yes.
+    try {
+        const job = await Job.findByIdAndDelete(id);
+        if (!job) return res.status(404).json({ message: 'Job not found' });
 
-    const { title, company_name, type, description, location, salary_range, requirements } = req.body;
-    const db = req.app.locals.db;
+        // Log job deletion activity
+        await logActivity('job_added', `Job posting '${job.title}' deleted.`, req.user.id);
+
+        res.json({ success: true, message: 'Job deleted' });
+    } catch (error) {
+        console.error('Delete job error:', error);
+        res.status(500).json({ message: 'Error deleting job', error: error.message });
+    }
+});
+
+// Update specific job (KYC-approved recruiters only)
+router.put('/:id', requireAuth, requireKycApproved, requireCompanyApproved, async (req, res) => {
+    const { id } = req.params;
+    const { title, company_name, type, description, location, salary_range, requirements, status, experience_level } = req.body;
 
     try {
-        await db.run(
-            `UPDATE jobs 
-             SET title=?, company_name=?, type=?, description=?, location=?, salary_range=?, requirements=? 
-             WHERE id = ?`,
-            [title, company_name, type, description, location, salary_range, requirements, id]
-        );
-        res.json({ success: true, message: 'Job updated' });
+        const existingJob = await Job.findById(id);
+        if (!existingJob) return res.status(404).json({ message: 'Job not found' });
+
+        // Check if job belongs to recruiter
+        if (existingJob.recruiter_id.toString() !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        const updateData = {
+            title,
+            company_name,
+            type,
+            description,
+            location,
+            salary_range,
+            requirements,
+            status,
+            experience_level
+        };
+
+        // If job was flagged/hidden, update to 'Under Review' on edit
+        if (existingJob.moderationStatus === 'Flagged' || existingJob.moderationStatus === 'Hidden') {
+            updateData.moderationStatus = 'Under Review';
+            updateData.adminComments = 'Waiting for admin re-approval after recruiter update.';
+        }
+
+        const job = await Job.findByIdAndUpdate(id, updateData, { new: true });
+        res.json({ success: true, message: 'Job updated', job });
     } catch (error) {
+        console.error("Update job error:", error);
         res.status(500).json({ message: 'Error updating job' });
+    }
+});
+
+// Admin Moderation Route
+router.patch('/:id/moderate', requireAuth, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { moderationStatus, flagReason, reviewDeadline, adminComments } = req.body;
+
+    try {
+        const job = await Job.findByIdAndUpdate(id, {
+            moderationStatus,
+            flagReason,
+            reviewDeadline,
+            adminComments
+        }, { new: true });
+
+        if (!job) return res.status(404).json({ message: 'Job not found' });
+
+        // Log moderation activity
+        const modAction = moderationStatus === 'Approved' ? 'kyc_approved' : 'kyc_rejected';
+        await logActivity(modAction, `Job '${job.title}' moderation status updated to ${moderationStatus}.`, req.user.id);
+
+        res.json({ success: true, message: `Job moderation status updated to ${moderationStatus}`, job });
+    } catch (error) {
+        console.error("Job moderation error:", error);
+        res.status(500).json({ message: 'Error updating job moderation status' });
+    }
+});
+
+// Patch status only (KYC-approved recruiters only)
+router.patch('/:id/status', requireAuth, requireKycApproved, requireCompanyApproved, async (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!['Active', 'Closed', 'Draft', 'Pending'].includes(status)) {
+        return res.status(400).json({ message: 'Invalid status' });
+    }
+
+    try {
+        const job = await Job.findByIdAndUpdate(id, { status }, { new: true });
+        if (!job) return res.status(404).json({ message: 'Job not found' });
+        res.json({ success: true, status: job.status });
+    } catch (error) {
+        console.error("Patch status error:", error);
+        res.status(500).json({ message: 'Error updating status' });
     }
 });
 

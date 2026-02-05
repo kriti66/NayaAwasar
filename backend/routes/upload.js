@@ -3,23 +3,47 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import Profile from '../models/Profile.js';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
 
 const router = express.Router();
 
-// Ensure upload directories exist (secure file upload practice)
-const uploadDirs = ['uploads', 'uploads/avatars', 'uploads/cvs', 'uploads/kyc'];
+// Ensure upload directories exist using absolute paths
+const uploadBaseDir = path.join(rootDir, 'uploads');
+const uploadDirs = [
+    uploadBaseDir,
+    path.join(uploadBaseDir, 'avatars'),
+    path.join(uploadBaseDir, 'cvs'),
+    path.join(uploadBaseDir, 'kyc')
+];
+
 uploadDirs.forEach(dir => {
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(dir)) {
+        console.log(`Creating directory: ${dir}`);
+        fs.mkdirSync(dir, { recursive: true });
+    }
 });
 
 // Configure storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        let folder = 'uploads/';
-        if (file.fieldname === 'avatar') folder += 'avatars';
-        else if (file.fieldname === 'cv') folder += 'cvs';
-        else folder += 'kyc';
-        cb(null, folder);
+        try {
+            let targetSubdir = 'kyc';
+            if (file.fieldname === 'avatar') targetSubdir = 'avatars';
+            else if (file.fieldname === 'cv') targetSubdir = 'cvs';
+
+            const dest = path.join(uploadBaseDir, targetSubdir);
+            // double check existence just in case
+            if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+
+            cb(null, dest);
+        } catch (error) {
+            console.error("Multer destination error:", error);
+            cb(error);
+        }
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -54,23 +78,42 @@ const upload = multer({
     fileFilter: fileFilter
 });
 
-// Route to upload KYC documents
-router.post('/kyc', upload.any(), (req, res) => {
-    if (!req.files || req.files.length === 0) {
-        return res.status(400).json({ message: 'No files uploaded' });
-    }
+// Custom middleware to handle multer errors for KYC
+router.post('/kyc', (req, res) => {
+    console.log("📥 Received KYC upload request. Files count:", req.headers['content-length']);
+    upload.any()(req, res, (err) => {
+        if (err) {
+            console.error("Multer/Upload error during KYC:", err);
+            if (err instanceof multer.MulterError) {
+                return res.status(400).json({ message: `Upload error: ${err.message}` });
+            }
+            return res.status(400).json({ message: err.message || 'Error uploading files' });
+        }
 
-    const fileUrls = {};
-    req.files.forEach(file => {
-        fileUrls[file.fieldname] = `/uploads/kyc/${file.filename}`;
-    });
+        if (!req.files || req.files.length === 0) {
+            console.warn("⚠️ KYC Upload: No files found in request");
+            return res.status(400).json({ message: 'No files uploaded' });
+        }
 
-    res.json({
-        success: true,
-        message: 'KYC files uploaded successfully',
-        files: fileUrls
+        const fileUrls = {};
+        req.files.forEach(file => {
+            // Store path relative to the uploads folder or as a full URL path
+            // The frontend expects paths like /uploads/kyc/...
+            const relativePath = path.relative(rootDir, file.path).replace(/\\/g, '/');
+            fileUrls[file.fieldname] = `/${relativePath}`;
+        });
+
+        console.log("✅ KYC files uploaded successfully:", Object.keys(fileUrls));
+
+        res.json({
+            success: true,
+            message: 'KYC files uploaded successfully',
+            files: fileUrls
+        });
     });
 });
+
+import User from '../models/User.js';
 
 // Route to upload CV
 router.post('/cv', upload.single('cv'), async (req, res) => {
@@ -83,15 +126,15 @@ router.post('/cv', upload.single('cv'), async (req, res) => {
     const cvUrl = `/uploads/cvs/${req.file.filename}`;
 
     try {
-        await Profile.findOneAndUpdate(
-            { user_id: user.id },
+        await User.findByIdAndUpdate(
+            user.id,
             { resume_url: cvUrl },
-            { upsert: true, new: true }
+            { new: true }
         );
         res.json({ success: true, message: 'CV uploaded successfully', url: cvUrl });
     } catch (error) {
         console.error("CV upload error:", error);
-        res.status(500).json({ message: 'Error updating profile' });
+        res.status(500).json({ message: 'Error updating user profile' });
     }
 });
 
@@ -106,16 +149,17 @@ router.post('/avatar', upload.single('avatar'), async (req, res) => {
     const avatarUrl = `/uploads/avatars/${req.file.filename}`;
 
     try {
-        await Profile.findOneAndUpdate(
-            { user_id: user.id },
-            { profile_picture_url: avatarUrl },
-            { upsert: true, new: true }
+        await User.findByIdAndUpdate(
+            user.id,
+            { profileImage: avatarUrl },
+            { new: true }
         );
         res.json({ success: true, message: 'Profile picture updated successfully', url: avatarUrl });
     } catch (error) {
         console.error("Avatar upload error:", error);
-        res.status(500).json({ message: 'Error updating profile' });
+        res.status(500).json({ message: 'Error updating user profile' });
     }
 });
+
 
 export default router;

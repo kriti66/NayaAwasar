@@ -62,7 +62,7 @@ const Register = () => {
         setLoading(true);
         setError('');
         const result = await register({
-            name: formData.name,
+            fullName: formData.name,
             email: formData.email,
             password: formData.password,
             role: formData.role
@@ -80,35 +80,25 @@ const Register = () => {
     };
 
     return (
-        <div className="min-h-screen bg-white flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-3xl w-full space-y-8">
-                <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                        Register for Naya Awasar
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
+            <div className="max-w-2xl w-full space-y-8">
+                <div className="text-center">
+                    <h2 className="text-3xl font-extrabold text-gray-900">
+                        Join Naya Awasar
                     </h2>
+                    <p className="mt-2 text-sm text-gray-600">Create your account to get started</p>
 
                     {/* Stepper */}
-                    <div className="mt-8 flex items-center justify-center space-x-4 sm:space-x-8">
-                        {[
-                            { step: 1, label: 'Select Role' },
-                            { step: 2, label: 'Account Details' },
-                            { step: 3, label: 'Profile Details' },
-                            { step: 4, label: 'Confirm' }
-                        ].map((item, index) => (
-                            <div key={item.step} className="flex flex-col items-center relative">
-                                <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 
-                                    ${currentStep >= item.step ? 'bg-blue-600 border-blue-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-500'}
-                                    font-bold text-sm z-10 transition-colors duration-200`}>
-                                    {item.step}
+                    <div className="mt-8 flex items-center justify-center space-x-4">
+                        {[1, 2, 3, 4].map((step) => (
+                            <div key={step} className="flex items-center">
+                                <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors
+                                    ${currentStep >= step ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-300'}
+                                    text-sm font-bold`}>
+                                    {step}
                                 </div>
-                                <div className={`mt-2 text-xs sm:text-sm font-medium ${currentStep >= item.step ? 'text-blue-600' : 'text-gray-500'}`}>
-                                    {item.label}
-                                </div>
-                                {/* Divider Line */}
-                                {index < 3 && (
-                                    <div className={`absolute top-5 left-1/2 w-full h-0.5 -mr-4 sm:-mr-8 
-                                        ${currentStep > item.step ? 'bg-blue-600' : 'bg-gray-200'}`} style={{ width: '100%', transform: 'translateX(50%)' }}>
-                                    </div>
+                                {step < 4 && (
+                                    <div className={`w-8 sm:w-12 h-0.5 mx-2 ${currentStep > step ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
                                 )}
                             </div>
                         ))}
@@ -116,34 +106,40 @@ const Register = () => {
                 </div>
 
                 {/* Content */}
-                <div className="mt-8 bg-white p-8 sm:p-10 shadow-lg rounded-xl border border-gray-100">
+                <div className="bg-white p-8 shadow-xl rounded-2xl border border-gray-100">
                     {/* Step 1: Role Selection */}
                     {currentStep === 1 && (
-                        <div className="space-y-8 text-center animate-fade-in">
-                            <h3 className="text-2xl font-bold text-gray-900">Choose Your Role</h3>
-                            <p className="text-gray-500">Are you looking for a job or hiring talent?</p>
+                        <div className="space-y-8 animate-fade-in">
+                            <div className="text-center">
+                                <h3 className="text-xl font-bold text-gray-900">What are you looking for?</h3>
+                                <p className="text-sm text-gray-500 mt-1">Select your primary goal on the platform</p>
+                            </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <button
                                     onClick={() => handleRoleSelect('jobseeker')}
-                                    className={`p-6 border-2 rounded-xl flex items-center justify-center transition-all duration-200 space-x-4
-                                        ${formData.role === 'jobseeker' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}`}
+                                    className={`p-8 border-2 rounded-2xl flex flex-col items-center transition-all space-y-4
+                                        ${formData.role === 'jobseeker' ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md' : 'border-gray-100 bg-gray-50 hover:bg-white hover:border-blue-200'}`}
                                 >
-                                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                    <span className="text-lg font-bold">Job Seeker</span>
+                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center transition-colors ${formData.role === 'jobseeker' ? 'bg-blue-600 text-white' : 'bg-white text-gray-400'}`}>
+                                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                        </svg>
+                                    </div>
+                                    <span className="font-bold text-lg">I want a Job</span>
                                 </button>
 
                                 <button
                                     onClick={() => handleRoleSelect('recruiter')}
-                                    className={`p-6 border-2 rounded-xl flex items-center justify-center transition-all duration-200 space-x-4
-                                        ${formData.role === 'recruiter' ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}`}
+                                    className={`p-8 border-2 rounded-2xl flex flex-col items-center transition-all space-y-4
+                                        ${formData.role === 'recruiter' ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md' : 'border-gray-100 bg-gray-50 hover:bg-white hover:border-blue-200'}`}
                                 >
-                                    <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                                    </svg>
-                                    <span className="text-lg font-bold">Recruiter</span>
+                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center transition-colors ${formData.role === 'recruiter' ? 'bg-blue-600 text-white' : 'bg-white text-gray-400'}`}>
+                                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                        </svg>
+                                    </div>
+                                    <span className="font-bold text-lg">I'm Hiring</span>
                                 </button>
                             </div>
                         </div>
@@ -152,104 +148,115 @@ const Register = () => {
                     {/* Step 2: Account Details */}
                     {currentStep === 2 && (
                         <div className="space-y-6 animate-fade-in">
-                            <h3 className="text-2xl font-bold text-center text-gray-900">Account Details</h3>
+                            <div className="text-center">
+                                <h3 className="text-xl font-bold text-gray-900">Account Details</h3>
+                                <p className="text-sm text-gray-500 mt-1">Provide your basic information</p>
+                            </div>
 
-                            {error && <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">{error}</div>}
+                            {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium text-center border border-red-100">{error}</div>}
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Full Name</label>
-                                <input type="text" name="name" value={formData.name} onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500" required />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Email Address</label>
-                                <input type="email" name="email" value={formData.email} onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500" required />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Password</label>
-                                <input type="password" name="password" value={formData.password} onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500" required />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
-                                <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500" required />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-gray-700">Full Name</label>
+                                    <input type="text" name="name" value={formData.name} onChange={handleChange}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-blue-600 focus:ring-0 transition-all text-gray-900" placeholder="John Doe" required />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-gray-700">Email Address</label>
+                                    <input type="email" name="email" value={formData.email} onChange={handleChange}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-blue-600 focus:ring-0 transition-all text-gray-900" placeholder="john@example.com" required />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-gray-700">Password</label>
+                                    <input type="password" name="password" value={formData.password} onChange={handleChange}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-blue-600 focus:ring-0 transition-all text-gray-900" placeholder="••••••••" required />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-sm font-medium text-gray-700">Confirm Password</label>
+                                    <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-blue-600 focus:ring-0 transition-all text-gray-900" placeholder="••••••••" required />
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {/* Step 3: Profile Details (Placeholder/Simple) */}
+                    {/* Step 3: Profile Details */}
                     {currentStep === 3 && (
                         <div className="space-y-6 animate-fade-in text-center">
-                            <h3 className="text-2xl font-bold text-gray-900">Profile Details</h3>
-                            <p className="text-gray-500">Let's get to know you a bit better.</p>
-
-                            <div className="bg-blue-50 p-6 rounded-lg text-blue-800">
-                                <p>For now, we'll skip the detailed profile setup. You can complete your profile (upload resume, add skills, etc.) from your <strong>Dashboard</strong> after creating your account!</p>
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-900">Setting Up Your Profile</h3>
+                                <p className="text-sm text-gray-500 mt-1">Final steps to get started</p>
                             </div>
 
-                            <div className="text-sm text-gray-500 italic mt-4">
-                                (This step is intentionally simplified for this version)
+                            <div className="bg-blue-50 p-8 rounded-2xl text-blue-700 border border-blue-100">
+                                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm text-blue-600">
+                                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <p className="font-semibold">Complete your professional profile on the dashboard after registration to increase your chances by 70%!</p>
                             </div>
                         </div>
                     )}
 
                     {/* Step 4: Confirm */}
                     {currentStep === 4 && (
-                        <div className="space-y-6 animate-fade-in text-center">
-                            <h3 className="text-2xl font-bold text-gray-900">Confirm & Join</h3>
+                        <div className="space-y-6 animate-fade-in">
+                            <div className="text-center">
+                                <h3 className="text-xl font-bold text-gray-900">Confirm Registration</h3>
+                                <p className="text-sm text-gray-500 mt-1">Review your information before joining</p>
+                            </div>
 
-                            {error && <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">{error}</div>}
+                            {error && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium text-center border border-red-100">{error}</div>}
 
-                            <div className="bg-gray-50 p-6 rounded-lg text-left space-y-3">
-                                <div className="flex justify-between border-b pb-2">
-                                    <span className="text-gray-500">Role</span>
-                                    <span className="font-medium text-gray-900 capitalize">{formData.role}</span>
+                            <div className="bg-gray-50 p-6 rounded-2xl space-y-3 border border-gray-100">
+                                <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                                    <span className="text-sm text-gray-500">I am joining as</span>
+                                    <span className="font-bold text-gray-900 capitalize">{formData.role === 'jobseeker' ? 'Job Seeker' : 'Recruiter'}</span>
                                 </div>
-                                <div className="flex justify-between border-b pb-2">
-                                    <span className="text-gray-500">Name</span>
-                                    <span className="font-medium text-gray-900">{formData.name}</span>
+                                <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                                    <span className="text-sm text-gray-500">Full Name</span>
+                                    <span className="font-bold text-gray-900">{formData.name}</span>
                                 </div>
-                                <div className="flex justify-between border-b pb-2">
-                                    <span className="text-gray-500">Email</span>
-                                    <span className="font-medium text-gray-900">{formData.email}</span>
+                                <div className="flex justify-between items-center py-2">
+                                    <span className="text-sm text-gray-500">Email Address</span>
+                                    <span className="font-bold text-gray-900">{formData.email}</span>
                                 </div>
                             </div>
 
-                            <p className="text-sm text-gray-500">By clicking "Confirm Registration", you agree to our Terms of Service and Privacy Policy.</p>
+                            <p className="text-xs text-center text-gray-500">By clicking confirm, you agree to our Terms and Privacy Policy.</p>
                         </div>
                     )}
 
                     {/* Navigation Buttons */}
-                    <div className="mt-10 flex justify-between">
+                    <div className="mt-10 flex items-center justify-between">
                         {currentStep > 1 ? (
                             <button
                                 onClick={handleBack}
-                                className="px-6 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none"
+                                className="px-6 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-50 transition-colors"
                             >
-                                Back
+                                Previous
                             </button>
                         ) : (
-                            <Link to="/login" className="px-6 py-2 text-sm font-medium text-blue-600 hover:text-blue-500">
-                                Back to Login
+                            <Link to="/login" className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                                Sign In Instead
                             </Link>
                         )}
 
                         {currentStep < 4 ? (
                             <button
                                 onClick={handleNext}
-                                className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                                className="px-8 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm"
                             >
-                                Next
+                                Continue
                             </button>
                         ) : (
                             <button
                                 onClick={handleSubmit}
                                 disabled={loading}
-                                className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                                className="px-8 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
                             >
-                                {loading ? 'Creating Account...' : 'Confirm Registration'}
+                                {loading ? 'Joining...' : 'Confirm Join'}
                             </button>
                         )}
                     </div>

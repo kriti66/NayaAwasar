@@ -19,15 +19,24 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['job_seeker', 'recruiter', 'admin'],
-        default: 'job_seeker'
+        enum: ['jobseeker', 'recruiter', 'admin'],
+        default: 'jobseeker'
     },
     kycStatus: {
         type: String,
-        enum: ['not_started', 'pending', 'verified', 'rejected'],
-        default: 'not_started'
+        enum: ['not_submitted', 'pending', 'approved', 'rejected'],
+        default: 'not_submitted'
+    },
+    isKycSubmitted: { type: Boolean, default: false },
+    isKycVerified: { type: Boolean, default: false },
+    kycRejectionReason: {
+        type: String,
+        default: null
     },
     kycCompletedAt: {
+        type: Date
+    },
+    kycVerifiedAt: {
         type: Date
     },
     phoneNumber: {
@@ -71,40 +80,20 @@ const userSchema = new mongoose.Schema({
         default: ''
     },
     workExperience: [
-        {
-            title: String,
-            company: String,
-            duration: String,
-            description: String
-        }
+        { title: String, company: String, duration: String, description: String }
     ],
     education: [
-        {
-            degree: String,
-            institution: String,
-            year: String
-        }
+        { degree: String, institution: String, year: String }
     ],
-    isPublic: {
-        type: Boolean,
-        default: true
-    },
-    skills: {
-        type: String,
-        default: ''
-    },
-    resume_url: {
-        type: String,
-        default: ''
-    },
-    lastPasswordChange: {
-        type: Date,
-        default: Date.now
-    },
+    isPublic: { type: Boolean, default: true },
+    skills: { type: String, default: '' },
+    resume_url: { type: String, default: '' },
+    lastPasswordChange: { type: Date, default: Date.now },
     resetOtp: { type: String, default: null },
     resetOtpExpiry: { type: Date, default: null },
     reset_password_token: { type: String, default: null },
-    reset_password_expires: { type: Date, default: null }
+    reset_password_expires: { type: Date, default: null },
+    isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
 const User = mongoose.model('User', userSchema);

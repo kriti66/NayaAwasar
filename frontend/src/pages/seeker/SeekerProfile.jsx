@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import Sidebar from '../../components/Sidebar';
+import DashboardNavbar from '../../components/dashboard/DashboardNavbar';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 
@@ -64,87 +64,140 @@ const SeekerProfile = () => {
     if (loading) return <div>Loading...</div>;
 
     return (
-        <div className="flex h-screen bg-gray-100">
-            <Sidebar />
-            <div className="flex-1 overflow-auto p-8">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-2xl font-bold">My Profile</h1>
-                    <button
-                        onClick={() => { if (isEditing) handleUpdate(); else setIsEditing(true); }}
-                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-                    >
-                        {isEditing ? 'Save Changes' : 'Edit Profile'}
-                    </button>
-                </div>
+        <div className="min-h-screen flex flex-col bg-[#f9fafb]">
+            <DashboardNavbar />
+            <div className="flex-1 w-full">
+                <main className="py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
+                    <div className="flex items-center justify-between mb-12">
+                        <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight italic">
+                            My <span className="text-[#2D9B82]">Profile</span>
+                        </h1>
+                        <button
+                            onClick={() => { if (isEditing) handleUpdate(); else setIsEditing(true); }}
+                            className="px-8 py-4 bg-[#2D9B82] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#25836d] transition-all shadow-xl shadow-[#2D9B82]/20 transform active:scale-95"
+                        >
+                            {isEditing ? 'Save Changes' : 'Edit Profile'}
+                        </button>
+                    </div>
 
-                <div className="bg-white shadow rounded-lg p-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Name</label>
-                            <input type="text" value={profile.name || user?.name || ''} disabled className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-gray-50" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Email</label>
-                            <input type="email" value={profile.email || user?.email || ''} disabled className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 bg-gray-50" />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Location</label>
-                            <input
-                                type="text"
-                                value={isEditing ? editForm.location : (profile.location || '')}
-                                onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
-                                disabled={!isEditing}
-                                className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 ${!isEditing ? 'bg-gray-50' : ''}`}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Skills</label>
-                            <input
-                                type="text"
-                                value={isEditing ? editForm.skills : (profile.skills || '')}
-                                onChange={(e) => setEditForm({ ...editForm, skills: e.target.value })}
-                                disabled={!isEditing}
-                                placeholder="Comma separated, e.g. React, Node.js"
-                                className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 ${!isEditing ? 'bg-gray-50' : ''}`}
-                            />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-sm font-medium text-gray-700">Bio</label>
-                            <textarea
-                                rows="3"
-                                value={isEditing ? editForm.bio : (profile.bio || '')}
-                                onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-                                disabled={!isEditing}
-                                className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 ${!isEditing ? 'bg-gray-50' : ''}`}
-                            ></textarea>
-                        </div>
-                        <div className="col-span-2 border-t pt-4">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Resume/CV</label>
-                            <div className="flex items-center space-x-4">
-                                {profile.resume_url ? (
-                                    <a
-                                        href={`http://localhost:5000${profile.resume_url}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-blue-600 hover:text-blue-800 underline"
-                                    >
-                                        View Current Resume
-                                    </a>
-                                ) : (
-                                    <span className="text-gray-500">No resume uploaded.</span>
-                                )}
-                                <div>
-                                    <input
-                                        type="file"
-                                        accept=".pdf,.doc,.docx"
-                                        onChange={handleFileChange}
-                                        className="ml-5 bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
-                                    />
+                    <div className="bg-white rounded-[3rem] shadow-2xl shadow-gray-200/50 border border-gray-50 overflow-hidden">
+                        <div className="p-12 space-y-10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
+                                            <div className="h-2 w-2 rounded-full bg-[#2D9B82]/40"></div>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={profile.name || user?.name || ''}
+                                            disabled
+                                            className="block w-full pl-12 pr-6 py-4 bg-gray-50 border-2 border-gray-50 rounded-2xl text-sm font-black text-gray-400 cursor-not-allowed italic"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Terminal</label>
+                                    <div className="relative">
+                                        <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
+                                            <div className="h-2 w-2 rounded-full bg-[#2D9B82]/40"></div>
+                                        </div>
+                                        <input
+                                            type="email"
+                                            value={profile.email || user?.email || ''}
+                                            disabled
+                                            className="block w-full pl-12 pr-6 py-4 bg-gray-50 border-2 border-gray-50 rounded-2xl text-sm font-black text-gray-400 cursor-not-allowed italic"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Current Location</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={isEditing ? editForm.location : (profile.location || '')}
+                                            onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                                            disabled={!isEditing}
+                                            placeholder="e.g. Kathmandu, Nepal"
+                                            className={`block w-full px-6 py-4 rounded-2xl text-sm font-black transition-all outline-none border-2 
+                                                ${isEditing
+                                                    ? 'bg-white border-[#2D9B82] text-gray-900 shadow-lg shadow-[#2D9B82]/5'
+                                                    : 'bg-gray-50 border-gray-50 text-gray-900'}`}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Skill Matrix</label>
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            value={isEditing ? editForm.skills : (profile.skills || '')}
+                                            onChange={(e) => setEditForm({ ...editForm, skills: e.target.value })}
+                                            disabled={!isEditing}
+                                            placeholder="React, Node.js, Python..."
+                                            className={`block w-full px-6 py-4 rounded-2xl text-sm font-black transition-all outline-none border-2 
+                                                ${isEditing
+                                                    ? 'bg-white border-[#2D9B82] text-gray-900 shadow-lg shadow-[#2D9B82]/5'
+                                                    : 'bg-gray-50 border-gray-50 text-gray-900'}`}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="col-span-2 space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Professional Bio</label>
+                                    <textarea
+                                        rows="4"
+                                        value={isEditing ? editForm.bio : (profile.bio || '')}
+                                        onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                                        disabled={!isEditing}
+                                        placeholder="Tell us about your professional journey..."
+                                        className={`block w-full px-6 py-4 rounded-2xl text-sm font-black transition-all outline-none border-2 resize-none
+                                            ${isEditing
+                                                ? 'bg-white border-[#2D9B82] text-gray-900 shadow-lg shadow-[#2D9B82]/5'
+                                                : 'bg-gray-50 border-gray-50 text-gray-900'}`}
+                                    ></textarea>
+                                </div>
+
+                                <div className="col-span-2 pt-10 border-t border-gray-50">
+                                    <div className="flex flex-col md:flex-row items-center justify-between gap-8 bg-gray-50/50 p-8 rounded-[2rem] border border-gray-100">
+                                        <div className="flex items-center gap-6">
+                                            <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center text-[#2D9B82] border border-gray-100 shadow-sm font-black">PDF</div>
+                                            <div>
+                                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Resume / CV File</h4>
+                                                {profile.resume_url ? (
+                                                    <a
+                                                        href={`http://localhost:5000${profile.resume_url}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="text-xs font-black text-[#2D9B82] hover:text-[#25836d] underline underline-offset-4 decoration-2 uppercase tracking-widest italic"
+                                                    >
+                                                        Current_Manifest_v1.0.pdf
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest italic">No File Uploaded</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="relative group">
+                                            <input
+                                                type="file"
+                                                accept=".pdf,.doc,.docx"
+                                                onChange={handleFileChange}
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            />
+                                            <div className="px-8 py-3 bg-white border-2 border-gray-100 text-[10px] font-black uppercase tracking-widest text-gray-900 rounded-xl group-hover:bg-gray-900 group-hover:text-white group-hover:border-gray-900 transition-all duration-300 shadow-sm flex items-center gap-3">
+                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                </svg>
+                                                Upload New File
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
+                </main>
             </div>
         </div>
     );

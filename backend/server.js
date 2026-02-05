@@ -1,81 +1,100 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import initDb from './database/init.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-dotenv.config();
-
-// MongoDB connection (for User, KYC, Job, Application models)
-if (process.env.MONGO_URI) {
-    mongoose.connect(process.env.MONGO_URI)
+// MongoDB: required for JWT-based auth and user management (User, KYC, Job, Application)
+const MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI) {
+    console.warn('MONGO_URI not set. Set it in .env for JWT auth and KYC to work.');
+} else {
+    mongoose.connect(MONGO_URI)
         .then(() => console.log('MongoDB connected'))
-        .catch(err => console.error('MongoDB connection error:', err));
+        .catch(err => {
+            console.error('MongoDB connection error:', err);
+            console.warn('Server will still start; auth/KYC will fail until MongoDB is reachable.');
+        });
 }
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001; // Matches the .env PORT prefernece
 
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'http://localhost:5176',
+    'http://localhost:5177',
+    'http://localhost:5178',
+    'http://localhost:5179',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5178'
+].filter(Boolean);
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            return callback(new Error('The CORS policy for this site does not allow access from the specified Origin.'), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
 app.use(express.json());
 
-// Serving static files (uploaded CVs, etc.) if needed
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Serving static files (uploaded CVs, etc.)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Initialize DB
-let db;
-initDb().then(database => {
-    db = database;
-    app.locals.db = db; // Make db accessible in routes
-}).catch(err => {
-    console.error('Failed to initialize database', err);
+// Health check (use this in browser to confirm backend is running: http://localhost:5001/api/health)
+app.get('/api/health', (req, res) => {
+    res.json({ ok: true, message: 'Backend is running', port: PORT });
 });
-
-// Routes Placeholder
 app.get('/', (req, res) => {
     res.send('Naya Awasar API is running');
 });
 
-// Import Routes
+// Import Routes & Auth
 import authRoutes from './routes/auth.js';
 import jobRoutes from './routes/jobs.js';
 import applicationRoutes from './routes/applications.js';
 import dashboardRoutes from './routes/dashboard.js';
 import uploadRoutes from './routes/upload.js';
 import userRoutes from './routes/users.js';
+import userProfileRoutes from './routes/userProfile.js';
 import profileRoutes from './routes/profiles.js';
 import kycRoutes from './routes/kyc.js';
-import adminKycRoutes from './routes/adminKyc.js';
-import jwt from 'jsonwebtoken';
-
-// Auth Middleware
-const authenticateToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-
-    if (token == null) return res.sendStatus(401);
-
-    jwt.verify(token, process.env.JWT_SECRET || 'supersecretkey', (err, user) => {
-        if (err) return res.sendStatus(403);
-        req.user = user;
-        next();
-    });
-};
+import adminRoutes from './routes/admin.js';
+import locationRoutes from './routes/location.js';
+import companyRoutes from './routes/companies.js';
+import recruiterRoutes from './routes/recruiter.js';
+import { requireAuth } from './middleware/auth.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
-app.use('/api/applications', authenticateToken, applicationRoutes);
-app.use('/api/dashboard', authenticateToken, dashboardRoutes);
-app.use('/api/upload', authenticateToken, uploadRoutes);
-app.use('/api/admin/users', authenticateToken, userRoutes);
-app.use('/api/profile', authenticateToken, profileRoutes);
-app.use('/api/kyc', authenticateToken, kycRoutes);
-app.use('/api/admin/kyc', authenticateToken, adminKycRoutes);
+app.use('/api/applications', requireAuth, applicationRoutes);
+app.use('/api/dashboard', requireAuth, dashboardRoutes);
+app.use('/api/upload', requireAuth, uploadRoutes);
+app.use('/api/admin/users', requireAuth, userRoutes);
+app.use('/api/users', requireAuth, userProfileRoutes); // Mounts /profile and /profile-image
+app.use('/api/admin', adminRoutes);
+app.use('/api/profile', requireAuth, profileRoutes);
+app.use('/api/kyc', requireAuth, kycRoutes);
+app.use('/api/location', locationRoutes);
+app.use('/api/companies', companyRoutes);
+app.use('/api/recruiter', recruiterRoutes);
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`\n========================================`);
+    console.log(`  Backend running at http://localhost:${PORT}`);
+    console.log(`  Health check: http://localhost:${PORT}/api/health`);
+    console.log(`  Keep this terminal OPEN while using the app.`);
+    console.log(`========================================\n`);
 });

@@ -11,10 +11,17 @@ const generateOTP = () => {
 export const sendOtp = async (req, res) => {
     const { email } = req.body;
 
+    if (!email) {
+        return res.status(400).json({ success: false, message: "Email is required." });
+    }
+
     try {
+        console.log(`🔍 Received OTP request for: ${email}`);
+
         // Check if user exists
         const user = await User.findOne({ email });
         if (!user) {
+            console.warn(`⚠️ OTP request failed: User not found for ${email}`);
             return res.status(404).json({ success: false, message: "User not found with this email." });
         }
 
@@ -27,6 +34,8 @@ export const sendOtp = async (req, res) => {
         user.resetOtp = hashedOtp;
         user.resetOtpExpiry = expiry;
         await user.save();
+
+        console.log(`✅ OTP generated and saved for ${email}`);
 
         // Send OTP via email
         const emailContent = `
@@ -43,17 +52,26 @@ export const sendOtp = async (req, res) => {
             </div>
         `;
 
-        await sendEmail({
-            to: user.email,
-            subject: 'Your Password Reset OTP',
-            text: emailContent
-        });
-
-        res.status(200).json({ success: true, message: "OTP sent to your email." });
+        try {
+            await sendEmail({
+                to: user.email,
+                subject: 'Your Password Reset OTP - Naya Awasar',
+                text: emailContent
+            });
+            console.log(`✅ Reset OTP email sent to ${email}`);
+            res.status(200).json({ success: true, message: "OTP sent to your email successfully." });
+        } catch (mailError) {
+            console.error("❌ Failed to send OTP email:", mailError);
+            res.status(500).json({
+                success: false,
+                message: "Failed to send reset email. Please check your email configuration.",
+                error: mailError.message
+            });
+        }
 
     } catch (error) {
-        console.error("Error in sendOtp:", error);
-        res.status(500).json({ success: false, message: "Server error while sending OTP." });
+        console.error("❌ Error in sendOtp controller:", error);
+        res.status(500).json({ success: false, message: "Internal server error while processing OTP request." });
     }
 };
 

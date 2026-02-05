@@ -28,7 +28,7 @@ const ProtectedRoute = ({ allowedRoles, requireKYC = false }) => {
 
     // Access control: Job Seeker cannot apply for jobs unless verified; Recruiter cannot post/view applicants unless verified
     if (requireKYC && (user.role === 'job_seeker' || user.role === 'jobseeker' || user.role === 'recruiter')) {
-        if (user.kycStatus !== 'verified') {
+        if (user.kycStatus !== 'verified' && user.kycStatus !== 'approved') {
             return <Navigate to="/kyc" replace />;
         }
     }
