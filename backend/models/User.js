@@ -86,9 +86,36 @@ const userSchema = new mongoose.Schema({
         { degree: String, institution: String, year: String }
     ],
     isPublic: { type: Boolean, default: true },
-    skills: { type: String, default: '' },
-    resume_url: { type: String, default: '' },
-    lastPasswordChange: { type: Date, default: Date.now },
+    skills: [String],
+
+    // Resume object (prompt requested object, existing is string)
+    resume: {
+        fileUrl: { type: String, default: '' },
+        uploadedAt: { type: Date }
+    },
+
+    // Job Preferences
+    jobPreferences: {
+        jobType: { type: String, default: 'Full-time' }, // Full-time, Internship, etc.
+        workMode: { type: String, default: 'On-site' }, // Remote, Hybrid, On-site
+        location: { type: String, default: '' },
+        seniority: { type: String, default: 'Entry Level' }
+    },
+
+    // Projects
+    projects: [{
+        title: String,
+        description: String,
+        techStack: [String],
+        githubUrl: String,
+        liveUrl: String
+    }],
+
+    // Profile Strength
+    profileStrength: { type: Number, default: 0 },
+
+    // Visibility
+    profileVisibility: { type: Boolean, default: true },
     resetOtp: { type: String, default: null },
     resetOtpExpiry: { type: Date, default: null },
     reset_password_token: { type: String, default: null },

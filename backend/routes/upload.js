@@ -128,7 +128,13 @@ router.post('/cv', upload.single('cv'), async (req, res) => {
     try {
         await User.findByIdAndUpdate(
             user.id,
-            { resume_url: cvUrl },
+            {
+                resume_url: cvUrl,
+                resume: {
+                    fileUrl: cvUrl,
+                    uploadedAt: new Date()
+                }
+            },
             { new: true }
         );
         res.json({ success: true, message: 'CV uploaded successfully', url: cvUrl });

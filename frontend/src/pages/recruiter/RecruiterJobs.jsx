@@ -21,59 +21,69 @@ import { toast } from 'react-hot-toast';
 const RecruiterJobs = () => {
     const { user } = useAuth();
     const [jobs, setJobs] = useState([]);
+    const [stats, setStats] = useState({ total: 0, active: 0, applicants: 0, closed: 0 });
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('All Status');
     const [filterType, setFilterType] = useState('All Types');
     const [sortBy, setSortBy] = useState('Most Recent');
 
-    useEffect(() => {
-        const fetchJobs = async () => {
-            try {
-                setLoading(true);
-                const res = await api.get('/jobs');
-                // Filter client side as per existing logic
-                const myJobs = res.data.filter(job => job.recruiter_id === user.id);
-                setJobs(myJobs);
-            } catch (error) {
-                console.error("Error fetching jobs:", error);
-                toast.error("Failed to load jobs");
-            } finally {
-                setLoading(false);
-            }
-        };
-        if (user) fetchJobs();
-    }, [user]);
-
-    // Derived Stats
-    const stats = {
-        total: jobs.length,
-        active: jobs.filter(j => j.status !== 'Closed').length,
-        applicants: jobs.reduce((acc, job) => acc + (job.applicants_count || 0), 0),
-        closed: jobs.filter(j => j.status === 'Closed').length
+    const fetchStats = async () => {
+        try {
+            const res = await api.get('/recruiter/jobs/stats');
+            setStats(res.data);
+        } catch (error) {
+            console.error("Error loading stats:", error);
+        }
     };
 
-    // Filter Logic
-    const filteredJobs = jobs.filter(job => {
-        if (filterStatus !== 'All Status' && (job.status || 'Active') !== filterStatus) return false;
-        if (filterType !== 'All Types' && job.type !== filterType) return false;
-        return true;
-    }).sort((a, b) => {
-        if (sortBy === 'Most Recent') return new Date(b.posted_at) - new Date(a.posted_at);
-        if (sortBy === 'Oldest') return new Date(a.posted_at) - new Date(b.posted_at);
-        return 0;
-    });
+    const fetchJobs = async () => {
+        try {
+            setLoading(true);
+            const params = {};
+            if (filterStatus !== 'All Status') params.status = filterStatus;
+            if (filterType !== 'All Types') params.type = filterType;
+            if (sortBy === 'Most Recent') params.sort = 'recent';
+            if (sortBy === 'Oldest') params.sort = 'oldest';
+
+            const res = await api.get('/recruiter/jobs', { params });
+            setJobs(res.data);
+        } catch (error) {
+            console.error("Error fetching jobs:", error);
+            toast.error(error.response?.data?.message || "Failed to load jobs");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (user) {
+            fetchStats();
+            fetchJobs();
+        }
+    }, [user, filterStatus, filterType, sortBy]);
 
     const handleDelete = async (jobId) => {
-        if (window.confirm('Are you sure you want to delete this job?')) {
+        if (window.confirm('Are you sure you want to delete this job? This action cannot be undone.')) {
             try {
-                await api.delete(`/jobs/${jobId}`);
-                setJobs(jobs.filter(job => job.id !== jobId));
+                await api.delete(`/recruiter/jobs/${jobId}`);
                 toast.success("Job deleted successfully");
+                // Refresh data
+                fetchStats();
+                fetchJobs();
             } catch (error) {
                 console.error("Error deleting job:", error);
-                toast.error("Failed to delete job");
+                toast.error(error.response?.data?.message || "Failed to delete job");
             }
         }
+    };
+
+    // Date helper
+    const formatDate = (dateString) => {
+        if (!dateString) return '—';
+        const date = new Date(dateString);
+        return isNaN(date.getTime()) ? '—' : date.toLocaleDateString('en-US', {
+            year: 'numeric', month: 'short', day: 'numeric'
+        });
     };
 
     return (
@@ -171,8 +181,8 @@ const RecruiterJobs = () => {
                             <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#2D9B82] border-t-transparent"></div>
                             <p className="mt-2 text-sm text-gray-500 font-bold">Loading Jobs...</p>
                         </div>
-                    ) : filteredJobs.length > 0 ? (
-                        filteredJobs.map((job) => (
+                    ) : jobs.length > 0 ? (
+                        jobs.map((job) => (
                             <div key={job.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row justify-between hover:shadow-md transition-all group">
                                 <div className="flex-1">
                                     <div className="flex items-center gap-3 mb-2">
@@ -189,7 +199,7 @@ const RecruiterJobs = () => {
                                     <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-gray-500 mb-4">
                                         <div className="flex items-center gap-1.5">
                                             <MapPin size={14} />
-                                            {job.location}
+                                            {job.location || 'Remote'}
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <Clock size={14} />
@@ -197,18 +207,18 @@ const RecruiterJobs = () => {
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <span className="text-gray-300">|</span>
-                                            Posted {new Date(job.posted_at).toLocaleDateString()}
+                                            Posted {formatDate(job.createdAt || job.posted_at)}
                                         </div>
                                     </div>
 
                                     <div className="flex items-center gap-6">
                                         <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
                                             <Users size={16} className="text-[#2D9B82]" />
-                                            {job.applicants_count || Math.floor(Math.random() * 20) + 5} <span className="text-gray-400 font-normal ml-1">Applicants</span>
+                                            {job.applicants_count || 0} <span className="text-gray-400 font-normal ml-1">Applicants</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
                                             <Eye size={16} className="text-blue-500" />
-                                            {job.views_count || Math.floor(Math.random() * 500) + 100} <span className="text-gray-400 font-normal ml-1">Views</span>
+                                            {job.views_count || 0} <span className="text-gray-400 font-normal ml-1">Views</span>
                                         </div>
                                     </div>
                                 </div>
@@ -253,8 +263,8 @@ const RecruiterJobs = () => {
                     )}
                 </div>
 
-                {/* Pagination */}
-                {filteredJobs.length > 5 && (
+                {/* Pagination (Optional/Hidden if no backend support yet) */}
+                {jobs.length >= 100 && (
                     <div className="mt-8 flex justify-center">
                         <button className="px-6 py-2.5 bg-white border border-gray-200 text-gray-500 text-sm font-bold rounded-lg hover:bg-gray-50 hover:text-gray-700 shadow-sm transition-all">
                             Load More Jobs

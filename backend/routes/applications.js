@@ -145,39 +145,96 @@ router.get('/my', async (req, res) => {
 });
 
 // Apply for a job (KYC-approved seekers only; backend blocks if not approved)
-router.post('/apply', requireKycApproved, async (req, res) => {
-    const { job_id, personalInfo, coverLetter, resumeType, resumeUrl } = req.body;
+// Apply for a job
+router.post('/apply', async (req, res) => {
+    const { job_id, coverLetter } = req.body;
     const seekerId = req.user?.id;
+    const role = req.user?.role;
 
     if (!seekerId) return res.status(401).json({ message: 'Unauthorized' });
+    if (role !== 'jobseeker') return res.status(403).json({ message: 'Only jobseekers can apply' });
+    if (!job_id) return res.status(400).json({ message: 'Job ID is required' });
 
     try {
-        // Enforce validation
-        if (!job_id || !personalInfo || !coverLetter || !resumeType || !resumeUrl) {
-            return res.status(400).json({ message: 'All application steps must be completed' });
+        // 1. Fetch User details
+        const user = await User.findById(seekerId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        // 2. Comprehensive Validation with Specific Error Codes/Messages
+
+        // KYC Check
+        if (user.kycStatus !== 'approved') {
+            return res.status(403).json({
+                code: 'KYC_REQUIRED',
+                message: 'Your KYC verification is pending or missing. Please verify your identity to apply.'
+            });
         }
 
-        // Prevent duplicate applications
+        // Resume Check
+        const hasResume = (user.resume && user.resume.fileUrl) || user.resume_url;
+        if (!hasResume) {
+            return res.status(400).json({
+                code: 'RESUME_REQUIRED',
+                message: 'You need to upload a resume to apply.'
+            });
+        }
+
+        // Skills Check (Backend logic for >5 skills as per request, though some might have different rules, sticking to prompt)
+        const skillsCount = user.skills ? (Array.isArray(user.skills) ? user.skills.length : user.skills.split(',').length) : 0;
+        if (skillsCount < 5) {
+            return res.status(400).json({
+                code: 'SKILLS_REQUIRED',
+                message: 'Please add at least 5 core skills to your profile to improve matching.'
+            });
+        }
+
+        // Profile Strength Check
+        if (!user.profileStrength || user.profileStrength < 70) {
+            return res.status(400).json({
+                code: 'PROFILE_WEAK',
+                message: 'Your profile strength is too low. Complete at least 70% of your profile to apply.'
+            });
+        }
+
+        // 3. Prevent Duplicate Applications
         const existing = await Application.findOne({ job_id, seeker_id: seekerId });
         if (existing) {
-            return res.status(400).json({ message: 'You have already applied for this job' });
+            return res.status(400).json({
+                code: 'DUPLICATE_APPLICATION',
+                message: 'You have already applied for this position.'
+            });
         }
 
+        // 4. Fetch Job to ensure existence and get details
+        const job = await Job.findById(job_id);
+        if (!job) return res.status(404).json({ message: 'Job unavailable' });
+
+        // 5. Create Application
         const application = new Application({
             job_id,
             seeker_id: seekerId,
             status: 'Applied',
-            personalInfo,
-            coverLetter,
-            resumeType,
-            resumeUrl
+            personalInfo: {
+                fullName: user.fullName,
+                email: user.email,
+                phone: user.phoneNumber,
+            },
+            coverLetter: coverLetter || `I am writing to express my interest in the ${job.title} position at ${job.company_name}. Please find my resume attached.`,
+            resumeType: 'External',
+            resumeUrl: user.resume?.fileUrl || user.resume_url,
+            appliedAt: new Date()
         });
 
         await application.save();
+
+        // Increment applicant count (optional but good practice)
+        // await Job.findByIdAndUpdate(job_id, { $inc: { applicants_count: 1 } });
+
         res.status(201).json({ success: true, message: 'Application submitted successfully' });
+
     } catch (error) {
         console.error("Application error:", error);
-        res.status(500).json({ message: 'Error applying for job' });
+        res.status(500).json({ message: 'Server error processing application' });
     }
 });
 

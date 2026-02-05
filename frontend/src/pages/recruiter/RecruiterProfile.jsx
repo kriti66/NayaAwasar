@@ -4,12 +4,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Mail, MapPin, Phone, Building, Calendar, User, CheckCircle } from 'lucide-react';
 import EditProfileModal from '../../components/profile/EditProfileModal';
+import ChangePasswordModal from '../../components/profile/ChangePasswordModal';
 
 const RecruiterProfile = () => {
     const { user: authUser } = useAuth();
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     const fetchProfileSummary = async () => {
         try {
@@ -113,7 +115,10 @@ const RecruiterProfile = () => {
                                 >
                                     Edit Profile
                                 </button>
-                                <button className="px-6 py-2.5 bg-gray-100 text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-200 transition-colors border border-gray-200">
+                                <button
+                                    onClick={() => setIsPasswordModalOpen(true)}
+                                    className="px-6 py-2.5 bg-gray-100 text-gray-700 text-sm font-bold rounded-lg hover:bg-gray-200 transition-colors border border-gray-200"
+                                >
                                     Change Password
                                 </button>
                             </div>
@@ -203,6 +208,11 @@ const RecruiterProfile = () => {
                 onClose={() => setIsEditModalOpen(false)}
                 user={user}
                 onUpdate={fetchProfileSummary}
+            />
+
+            <ChangePasswordModal
+                isOpen={isPasswordModalOpen}
+                onClose={() => setIsPasswordModalOpen(false)}
             />
         </RecruiterLayout >
     );

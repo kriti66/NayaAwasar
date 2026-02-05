@@ -2,28 +2,26 @@ import React from 'react';
 import { CheckCircle2, Circle } from 'lucide-react';
 
 const ProfileStrengthCard = ({ profile }) => {
-    const completion = profile?.profileCompletion || 0;
+    const completion = profile?.profileStrength || 0;
 
     // Determine strength level
     let strength = 'Weak';
     let strengthColor = 'text-red-500';
-    if (completion > 70) {
+    if (completion >= 70) {
         strength = 'Strong';
         strengthColor = 'text-green-500';
-    } else if (completion > 40) {
+    } else if (completion >= 40) {
         strength = 'Medium';
         strengthColor = 'text-yellow-500';
     }
 
     const checklist = [
-        { id: 'photo', label: 'Add profile photo', done: !!profile?.profileImage },
-        { id: 'bio', label: 'Complete about section', done: !!profile?.bio },
+        { id: 'bio', label: 'Complete professional summary', done: profile?.bio && profile?.bio.length > 20 },
+        { id: 'skills', label: 'Add core skills (min 5)', done: profile?.skills && (Array.isArray(profile.skills) ? profile.skills.length : profile.skills.split(',').length) >= 5 },
         { id: 'experience', label: 'Add work experience', done: profile?.workExperience?.length > 0 },
         { id: 'education', label: 'Add education', done: profile?.education?.length > 0 },
-        { id: 'skills', label: 'Add skills (min 5)', done: profile?.skills?.split(',').length >= 5 },
-        { id: 'projects', label: 'Add at least 2 projects', done: false }, // Placeholder for now
-        { id: 'phone', label: 'Add phone number', done: !!profile?.phoneNumber },
-        { id: 'portfolio', label: 'Add portfolio link', done: !!profile?.portfolioUrl },
+        { id: 'projects', label: 'Add projects (min 2)', done: profile?.projects?.length >= 2 },
+        { id: 'resume', label: 'Upload resume/CV', done: !!((profile?.resume && profile?.resume?.fileUrl) || profile?.resume_url) },
     ];
 
     const completedCount = checklist.filter(item => item.done).length;
@@ -46,7 +44,7 @@ const ProfileStrengthCard = ({ profile }) => {
                 <div className="h-2 w-full bg-gray-50 rounded-full overflow-hidden mb-8">
                     <div
                         className={`h-full transition-all duration-1000 ${strength === 'Strong' ? 'bg-[#2D9B82]' :
-                                strength === 'Medium' ? 'bg-yellow-400' : 'bg-red-400'
+                            strength === 'Medium' ? 'bg-yellow-400' : 'bg-red-400'
                             }`}
                         style={{ width: `${completion}%` }}
                     ></div>

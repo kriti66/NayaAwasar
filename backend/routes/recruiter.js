@@ -1,5 +1,6 @@
 
 import express from 'express';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Company from '../models/Company.js';
 import Job from '../models/Job.js';
@@ -64,6 +65,146 @@ router.get('/profile-summary', requireAuth, async (req, res) => {
 
     } catch (error) {
         console.error('Error fetching recruiter profile summary:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// @route   GET /api/recruiter/jobs/stats
+// @desc    Get detailed stats for recruiter jobs
+router.get('/jobs/stats', requireAuth, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const totalJobs = await Job.countDocuments({ recruiter_id: userId });
+        const activeJobs = await Job.countDocuments({ recruiter_id: userId, status: 'Active' });
+        const closedJobs = await Job.countDocuments({ recruiter_id: userId, status: 'Closed' });
+
+        // Calculate total applicants across all jobs
+        const recruiterJobs = await Job.find({ recruiter_id: userId }).select('_id');
+        const jobIds = recruiterJobs.map(job => job._id);
+        const totalApplicants = await Application.countDocuments({ job_id: { $in: jobIds } });
+
+        res.json({
+            total: totalJobs,
+            active: activeJobs,
+            closed: closedJobs,
+            applicants: totalApplicants
+        });
+    } catch (error) {
+        console.error('Error fetching job stats:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// @route   GET /api/recruiter/jobs
+// @desc    Get recruiter's jobs with filters and applicant counts
+router.get('/jobs', requireAuth, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { status, type, sort = 'recent' } = req.query;
+
+        // Convert userId to ObjectId for aggregation
+        let query = { recruiter_id: new mongoose.Types.ObjectId(userId) };
+
+        // Filters
+        if (status && status !== 'All Status') {
+            query.status = status;
+        }
+        if (type && type !== 'All Types') {
+            query.type = type;
+        }
+
+        // Sorting
+        let sortOption = { createdAt: -1 }; // Default recent
+        if (sort === 'oldest') {
+            sortOption = { createdAt: 1 };
+        }
+
+        // Fetch jobs (using aggregation to get applicant count would be ideal, 
+        // but for <100 jobs, a separate count or lean query is fine. 
+        // Let's use aggregation for performance).
+
+        const jobs = await Job.aggregate([
+            { $match: query },
+            { $sort: sortOption },
+            {
+                $lookup: {
+                    from: 'applications',
+                    localField: '_id',
+                    foreignField: 'job_id',
+                    as: 'applications'
+                }
+            },
+            {
+                $project: {
+                    _id: 1,
+                    title: 1,
+                    status: 1,
+                    type: 1,
+                    location: 1,
+                    createdAt: 1, // Ensure timestamp works
+                    posted_at: 1, // Fallback if schema uses this
+                    views_count: 1, // From schema
+                    applicants_count: { $size: '$applications' }, // Count array
+                    id: '$_id' // Frontend friendly id
+                }
+            }
+        ]);
+
+        res.json(jobs);
+
+    } catch (error) {
+        console.error('Error fetching recruiter jobs:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// @route   DELETE /api/recruiter/jobs/:id
+router.delete('/jobs/:id', requireAuth, async (req, res) => {
+    try {
+        const job = await Job.findOne({ _id: req.params.id, recruiter_id: req.user.id });
+
+        if (!job) {
+            return res.status(404).json({ message: 'Job not found or unauthorized' });
+        }
+
+        await Job.findByIdAndDelete(req.params.id);
+
+        // Optional: DELETE associated applications or keep for records?
+        // Usually safer to keep or mark deleted. For now, just delete job.
+
+        res.json({ message: 'Job deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting job:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// @route   PUT /api/recruiter/jobs/:id
+router.put('/jobs/:id', requireAuth, async (req, res) => {
+    try {
+        let job = await Job.findOne({ _id: req.params.id, recruiter_id: req.user.id });
+        if (!job) {
+            return res.status(404).json({ message: 'Job not found or unauthorized' });
+        }
+
+        // Update fields
+        const { title, type, location, status, description, salary_range, requirements } = req.body;
+
+        // Only update allowed fields
+        if (title) job.title = title;
+        if (type) job.type = type;
+        if (location) job.location = location;
+        if (status) job.status = status;
+        if (description) job.description = description;
+        if (salary_range) job.salary_range = salary_range;
+        if (requirements) job.requirements = requirements;
+
+        await job.save();
+        res.json(job);
+
+    } catch (error) {
+        console.error('Error updating job:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });

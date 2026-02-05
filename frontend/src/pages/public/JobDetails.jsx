@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import Layout from '../../components/Layout';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -34,7 +35,7 @@ const JobDetails = () => {
             return;
         }
         if (user.role !== 'jobseeker') {
-            alert("Only job seekers can apply.");
+            toast.error("Only job seekers can apply.");
             return;
         }
 
@@ -44,10 +45,40 @@ const JobDetails = () => {
         try {
             await api.post('/applications/apply', { job_id: job.id });
             setHasApplied(true);
-            alert("Application submitted successfully!");
+            toast.success("Application submitted successfully!");
+            // Optional: Redirect to My Applications after short delay
+            setTimeout(() => navigate('/seeker/applications'), 1500);
         } catch (error) {
             console.error("Application error:", error);
-            alert("Failed to apply. You might have already applied.");
+            const errorData = error.response?.data || {};
+            const code = errorData.code;
+            const msg = errorData.message || "Failed to apply.";
+
+            // Handle specific errors with helpful redirects based on ERROR CODES
+            if (code === 'KYC_REQUIRED') {
+                toast.error(msg, { duration: 5000 });
+                setTimeout(() => navigate('/kyc/status'), 2000);
+            } else if (code === 'RESUME_REQUIRED') {
+                toast.error(msg, { duration: 5000 });
+                // Assuming profile page has a hash or section capable logic, or just guide them
+                setTimeout(() => navigate('/seeker/profile'), 2000);
+            } else if (code === 'SKILLS_REQUIRED') {
+                toast.error(msg, { duration: 5000 });
+                setTimeout(() => navigate('/seeker/profile'), 2000);
+            } else if (code === 'PROFILE_WEAK') {
+                toast.error(msg, { duration: 5000 });
+                setTimeout(() => navigate('/seeker/profile'), 2000);
+            } else if (code === 'DUPLICATE_APPLICATION') {
+                toast.error("You've already applied for this job!");
+            } else {
+                // Fallback for other errors (or legacy if any)
+                if (msg.toLowerCase().includes("kyc")) {
+                    toast.error(msg);
+                    setTimeout(() => navigate('/kyc/status'), 2000);
+                } else {
+                    toast.error(msg);
+                }
+            }
         } finally {
             setApplying(false);
         }
