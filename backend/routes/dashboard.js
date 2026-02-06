@@ -16,19 +16,107 @@ router.get('/', async (req, res) => {
 
     try {
         if (role === 'jobseeker' || role === 'job_seeker') {
-            const user = await User.findById(userId).select('fullName profileCompletion kycStatus kycRejectionReason resume_url skills');
+            const user = await User.findById(userId).select('fullName profileCompletion kycStatus kycRejectionReason resume_url skills savedJobs professionalHeadline jobPreferences location');
 
             // Stats
-            const appliedCount = await Application.countDocuments({ seeker_id: userId });
-            const inReviewCount = await Application.countDocuments({ seeker_id: userId, status: 'Under Review' });
-            const interviewCount = await Application.countDocuments({ seeker_id: userId, status: 'Interview Scheduled' });
+            const [appliedCount, inReviewCount, interviewCount, offerCount, userWithSaved] = await Promise.all([
+                Application.countDocuments({ seeker_id: userId }), // Total Applied
+                Application.countDocuments({ seeker_id: userId, status: { $in: ['applied', 'in_review'] } }), // In Review
+                Application.countDocuments({ seeker_id: userId, status: 'interview' }), // Interview
+                Application.countDocuments({ seeker_id: userId, status: 'offered' }), // Offers
+                User.findById(userId).select('savedJobs')
+            ]);
+
+            const savedCount = userWithSaved?.savedJobs?.length || 0;
+
+            // Profile Views (from Activity collection)
+            // Assuming we log 'RECRUITER_VIEW' activities where userId or meta.targetUserId is the seeker
+            // Checking Activity schema: userId is the one PERFORMING the action.
+            // So we need to find activities where type is 'RECRUITER_VIEW' and meta.candidateId (or similar) is userId.
+            // Let's check how profileController logs it: logUserActivity(userId, 'RECRUITER_VIEW', { recruiterId: req.user.id });
+            // Wait, profileController.js line 289: logUserActivity(userId, 'RECRUITER_VIEW', { recruiterId: req.user.id });
+            // The first arg to logUserActivity is 'userId'. Let's check util/activityLogger (implied).
+            // Usually logs are: User X did Y.
+            // If profileController logs: logUserActivity(userId, ...), it means the 'userId' is the subject.
+            // But here the 'subject' is the profile being viewed, not the viewer?
+            // Let's assume for now we search for activities where userId = seekerId AND type = 'PROFILE_VIEW' (if self-view)
+            // OR find where meta.targetUserId = seekerId if the recruiter is the actor.
+            // Actually, in profileController.js:
+            // logUserActivity(userId, 'RECRUITER_VIEW', { recruiterId: req.user.id })
+            // This logs that 'userId' (the profile owner) had a 'RECRUITER_VIEW'.
+            // So we can count documents in Activity where userId = seekerId and type = 'RECRUITER_VIEW'.
+
+            const { default: Activity } = await import('../models/Activity.js');
+            const profileViews = await Activity.countDocuments({ userId: userId, type: 'RECRUITER_VIEW' });
 
             // Application Pipeline Details
             const upcomingInterviews = await Application.find({
                 seeker_id: userId,
-                status: 'Interview Scheduled',
+                status: 'interview',
                 'interview.date': { $gte: new Date().setHours(0, 0, 0, 0) }
-            }).populate('job_id', 'title company_name');
+            }).populate('job_id', 'title company_name company_logo')
+                .sort({ 'interview.date': 1 })
+                .limit(1);
+
+            // Recent Activity (Mixed types: Applications, Messages, etc)
+            // We want activities related to this user
+            const recentActivity = await Activity.find({ userId: userId })
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .lean(); // We will format this on frontend or here.
+
+            // Generate readable messages for activity
+            const activityFeed = recentActivity.map(act => {
+                let message = '';
+                if (act.type === 'APPLIED_JOB') message = `You applied to ${act.meta?.jobTitle || 'a job'}`;
+                else if (act.type === 'RECRUITER_VIEW') message = `${act.meta?.companyName || 'A recruiter'} viewed your profile`;
+                else if (act.type === 'MESSAGE') message = `New message from ${act.meta?.senderName || 'Recruiter'}`;
+                else message = 'New activity';
+
+                return {
+                    id: act._id,
+                    type: act.type,
+                    message,
+                    timestamp: act.createdAt
+                };
+            });
+
+
+            // Recommended Jobs
+            // Simple algo: Match title or description with user skills
+            let recommendedJobs = [];
+            if (user.skills && user.skills.length > 0) {
+                // Determine skills array (handle current string vs array inconsistency in DB vs app)
+                const skillsArray = Array.isArray(user.skills) ? user.skills : user.skills.split(',');
+
+                const regexConditions = skillsArray.map(skill => ({
+                    title: { $regex: skill.trim(), $options: 'i' }
+                }));
+
+                // Also match location preference if set
+                const query = {
+                    status: 'Active',
+                    $or: regexConditions
+                };
+
+                if (user.jobPreferences?.location) {
+                    // Optional: boost or filter by location
+                    // For now, let's just use skills matching for wider results
+                }
+
+                recommendedJobs = await Job.find(query)
+                    .select('title company_name location salary_range type company_logo createdAt')
+                    .limit(3)
+                    .sort({ createdAt: -1 });
+            }
+            // Fallback if no skills or no matches: specific query or recent jobs
+            if (recommendedJobs.length === 0) {
+                recommendedJobs = await Job.find({ status: 'Active' })
+                    .select('title company_name location salary_range type company_logo createdAt')
+                    .limit(3)
+                    .sort({ createdAt: -1 });
+            }
+
 
             // Recommended Actions
             const actions = [];
@@ -38,11 +126,12 @@ router.get('/', async (req, res) => {
                 actions.push({ id: 'kyc_retry', title: 'Re-submit KYC (Previous attempt rejected)', urgency: 'high', type: 'kyc' });
             }
 
-            if (!user.resume_url) {
+            if (!user.resume_url && (!user.resume || !user.resume.fileUrl)) {
                 actions.push({ id: 'resume', title: 'Upload your professional resume', urgency: 'medium', type: 'profile' });
             }
 
-            if (!user.skills || user.skills.split(',').length < 3) {
+            const skillsCount = Array.isArray(user.skills) ? user.skills.length : (user.skills ? user.skills.split(',').length : 0);
+            if (skillsCount < 3) {
                 actions.push({ id: 'skills', title: 'Add missing skills to your profile', urgency: 'medium', type: 'profile' });
             }
 
@@ -50,39 +139,44 @@ router.get('/', async (req, res) => {
                 actions.push({ id: 'interview', title: `Respond to ${interviewCount} interview invitation(s)`, urgency: 'high', type: 'interview' });
             }
 
-            // Profile Strength Breakdown (Mocking some values based on real fields)
+            // Profile Strength Breakdown
             const profileStrength = {
+                score: user.profileStrength || 0, // Utilize the pre-calculated strength field
                 completeness: user.profileCompletion || 0,
-                resumeQuality: user.resume_url ? 85 : 0,
-                skillsMatch: (user.skills?.split(',').length || 0) * 20 > 100 ? 100 : (user.skills?.split(',').length || 0) * 20,
-                activityLevel: appliedCount > 5 ? 90 : appliedCount * 15
+                resumeQuality: (user.resume && user.resume.fileUrl) ? 70 : 0, // Mock logic or use real
+                skillsMatch: Math.min(skillsCount * 15, 100),
+                label: user.profileStrength > 70 ? 'Excellent' : (user.profileStrength > 40 ? 'Good' : 'Weak')
             };
 
             res.json({
                 user: {
                     fullName: user.fullName,
                     profileCompletion: user.profileCompletion,
-                    kycStatus: user.kycStatus
+                    kycStatus: user.kycStatus,
+                    professionalHeadline: user.professionalHeadline,
+                    location: user.location,
+                    isOpenToWork: true // Placeholder or field from DB
                 },
                 stats: {
-                    discoveryScore: user.profileCompletion || 0,
+                    discoveryScore: 20, // Placeholder
                     activeApplications: appliedCount,
-                    profileViews: 24, // Placeholder as we don't track views yet
+                    profileViews: profileViews,
                     interviews: interviewCount,
-                    saved: 0 // Placeholder
+                    saved: savedCount
                 },
                 profileStrength,
                 recommendedActions: actions,
                 applicationPipeline: {
                     inReview: inReviewCount,
                     interviews: interviewCount,
-                    bookmarked: 0 // Placeholder
+                    offers: offerCount,
+                    saved: savedCount
                 },
-                upcomingInterviews
+                upcomingInterview: upcomingInterviews[0] || null,
+                recommendedJobs,
+                recentActivity: activityFeed
             });
         } else {
-            // For recruiters or admins, they can still use their specific endpoints for now
-            // or we could add them here if needed.
             res.status(400).json({ message: 'Dashboard data only available for jobseekers via this endpoint' });
         }
     } catch (error) {
@@ -96,8 +190,10 @@ router.get('/seeker/stats', async (req, res) => {
     if (!seekerId) return res.status(401).json({ message: 'Unauthorized' });
 
     try {
-        const appliedCount = await Application.countDocuments({ seeker_id: seekerId });
-        const interviewCount = await Application.countDocuments({ seeker_id: seekerId, status: 'Interview Scheduled' });
+        const [appliedCount, interviewCount] = await Promise.all([
+            Application.countDocuments({ seeker_id: seekerId }),
+            Application.countDocuments({ seeker_id: seekerId, status: 'interview' })
+        ]);
 
         res.json({ applied: appliedCount, saved: 0, interviews: interviewCount });
     } catch (error) {
@@ -123,7 +219,12 @@ router.get('/recruiter/stats', async (req, res) => {
         // Find jobs by this recruiter first to count their applications
         const recruiterJobs = await Job.find({ recruiter_id: recruiterId }).select('_id');
         const jobIds = recruiterJobs.map(j => j._id);
-        const applicantCount = await Application.countDocuments({ job_id: { $in: jobIds } });
+
+        // Count only ACTIVE applications (exclude final states: hired, rejected, withdrawn)
+        const applicantCount = await Application.countDocuments({
+            job_id: { $in: jobIds },
+            status: { $nin: ['hired', 'rejected', 'withdrawn'] }
+        });
 
         // Fetch company for profile views
         const company = await Company.findOne({ recruiters: recruiterId });

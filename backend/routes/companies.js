@@ -311,9 +311,10 @@ router.put('/:id', requireAuth, async (req, res) => {
         Object.assign(company, updates);
 
         // If not admin, any update resets status to pending for review
-        if (req.user.role !== 'admin') {
-            company.status = 'pending';
-        }
+        // CHANGED: We now allow updates to non-critical fields without resetting status
+        // if (req.user.role !== 'admin') {
+        //     company.status = 'pending';
+        // }
 
         await company.save();
 
@@ -343,9 +344,9 @@ router.put('/:id/logo', requireAuth, upload.single('logo'), async (req, res) => 
         company.logo = `/uploads/company/${req.file.filename}`;
 
         // Reset status to pending on change if not admin
-        if (req.user.role !== 'admin') {
-            company.status = 'pending';
-        }
+        // if (req.user.role !== 'admin') {
+        //     company.status = 'pending';
+        // }
 
         await company.save();
         res.json(company);
@@ -377,9 +378,9 @@ router.put('/:id/photos', requireAuth, upload.array('photos', 5), async (req, re
         company.photos = [...(company.photos || []), ...newPhotos];
 
         // Reset status to pending on change if not admin
-        if (req.user.role !== 'admin') {
-            company.status = 'pending';
-        }
+        // if (req.user.role !== 'admin') {
+        //     company.status = 'pending';
+        // }
 
         await company.save();
         res.json(company);

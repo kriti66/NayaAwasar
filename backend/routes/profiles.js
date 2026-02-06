@@ -1,169 +1,101 @@
 import express from 'express';
-import User from '../models/User.js';
-import { logActivity } from '../utils/activityLogger.js';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import {
+    getMyProfile,
+    updateProfile,
+    updateVisibility,
+    updateSkills,
+    addExperience,
+    updateExperience,
+    deleteExperience,
+    addEducation,
+    updateEducation,
+    deleteEducation,
+    uploadResume,
+    getResume,
+    deleteResume,
+    downloadResume,
+    getPublicProfile
+
+} from '../controllers/profileController.js';
+import { generateCV, downloadCV, viewCV } from '../controllers/cvController.js';
+
+
+import { requireRole, requireAuth } from '../middleware/auth.js'; // Assuming you have or can add this, or checking role manually
 
 const router = express.Router();
 
-// Get My Profile
-router.get('/', async (req, res) => {
-    try {
-        const user = await User.findById(req.user.id).select('-password').lean();
-        if (!user) return res.status(404).json({ message: 'User not found' });
-        res.json(user);
-    } catch (error) {
-        console.error("Fetch profile error:", error);
-        res.status(500).json({ message: 'Error fetching profile' });
+// Multer Config
+const uploadDir = 'uploads/resumes';
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'resume-' + uniqueSuffix + path.extname(file.originalname));
     }
 });
 
-// Get specific user profile (public/preview)
-router.get('/user/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const user = await User.findById(id).select('-password -resetOtp -resetOtpExpiry').lean();
-        if (!user) return res.status(404).json({ message: 'User not found' });
-        res.json(user);
-    } catch (error) {
-        console.error("Fetch user profile error:", error);
-        res.status(500).json({ message: 'Error fetching user profile' });
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Invalid file type. Only PDF, DOC, DOCX allowed.'));
+        }
     }
 });
 
-// Helper: Calculate Profile Strength
-const calculateProfileStrength = (user) => {
-    let score = 0;
+// Routes
+// /api/profile/me
+router.get('/me', getMyProfile);
 
-    // Summary (Bio) -> 20%
-    if (user.bio && user.bio.length > 20) score += 20;
+router.patch('/me', updateProfile);
 
-    // Skills (>=5) -> 20%
-    if (user.skills && user.skills.length >= 5) score += 20;
-    else if (user.skills && user.skills.length > 0) score += 10; // Partial score
+// Visibility
+router.patch('/me/visibility', updateVisibility);
 
-    // Experience -> 15%
-    if (user.workExperience && user.workExperience.length > 0) score += 15;
+// Skills
+router.post('/me/skills', updateSkills);
 
-    // Education -> 15%
-    if (user.education && user.education.length > 0) score += 15;
+// Experience
+router.post('/me/experience', addExperience);
+router.patch('/me/experience/:id', updateExperience);
+router.delete('/me/experience/:id', deleteExperience);
 
-    // Projects (>=2) -> 20%
-    if (user.projects && user.projects.length >= 2) score += 20;
-    else if (user.projects && user.projects.length > 0) score += 10; // Partial score
+// Education
+router.post('/me/education', addEducation);
+router.patch('/me/education/:id', updateEducation);
+router.delete('/me/education/:id', deleteEducation);
 
-    // Resume Uploaded -> 10%
-    if (user.resume && user.resume.fileUrl) score += 10;
+// Resume/CV Management
+router.post('/me/resume', upload.single('resume'), uploadResume);
+router.get('/me/resume', getResume);
+router.delete('/me/resume', deleteResume);
+router.get('/me/resume/download', downloadResume);
 
-    return Math.min(score, 100);
-};
+// CV Generation
+// CV Generation
+router.post('/generate-cv', requireAuth, generateCV);
 
-// Generic update helper
-const updateProfileSection = async (req, res, updateData) => {
-    try {
-        const user = await User.findById(req.user.id);
-        if (!user) return res.status(404).json({ message: 'User not found' });
 
-        // Apply updates
-        Object.keys(updateData).forEach(key => {
-            user[key] = updateData[key];
-        });
 
-        // Recalculate strength
-        user.profileStrength = calculateProfileStrength(user);
+router.get('/cv/download', requireAuth, downloadCV);
+router.get('/cv/view', requireAuth, viewCV);
 
-        await user.save();
-        res.json({ success: true, user, message: 'Profile updated successfully' });
-    } catch (error) {
-        console.error("Update profile error:", error);
-        res.status(500).json({ message: 'Error updating profile', error: error.message });
-    }
-};
 
-// Update Summary (Bio)
-router.put('/summary', async (req, res) => {
-    const { bio, professionalHeadline } = req.body;
-    await updateProfileSection(req, res, { bio, professionalHeadline });
-});
+// Public Profile (Recruiter View)
+router.get('/:userId/public', requireRole('recruiter', 'admin'), getPublicProfile);
 
-// Update Skills
-router.put('/skills', async (req, res) => {
-    const { skills } = req.body; // Expecting array of strings
-    await updateProfileSection(req, res, { skills });
-});
-
-// Update Experience
-router.put('/experience', async (req, res) => {
-    const { experience } = req.body; // Expecting array
-    await updateProfileSection(req, res, { workExperience: experience });
-});
-
-// Update Education
-router.put('/education', async (req, res) => {
-    const { education } = req.body; // Expecting array
-    await updateProfileSection(req, res, { education });
-});
-
-// Update Projects
-router.put('/projects', async (req, res) => {
-    const { projects } = req.body; // Expecting array
-    await updateProfileSection(req, res, { projects });
-});
-
-// Update Resume (URL only as per requirement)
-router.put('/resume', async (req, res) => {
-    const { fileUrl } = req.body;
-    await updateProfileSection(req, res, {
-        resume: {
-            fileUrl,
-            uploadedAt: new Date()
-        },
-        resume_url: fileUrl // Keep legacy field in sync
-    });
-});
-
-// Update Job Preferences
-router.put('/preferences', async (req, res) => {
-    const { jobPreferences } = req.body;
-    await updateProfileSection(req, res, { jobPreferences });
-});
-
-// Update Visibility
-router.put('/visibility', async (req, res) => {
-    const { isPublic } = req.body;
-    await updateProfileSection(req, res, {
-        profileVisibility: isPublic,
-        isPublic: isPublic // Keep legacy field in sync
-    });
-});
-
-// General Profile Update (Legacy support)
-router.put('/', async (req, res) => {
-    try {
-        const updates = req.body;
-        const allowedFields = [
-            'fullName', 'professionalHeadline', 'bio',
-            'phoneNumber', 'linkedinUrl', 'portfolioUrl',
-            'workExperience', 'education', 'skills', 'isPublic',
-            'projects', 'jobPreferences'
-        ];
-
-        const user = await User.findById(req.user.id);
-        if (!user) return res.status(404).json({ message: 'User not found' });
-
-        allowedFields.forEach(field => {
-            if (updates[field] !== undefined) {
-                user[field] = updates[field];
-            }
-        });
-
-        user.profileStrength = calculateProfileStrength(user);
-        await user.save();
-
-        res.json({ success: true, user, message: 'Profile updated successfully' });
-    } catch (error) {
-        console.error("Update profile error:", error);
-        res.status(500).json({ message: 'Error updating profile' });
-    }
-});
 
 export default router;
-

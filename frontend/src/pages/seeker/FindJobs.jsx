@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import SeekerLayout from '../../components/layouts/SeekerLayout';
+import useJobSaver from '../../hooks/useJobSaver';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -15,6 +15,22 @@ const FindJobs = () => {
     const [jobs, setJobs] = useState([]);
     const [recommendedJobs, setRecommendedJobs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const { savedJobIds, setSavedJobIds, toggleSaveJob } = useJobSaver();
+
+    // Fetch saved jobs on mount
+    useEffect(() => {
+        const fetchSaved = async () => {
+            try {
+                const res = await api.get('/users/profile');
+                if (res.data.savedJobs) {
+                    setSavedJobIds(res.data.savedJobs);
+                }
+            } catch (err) {
+                console.error("Failed to fetch saved jobs", err);
+            }
+        };
+        fetchSaved();
+    }, [setSavedJobIds]);
 
     // Search & Filter State
     const [searchQuery, setSearchQuery] = useState('');
@@ -142,8 +158,11 @@ const FindJobs = () => {
                             <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#2D9B82] transition-colors line-clamp-1">{job.title}</h3>
                             <p className="text-sm font-medium text-gray-500">{job.company_name} • <span className="text-xs text-gray-400">4h ago</span></p>
                         </div>
-                        <button className="text-gray-400 hover:text-[#2D9B82] p-1 rounded-full hover:bg-emerald-50 transition-colors">
-                            <Bookmark size={18} />
+                        <button
+                            onClick={() => toggleSaveJob(job.id || job._id)}
+                            className={`p-1 rounded-full transition-colors ${savedJobIds.includes(job.id || job._id) ? 'text-[#2D9B82] bg-emerald-50' : 'text-gray-400 hover:text-[#2D9B82] hover:bg-emerald-50'}`}
+                        >
+                            <Bookmark size={18} fill={savedJobIds.includes(job.id || job._id) ? "currentColor" : "none"} />
                         </button>
                     </div>
 
@@ -161,7 +180,7 @@ const FindJobs = () => {
                             {job.salary_range || 'Negotiable'}
                         </div>
                         <Link
-                            to={`/jobs/${job.id || job._id}`}
+                            to={`/jobseeker/jobs/${job.id || job._id}`}
                             className="px-5 py-2 bg-[#2D9B82] text-white rounded-lg text-xs font-bold hover:bg-[#25836d] transition-all shadow-sm shadow-[#2D9B82]/20"
                         >
                             Details
@@ -174,19 +193,19 @@ const FindJobs = () => {
 
     if (loading) {
         return (
-            <SeekerLayout>
+            <>
                 <div className="flex items-center justify-center min-h-[60vh]">
                     <div className="flex flex-col items-center gap-4">
                         <div className="w-12 h-12 border-4 border-[#2D9B82] border-t-transparent rounded-full animate-spin"></div>
                         <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Loading Jobs...</p>
                     </div>
                 </div>
-            </SeekerLayout>
+            </>
         );
     }
 
     return (
-        <SeekerLayout>
+        <>
             <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header & Search */}
                 <div className="mb-8">
@@ -357,7 +376,7 @@ const FindJobs = () => {
                     </div>
                 </div>
             </main>
-        </SeekerLayout>
+        </>
     );
 };
 

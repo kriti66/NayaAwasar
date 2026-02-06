@@ -108,4 +108,48 @@ export const requireCompanyApproved = async (req, res, next) => {
     }
 };
 
+// ... existing code ...
+
+/**
+ * E) requireKycVerified: Checks user.isKycVerified === true.
+ * Used for actions like applying to jobs.
+ */
+export const requireKycVerified = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.user.id).select('isKycVerified kycStatus').lean();
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Check boolean flag OR status approved (to be safe)
+        if (user.isKycVerified === true || user.kycStatus === 'approved') {
+            return next();
+        }
+
+        return res.status(403).json({
+            code: 'KYC_REQUIRED',
+            message: 'Your account must be KYC verified to perform this action.'
+        });
+    } catch (error) {
+        console.error('requireKycVerified error:', error);
+        return res.status(500).json({ message: 'Error checking verification status' });
+    }
+};
+
+// ... existing code ...
+
+/**
+ * F) requireRole: Middleware generator to check if user has one of the allowed roles.
+ */
+export const requireRole = (...allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user || !allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Access denied: Insufficient privileges' });
+        }
+        next();
+    };
+};
+
 export const getJwtSecret = () => process.env.JWT_SECRET || 'supersecretkey';
+
+

@@ -44,42 +44,38 @@ const PostJob = () => {
 
     if (loadingCompany) {
         return (
-            <RecruiterLayout>
-                <div className="flex h-screen items-center justify-center">
-                    <div className="w-12 h-12 border-4 border-[#2D9B82]/30 border-t-[#2D9B82] rounded-full animate-spin"></div>
-                </div>
-            </RecruiterLayout>
+            <div className="flex h-screen items-center justify-center">
+                <div className="w-12 h-12 border-4 border-[#2D9B82]/30 border-t-[#2D9B82] rounded-full animate-spin"></div>
+            </div>
         );
     }
 
     if (!company || company.status !== 'approved') {
         return (
-            <RecruiterLayout>
-                <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full">
-                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-r-lg shadow-sm">
-                        <div className="flex">
-                            <div className="flex-shrink-0">
-                                <AlertTriangle className="h-6 w-6 text-yellow-500" />
-                            </div>
-                            <div className="ml-4">
-                                <h3 className="text-xl font-bold text-yellow-800">Company Profile Incomplete</h3>
-                                <div className="mt-2 text-sm text-yellow-700">
-                                    <p className="mb-4">
-                                        You need an <strong>Approved Company Profile</strong> before you can post jobs.
-                                        {company ? " Your current company status is " + company.status.toUpperCase() + "." : " You haven't created a company profile yet."}
-                                    </p>
-                                    <button
-                                        onClick={() => navigate('/recruiter/company')}
-                                        className="font-bold underline text-yellow-800 hover:text-yellow-600"
-                                    >
-                                        Go to Company Profile &rarr;
-                                    </button>
-                                </div>
+            <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full">
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded-r-lg shadow-sm">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <AlertTriangle className="h-6 w-6 text-yellow-500" />
+                        </div>
+                        <div className="ml-4">
+                            <h3 className="text-xl font-bold text-yellow-800">Company Profile Incomplete</h3>
+                            <div className="mt-2 text-sm text-yellow-700">
+                                <p className="mb-4">
+                                    You need an <strong>Approved Company Profile</strong> before you can post jobs.
+                                    {company ? " Your current company status is " + company.status.toUpperCase() + "." : " You haven't created a company profile yet."}
+                                </p>
+                                <button
+                                    onClick={() => navigate('/recruiter/company')}
+                                    className="font-bold underline text-yellow-800 hover:text-yellow-600"
+                                >
+                                    Go to Company Profile &rarr;
+                                </button>
                             </div>
                         </div>
                     </div>
-                </main>
-            </RecruiterLayout>
+                </div>
+            </main>
         );
     }
 
@@ -100,7 +96,7 @@ const PostJob = () => {
     };
 
     return (
-        <RecruiterLayout>
+        <>
             <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full">
                 <div className="md:flex md:items-center md:justify-between mb-8">
                     <div className="flex-1 min-w-0">
@@ -214,7 +210,7 @@ const PostJob = () => {
                     </form>
                 </div>
             </main>
-        </RecruiterLayout>
+        </>
     );
 };
 

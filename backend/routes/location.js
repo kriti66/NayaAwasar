@@ -31,7 +31,7 @@ router.put('/', requireAuth, requireAdmin, async (req, res) => {
         );
 
         // Log location update activity
-        await logActivity('location_updated', `Office location updated to '${address}'.`, req.user.id);
+        await logActivity(req.user.id, req.user.role, 'LOCATION_UPDATED', `Office location updated to '${address}'.`, 'Location', updatedLocation._id);
 
         res.json({ success: true, message: 'Location updated successfully', data: updatedLocation });
     } catch (err) {

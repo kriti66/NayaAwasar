@@ -89,197 +89,194 @@ const AdminKYCPanel = () => {
     );
 
     return (
-        <div className="min-h-screen flex flex-col bg-gray-100">
-            <DashboardNavbar />
-            <div className="flex-1 w-full flex flex-col h-[calc(100vh-80px)]">
-                <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
-                    <div>
-                        <h1 className="text-xl font-bold text-gray-900">KYC Verification</h1>
-                        <p className="text-xs text-gray-500">Review pending verification requests.</p>
-                    </div>
-                </header>
+        <div className="flex-1 w-full flex flex-col h-[calc(100vh-64px)] overflow-hidden">
+            <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
+                <div>
+                    <h1 className="text-xl font-bold text-gray-900">KYC Verification</h1>
+                    <p className="text-xs text-gray-500">Review pending verification requests.</p>
+                </div>
+            </header>
 
-                <main className="flex-1 p-8 overflow-hidden">
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
-                        {/* Queue List */}
-                        <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-                            <div className="p-6 border-b border-gray-200 space-y-4">
-                                <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                                    Queue ({pendingKYC.length})
-                                </h2>
-                                <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="Search..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex-1 overflow-y-auto">
-                                <div className="divide-y divide-gray-100">
-                                    {filteredKYC.map(kyc => (
-                                        <div
-                                            key={kyc._id || getUserId(kyc)}
-                                            onClick={() => setSelectedKYC(kyc)}
-                                            className={`p-4 cursor-pointer transition-all hover:bg-gray-50 border-l-4 ${selectedKYC?._id === kyc._id ? 'border-blue-600 bg-blue-50/30' : 'border-transparent'}`}
-                                        >
-                                            <div className="flex items-center justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <h3 className="text-sm font-semibold text-gray-900 truncate">{kyc.fullName}</h3>
-                                                    <p className="text-xs text-gray-500 truncate">{kyc.email}</p>
-                                                </div>
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight shrink-0 ${kyc.role === 'recruiter'
-                                                    ? 'bg-purple-100 text-purple-700'
-                                                    : 'bg-green-100 text-green-700'
-                                                    }`}>
-                                                    {kyc.role}
-                                                </span>
-                                            </div>
-                                            <div className="mt-2 text-[10px] text-gray-400 flex items-center gap-1">
-                                                <Clock className="w-3 h-3" />
-                                                {kyc.createdAt ? new Date(kyc.createdAt).toLocaleDateString() : '—'}
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {loading ? (
-                                        [1, 2, 3].map(i => <div key={i} className="h-24 bg-gray-50 animate-pulse m-4 rounded-lg"></div>)
-                                    ) : filteredKYC.length === 0 && (
-                                        <div className="p-8 text-center">
-                                            <p className="text-xs text-gray-400">Queue is empty</p>
-                                        </div>
-                                    )}
-                                </div>
+            <main className="flex-1 p-8 overflow-hidden">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+                    {/* Queue List */}
+                    <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
+                        <div className="p-6 border-b border-gray-200 space-y-4">
+                            <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                                Queue ({pendingKYC.length})
+                            </h2>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
                             </div>
                         </div>
-
-                        {/* Detail View */}
-                        <div className="lg:col-span-8 h-full">
-                            {selectedKYC ? (
-                                <div className="bg-white rounded-xl border border-gray-200 shadow-sm h-full flex flex-col overflow-hidden">
-                                    <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xl">
-                                                {selectedKYC.fullName.charAt(0)}
+                        <div className="flex-1 overflow-y-auto">
+                            <div className="divide-y divide-gray-100">
+                                {filteredKYC.map(kyc => (
+                                    <div
+                                        key={kyc._id || getUserId(kyc)}
+                                        onClick={() => setSelectedKYC(kyc)}
+                                        className={`p-4 cursor-pointer transition-all hover:bg-gray-50 border-l-4 ${selectedKYC?._id === kyc._id ? 'border-blue-600 bg-blue-50/30' : 'border-transparent'}`}
+                                    >
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <h3 className="text-sm font-semibold text-gray-900 truncate">{kyc.fullName}</h3>
+                                                <p className="text-xs text-gray-500 truncate">{kyc.email}</p>
                                             </div>
-                                            <div>
-                                                <h2 className="text-xl font-bold text-gray-900">{selectedKYC.fullName}</h2>
-                                                <p className="text-xs text-gray-500">{selectedKYC.role} applicant • Pending</p>
-                                            </div>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight shrink-0 ${kyc.role === 'recruiter'
+                                                ? 'bg-purple-100 text-purple-700'
+                                                : 'bg-green-100 text-green-700'
+                                                }`}>
+                                                {kyc.role}
+                                            </span>
                                         </div>
-                                        <button
-                                            disabled={processing}
-                                            onClick={() => handleApprove(selectedKYC)}
-                                            className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-                                        >
-                                            <Check className="w-4 h-4" />
-                                            Approve
-                                        </button>
+                                        <div className="mt-2 text-[10px] text-gray-400 flex items-center gap-1">
+                                            <Clock className="w-3 h-3" />
+                                            {kyc.createdAt ? new Date(kyc.createdAt).toLocaleDateString() : '—'}
+                                        </div>
                                     </div>
+                                ))}
+                                {loading ? (
+                                    [1, 2, 3].map(i => <div key={i} className="h-24 bg-gray-50 animate-pulse m-4 rounded-lg"></div>)
+                                ) : filteredKYC.length === 0 && (
+                                    <div className="p-8 text-center">
+                                        <p className="text-xs text-gray-400">Queue is empty</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
 
-                                    <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                                        <div className="grid grid-cols-2 gap-8">
-                                            <div className="space-y-4">
-                                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Identity Details</h3>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    {[
-                                                        { label: 'Type', value: selectedKYC.idType },
-                                                        { label: 'ID Number', value: selectedKYC.idNumber },
-                                                        { label: 'DOB', value: selectedKYC.dateOfBirth ? new Date(selectedKYC.dateOfBirth).toLocaleDateString() : '—' },
-                                                        { label: 'Nationality', value: selectedKYC.nationality || '—' }
-                                                    ].map((item, i) => (
-                                                        <div key={i}>
-                                                            <p className="text-[10px] text-gray-400 font-medium mb-0.5">{item.label}</p>
-                                                            <p className="text-sm font-semibold text-gray-900">{item.value}</p>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {selectedKYC.role === 'recruiter' && (
-                                                <div className="space-y-4">
-                                                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Company Info</h3>
-                                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 space-y-3">
-                                                        <div>
-                                                            <p className="text-[10px] text-gray-400 font-medium">Company Name</p>
-                                                            <p className="text-sm font-semibold text-gray-900">{selectedKYC.companyName}</p>
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <div>
-                                                                <p className="text-[10px] text-gray-400 font-medium">Reg No</p>
-                                                                <p className="text-xs font-semibold text-gray-900">{selectedKYC.registrationNumber}</p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[10px] text-gray-400 font-medium">Industry</p>
-                                                                <p className="text-xs font-semibold text-gray-900">{selectedKYC.industry}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
+                    {/* Detail View */}
+                    <div className="lg:col-span-8 h-full">
+                        {selectedKYC ? (
+                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm h-full flex flex-col overflow-hidden">
+                                <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xl">
+                                            {selectedKYC.fullName.charAt(0)}
                                         </div>
+                                        <div>
+                                            <h2 className="text-xl font-bold text-gray-900">{selectedKYC.fullName}</h2>
+                                            <p className="text-xs text-gray-500">{selectedKYC.role} applicant • Pending</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        disabled={processing}
+                                        onClick={() => handleApprove(selectedKYC)}
+                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                    >
+                                        <Check className="w-4 h-4" />
+                                        Approve
+                                    </button>
+                                </div>
 
+                                <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                                    <div className="grid grid-cols-2 gap-8">
                                         <div className="space-y-4">
-                                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verification Proofs</h3>
-                                            <div className="grid grid-cols-3 gap-4">
+                                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Identity Details</h3>
+                                            <div className="grid grid-cols-2 gap-4">
                                                 {[
-                                                    { label: 'ID Front', path: selectedKYC.documentFront || selectedKYC.idFront },
-                                                    { label: 'ID Back', path: selectedKYC.documentBack || selectedKYC.idBack },
-                                                    { label: 'Selfie', path: selectedKYC.selfieWithId }
-                                                ].filter(p => p.path).map((img, i) => (
-                                                    <div key={i} className="space-y-2">
-                                                        <div className="relative aspect-video rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group">
-                                                            <img
-                                                                src={`${API_BASE}${img.path}`}
-                                                                alt={img.label}
-                                                                className="w-full h-full object-cover"
-                                                            />
-                                                            <a href={`${API_BASE}${img.path}`} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <ExternalLink className="w-5 h-5 text-white" />
-                                                            </a>
-                                                        </div>
-                                                        <p className="text-[10px] font-medium text-gray-500 text-center">{img.label}</p>
+                                                    { label: 'Type', value: selectedKYC.idType },
+                                                    { label: 'ID Number', value: selectedKYC.idNumber },
+                                                    { label: 'DOB', value: selectedKYC.dateOfBirth ? new Date(selectedKYC.dateOfBirth).toLocaleDateString() : '—' },
+                                                    { label: 'Nationality', value: selectedKYC.nationality || '—' }
+                                                ].map((item, i) => (
+                                                    <div key={i}>
+                                                        <p className="text-[10px] text-gray-400 font-medium mb-0.5">{item.label}</p>
+                                                        <p className="text-sm font-semibold text-gray-900">{item.value}</p>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
 
-                                        <div className="p-6 bg-red-50 rounded-xl border border-red-100">
-                                            <h3 className="text-sm font-bold text-red-900 mb-4">Reject Verification</h3>
+                                        {selectedKYC.role === 'recruiter' && (
                                             <div className="space-y-4">
-                                                <textarea
-                                                    value={rejectionReason}
-                                                    onChange={(e) => setRejectionReason(e.target.value)}
-                                                    className="w-full bg-white border border-red-200 rounded-lg p-3 text-sm outline-none focus:ring-1 focus:ring-red-500"
-                                                    placeholder="Reason for rejection..."
-                                                    rows="2"
-                                                />
-                                                <button
-                                                    disabled={processing}
-                                                    onClick={() => handleReject(selectedKYC)}
-                                                    className="w-full bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
-                                                >
-                                                    Reject KYC
-                                                </button>
+                                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Company Info</h3>
+                                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 space-y-3">
+                                                    <div>
+                                                        <p className="text-[10px] text-gray-400 font-medium">Company Name</p>
+                                                        <p className="text-sm font-semibold text-gray-900">{selectedKYC.companyName}</p>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <p className="text-[10px] text-gray-400 font-medium">Reg No</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.registrationNumber}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] text-gray-400 font-medium">Industry</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.industry}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verification Proofs</h3>
+                                        <div className="grid grid-cols-3 gap-4">
+                                            {[
+                                                { label: 'ID Front', path: selectedKYC.documentFront || selectedKYC.idFront },
+                                                { label: 'ID Back', path: selectedKYC.documentBack || selectedKYC.idBack },
+                                                { label: 'Selfie', path: selectedKYC.selfieWithId }
+                                            ].filter(p => p.path).map((img, i) => (
+                                                <div key={i} className="space-y-2">
+                                                    <div className="relative aspect-video rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group">
+                                                        <img
+                                                            src={`${API_BASE}${img.path}`}
+                                                            alt={img.label}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                        <a href={`${API_BASE}${img.path}`} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <ExternalLink className="w-5 h-5 text-white" />
+                                                        </a>
+                                                    </div>
+                                                    <p className="text-[10px] font-medium text-gray-500 text-center">{img.label}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6 bg-red-50 rounded-xl border border-red-100">
+                                        <h3 className="text-sm font-bold text-red-900 mb-4">Reject Verification</h3>
+                                        <div className="space-y-4">
+                                            <textarea
+                                                value={rejectionReason}
+                                                onChange={(e) => setRejectionReason(e.target.value)}
+                                                className="w-full bg-white border border-red-200 rounded-lg p-3 text-sm outline-none focus:ring-1 focus:ring-red-500"
+                                                placeholder="Reason for rejection..."
+                                                rows="2"
+                                            />
+                                            <button
+                                                disabled={processing}
+                                                onClick={() => handleReject(selectedKYC)}
+                                                className="w-full bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+                                            >
+                                                Reject KYC
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
-                            ) : (
-                                <div className="h-full bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center text-center p-12">
-                                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-200">
-                                        <ShieldQuestion className="w-8 h-8" />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-gray-900">Selection Required</h3>
-                                    <p className="text-sm text-gray-500 mt-1">Select an applicant from the list to view details.</p>
+                            </div>
+                        ) : (
+                            <div className="h-full bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center text-center p-12">
+                                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-200">
+                                    <ShieldQuestion className="w-8 h-8" />
                                 </div>
-                            )}
-                        </div>
+                                <h3 className="text-lg font-bold text-gray-900">Selection Required</h3>
+                                <p className="text-sm text-gray-500 mt-1">Select an applicant from the list to view details.</p>
+                            </div>
+                        )}
                     </div>
-                </main>
-            </div>
+                </div>
+            </main>
         </div>
     );
 };

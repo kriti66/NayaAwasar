@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import SeekerLayout from '../../components/layouts/SeekerLayout';
+import { Link, useNavigate } from 'react-router-dom';
+import useJobSaver from '../../hooks/useJobSaver';
 import RecentActivityWidget from '../../components/dashboard/RecentActivityWidget';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -21,22 +21,28 @@ import {
 
 const SeekerDashboard = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
+    const { savedJobIds, setSavedJobIds, toggleSaveJob } = useJobSaver();
     const [stats, setStats] = useState({ applied: 0, saved: 0, interviews: 0 });
     const [recommendedJobs, setRecommendedJobs] = useState([]);
+    const [appliedJobIds, setAppliedJobIds] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
-                // Parallel fetch for stats and recommended jobs
-                // Adjust endpoints as per actual backend routes
-                const [statsRes, jobsRes] = await Promise.all([
+                // Fetch stats, recommended jobs, user profile (for saved jobs), and applications
+                const [statsRes, jobsRes, profileRes, appsRes] = await Promise.all([
                     api.get('/dashboard/seeker/stats').catch(() => ({ data: { applied: 0, saved: 0, interviews: 0 } })),
-                    api.get('/jobs/recommended').catch(() => ({ data: [] }))
+                    api.get('/jobs/recommended').catch(() => ({ data: [] })),
+                    api.get('/users/profile').catch(() => ({ data: { savedJobs: [] } })),
+                    api.get('/applications/my').catch(() => ({ data: [] }))
                 ]);
 
                 setStats(statsRes.data);
                 setRecommendedJobs(jobsRes.data);
+                setSavedJobIds(profileRes.data.savedJobs || []);
+                setAppliedJobIds(appsRes.data.map(app => typeof app.job_id === 'object' ? app.job_id._id : app.job_id));
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
             } finally {
@@ -47,24 +53,39 @@ const SeekerDashboard = () => {
         fetchDashboardData();
     }, []);
 
-    const handleApply = async (jobId) => {
-        try {
-            const response = await api.post('/applications/apply', { job_id: jobId });
-            if (response.data.success) {
-                alert('Applied successfully!');
-                // Optionally refresh stats
-                setStats(prev => ({ ...prev, applied: prev.applied + 1 }));
-            }
-        } catch (error) {
-            console.error("Application failed", error);
-            alert(error.response?.data?.message || 'Failed to apply');
-        }
+    // Update stats when savedJobIds change
+    useEffect(() => {
+        setStats(prev => ({ ...prev, saved: savedJobIds.length }));
+    }, [savedJobIds]);
+
+    const handleApply = (jobId) => {
+        navigate(`/apply/${jobId}`);
+    };
+
+    const timeAgo = (dateString) => {
+        if (!dateString) return 'Recently';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Recently';
+
+        const seconds = Math.floor((new Date() - date) / 1000);
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + "y ago";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + "mo ago";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + "d ago";
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + "h ago";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + "m ago";
+        return Math.floor(seconds) + "s ago";
     };
 
     return (
-        <SeekerLayout>
+        <>
             {/* Hero Section */}
             <div className="bg-[#111827] text-white pt-12 pb-24 px-4 sm:px-6 lg:px-8">
+                {/* ... (Keep existing hero content) ... */}
                 <div className="max-w-7xl mx-auto">
                     <div className="flex items-center gap-2 mb-4">
                         <span className="bg-gray-700 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider text-gray-300 flex items-center gap-2">
@@ -264,54 +285,73 @@ const SeekerDashboard = () => {
                                 {loading ? (
                                     <div className="p-8 text-center text-gray-400 text-sm font-medium">Loading recommendations...</div>
                                 ) : recommendedJobs.length > 0 ? (
-                                    recommendedJobs.slice(0, 3).map(job => (
-                                        <div key={job._id || job.id} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all group">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex items-start gap-4">
-                                                    <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-lg group-hover:bg-[#2D9B82] group-hover:text-white transition-colors">
-                                                        {job.company_name.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-base font-bold text-gray-900 group-hover:text-[#2D9B82] transition-colors">{job.title}</h4>
-                                                        <p className="text-xs font-medium text-gray-500 mb-2">{job.company_name} • {Math.floor((new Date() - new Date(job.posted_at)) / (86400000))}d ago</p>
+                                    recommendedJobs.slice(0, 3).map(job => {
+                                        const jobId = job._id || job.id;
+                                        const isSaved = savedJobIds.includes(jobId);
+                                        const isApplied = appliedJobIds.includes(jobId);
 
-                                                        <div className="flex flex-wrap gap-2">
-                                                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-50 text-gray-600 text-[10px] font-medium border border-gray-100">
-                                                                <MapPin size={10} className="mr-1" /> {job.location || 'Remote'}
-                                                            </span>
-                                                            <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-50 text-gray-600 text-[10px] font-medium border border-gray-100">
-                                                                NRs. {job.salary_range || 'Negotiable'}
-                                                            </span>
-                                                            {job.skills && (job.skills.includes('[')
-                                                                ? JSON.parse(job.skills).slice(0, 2)
-                                                                : job.skills.split(',').slice(0, 2)).map((skill, i) => (
-                                                                    <span key={i} className="inline-flex items-center px-2 py-1 rounded-md bg-gray-50 text-gray-600 text-[10px] font-medium border border-gray-100">
-                                                                        {skill.trim().replace(/^['"]|['"]$/g, '')}
-                                                                    </span>
-                                                                ))}
+                                        return (
+                                            <div key={jobId} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all group">
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex items-start gap-4">
+                                                        <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-lg group-hover:bg-[#2D9B82] group-hover:text-white transition-colors">
+                                                            {job.company_name.charAt(0)}
+                                                        </div>
+                                                        <div>
+                                                            <h4 className="text-base font-bold text-gray-900 group-hover:text-[#2D9B82] transition-colors">{job.title}</h4>
+                                                            <p className="text-xs font-medium text-gray-500 mb-2">{job.company_name} • {timeAgo(job.createdAt || job.posted_at)}</p>
+
+                                                            <div className="flex flex-wrap gap-2">
+                                                                <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-50 text-gray-600 text-[10px] font-medium border border-gray-100">
+                                                                    <MapPin size={10} className="mr-1" /> {job.location || 'Remote'}
+                                                                </span>
+                                                                <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-50 text-gray-600 text-[10px] font-medium border border-gray-100">
+                                                                    {job.salary_range ? `NRs. ${job.salary_range}` : 'Negotiable'}
+                                                                </span>
+                                                                {job.skills && (job.skills.includes('[')
+                                                                    ? JSON.parse(job.skills).slice(0, 2)
+                                                                    : job.skills.split(',').slice(0, 2)).map((skill, i) => (
+                                                                        <span key={i} className="inline-flex items-center px-2 py-1 rounded-md bg-gray-50 text-gray-600 text-[10px] font-medium border border-gray-100">
+                                                                            {skill.trim().replace(/^['"]|['"]$/g, '')}
+                                                                        </span>
+                                                                    ))}
+                                                            </div>
                                                         </div>
                                                     </div>
+                                                    <div className="flex flex-col items-end gap-2">
+                                                        <span className="px-2 py-0.5 bg-emerald-50 text-[#2D9B82] rounded text-[10px] font-bold uppercase tracking-wide">95% Match</span>
+                                                        <p className="text-[10px] text-gray-400">Profile match</p>
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-col items-end gap-2">
-                                                    <span className="px-2 py-0.5 bg-emerald-50 text-[#2D9B82] rounded text-[10px] font-bold uppercase tracking-wide">95% Match</span>
-                                                    <p className="text-[10px] text-gray-400">Profile match</p>
-                                                </div>
-                                            </div>
-                                            <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
-                                                <KycGuard>
+                                                <div className="mt-4 pt-4 border-t border-gray-50 flex items-center justify-between">
+                                                    {!isApplied ? (
+                                                        <KycGuard>
+                                                            <button
+                                                                onClick={() => handleApply(jobId)}
+                                                                className="flex-1 bg-gray-800 text-white py-2 rounded-lg text-xs font-bold hover:bg-[#2D9B82] transition-colors mr-3 w-full"
+                                                            >
+                                                                Apply Now
+                                                            </button>
+                                                        </KycGuard>
+                                                    ) : (
+                                                        <button
+                                                            disabled
+                                                            className="flex-1 bg-gray-100 text-gray-400 py-2 rounded-lg text-xs font-bold cursor-not-allowed mr-3 w-full"
+                                                        >
+                                                            Applied
+                                                        </button>
+                                                    )}
+
                                                     <button
-                                                        onClick={() => handleApply(job._id || job.id)}
-                                                        className="flex-1 bg-gray-800 text-white py-2 rounded-lg text-xs font-bold hover:bg-[#2D9B82] transition-colors mr-3 w-full"
+                                                        onClick={() => toggleSaveJob(jobId)}
+                                                        className={`p-2 border border-gray-200 rounded-lg transition-colors ${isSaved ? 'bg-blue-50 text-blue-500 border-blue-100' : 'hover:bg-gray-50 text-gray-400 hover:text-gray-900'}`}
                                                     >
-                                                        Apply Now
+                                                        <Bookmark size={16} fill={isSaved ? "currentColor" : "none"} />
                                                     </button>
-                                                </KycGuard>
-                                                <button className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-400 hover:text-gray-900 transition-colors">
-                                                    <Bookmark size={16} />
-                                                </button>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))
+                                        )
+                                    })
                                 ) : (
                                     <div className="p-8 bg-white rounded-xl border border-gray-200 text-center">
                                         <p className="text-sm font-medium text-gray-500">No stats available yet</p>
@@ -429,7 +469,7 @@ const SeekerDashboard = () => {
                 </div>
 
             </main>
-        </SeekerLayout>
+        </>
     );
 };
 

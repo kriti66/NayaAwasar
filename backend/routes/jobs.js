@@ -2,7 +2,8 @@ import express from 'express';
 import Job from '../models/Job.js';
 import Application from '../models/Application.js';
 import Company from '../models/Company.js';
-import { requireAuth, requireKycApproved, requireAdmin, requireCompanyApproved } from '../middleware/auth.js';
+import User from '../models/User.js';
+import { requireAuth, requireKycApproved, requireAdmin, requireCompanyApproved, requireKycVerified } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
@@ -122,7 +123,14 @@ router.post('/', requireAuth, requireKycApproved, requireCompanyApproved, async 
         await job.save();
 
         // Log job creation activity
-        await logActivity('job_added', `Job posting '${job.title}' added.`, recruiter_id);
+        await logActivity(recruiter_id, req.user.role, 'JOB_POSTED', `Job posting '${job.title}' added.`, 'Job', job._id);
+
+        // Notify Seekers (Simplified: In a real app, optimize this to targeted users)
+        // Here we just notify all active jobseekers for MVP or just log it.
+        // For this task request: "if some company posted job then show in notification this company posted a job"
+        const { broadcastNotification } = await import('../utils/notificationUtils.js');
+        await broadcastNotification('jobseeker', 'JOB_ALERT', `${job.company_name} posted a new job: ${job.title}`, job._id);
+
         res.status(201).json({ success: true, id: job._id });
     } catch (error) {
         console.error("Create job error:", error);
@@ -151,7 +159,7 @@ router.delete('/:id', requireAuth, requireKycApproved, requireCompanyApproved, a
         if (!job) return res.status(404).json({ message: 'Job not found' });
 
         // Log job deletion activity
-        await logActivity('job_added', `Job posting '${job.title}' deleted.`, req.user.id);
+        await logActivity(req.user.id, req.user.role, 'JOB_DELETED', `Job posting '${job.title}' deleted.`, 'Job', job._id);
 
         res.json({ success: true, message: 'Job deleted' });
     } catch (error) {
@@ -216,8 +224,8 @@ router.patch('/:id/moderate', requireAuth, requireAdmin, async (req, res) => {
         if (!job) return res.status(404).json({ message: 'Job not found' });
 
         // Log moderation activity
-        const modAction = moderationStatus === 'Approved' ? 'kyc_approved' : 'kyc_rejected';
-        await logActivity(modAction, `Job '${job.title}' moderation status updated to ${moderationStatus}.`, req.user.id);
+        const modAction = moderationStatus === 'Approved' ? 'JOB_APPROVED' : 'JOB_REJECTED';
+        await logActivity(req.user.id, req.user.role, modAction, `Job '${job.title}' moderation status updated to ${moderationStatus}.`, 'Job', job._id);
 
         res.json({ success: true, message: `Job moderation status updated to ${moderationStatus}`, job });
     } catch (error) {
@@ -242,6 +250,36 @@ router.patch('/:id/status', requireAuth, requireKycApproved, requireCompanyAppro
     } catch (error) {
         console.error("Patch status error:", error);
         res.status(500).json({ message: 'Error updating status' });
+    }
+});
+
+// Toggle Save Job (Jobseeker only)
+router.post('/:id/save', requireAuth, requireKycVerified, async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const user = await User.findById(userId);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const jobIndex = user.savedJobs.indexOf(id);
+        let saved = false;
+
+        if (jobIndex === -1) {
+            // Add to saved
+            user.savedJobs.push(id);
+            saved = true;
+        } else {
+            // Remove from saved
+            user.savedJobs.splice(jobIndex, 1);
+            saved = false;
+        }
+
+        await user.save();
+        res.json({ success: true, saved, savedJobs: user.savedJobs });
+    } catch (error) {
+        console.error("Toggle save job error:", error);
+        res.status(500).json({ message: 'Error toggling saved job' });
     }
 });
 

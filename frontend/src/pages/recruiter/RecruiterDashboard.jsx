@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import RecruiterLayout from '../../components/layouts/RecruiterLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Link } from 'react-router-dom';
@@ -34,7 +33,7 @@ const RecruiterDashboard = () => {
     }, [user]);
 
     return (
-        <RecruiterLayout>
+        <>
             {/* Hero Section */}
             <div className="bg-[#111827] text-white pt-12 pb-24 px-4 sm:px-6 lg:px-8">
                 <div className="max-w-7xl mx-auto">
@@ -174,7 +173,7 @@ const RecruiterDashboard = () => {
                 </div>
 
                 {/* Active Applications Banner */}
-                <Link to="/recruiter/applicants" className="block bg-white rounded-xl p-8 mb-8 shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
+                <Link to="/recruiter/applications" className="block bg-white rounded-xl p-8 mb-8 shadow-sm border border-gray-100 hover:shadow-md transition-all group relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50 rounded-full transform translate-x-12 -translate-y-12 opacity-50"></div>
                     <div className="relative z-10 flex items-center justify-between">
                         <div>
@@ -290,7 +289,7 @@ const RecruiterDashboard = () => {
                 </div>
 
             </main>
-        </RecruiterLayout>
+        </>
     );
 };
 

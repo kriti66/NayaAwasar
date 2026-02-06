@@ -3,24 +3,36 @@ import Application from '../models/Application.js';
 import User from '../models/User.js';
 import Job from '../models/Job.js';
 import Profile from '../models/Profile.js';
-import { requireKycApproved } from '../middleware/auth.js';
+import { requireKycApproved, requireKycVerified, requireRole } from '../middleware/auth.js';
+import { logUserActivity } from '../utils/userActivityLogger.js';
+import { logActivity } from '../utils/activityLogger.js';
+
 
 const router = express.Router();
 
 // Get applications for a job (KYC-approved recruiters only)
-router.get('/job/:jobId', requireKycApproved, async (req, res) => {
+router.get('/job/:jobId', requireKycApproved, requireRole('recruiter', 'admin'), async (req, res) => {
     const { jobId } = req.params;
     const recruiterId = req.user.id;
+
+    console.log(`[GET /job/:jobId] Fetching applications for jobId: ${jobId}, recruiterId: ${recruiterId}`);
 
     try {
         // First verify this job belongs to the recruiter
         const job = await Job.findOne({ _id: jobId, recruiter_id: recruiterId });
-        if (!job) return res.status(403).json({ message: 'Unauthorized access to this job' });
+        console.log(`[GET /job/:jobId] Job found:`, job ? `Yes (${job.title})` : 'No');
+
+        if (!job) {
+            console.warn(`[GET /job/:jobId] Job ${jobId} not found or doesn't belong to recruiter ${recruiterId}`);
+            return res.status(403).json({ message: 'Unauthorized access to this job' });
+        }
 
         const applications = await Application.find({ job_id: jobId })
             .populate('seeker_id', 'fullName email')
             .sort({ createdAt: -1 })
             .lean();
+
+        console.log(`[GET /job/:jobId] Found ${applications.length} applications for job ${jobId}`);
 
         // For each application, use the snapshot data
         for (let app of applications) {
@@ -32,7 +44,7 @@ router.get('/job/:jobId', requireKycApproved, async (req, res) => {
 
         res.json(applications);
     } catch (error) {
-        console.error("Fetch applications error:", error);
+        console.error("[GET /job/:jobId] Fetch applications error:", error);
         res.status(500).json({ message: 'Error fetching applications' });
     }
 });
@@ -117,7 +129,7 @@ router.get('/my-interviews', async (req, res) => {
     try {
         const interviews = await Application.find({
             seeker_id: seekerId,
-            status: 'Interview Scheduled',
+            status: 'interview',
             'interview.date': { $gte: new Date().setHours(0, 0, 0, 0) }
         }).populate('job_id', 'title company_name location');
 
@@ -145,63 +157,96 @@ router.get('/my', async (req, res) => {
 });
 
 // Apply for a job (KYC-approved seekers only; backend blocks if not approved)
-// Apply for a job
-router.post('/apply', async (req, res) => {
-    const { job_id, coverLetter } = req.body;
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+
+// Multer Config for Application Resumes
+const uploadDir = 'uploads/applications';
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'app-resume-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        if (allowedTypes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Invalid file type. Only PDF, DOC, DOCX allowed.'));
+        }
+    }
+});
+
+// Apply for a job (KYC-approved seekers only)
+router.post('/apply', requireKycVerified, upload.single('resume'), async (req, res) => {
+    const { job_id, coverLetter, resumeType } = req.body;
     const seekerId = req.user?.id;
     const role = req.user?.role;
 
     if (!seekerId) return res.status(401).json({ message: 'Unauthorized' });
     if (role !== 'jobseeker') return res.status(403).json({ message: 'Only jobseekers can apply' });
     if (!job_id) return res.status(400).json({ message: 'Job ID is required' });
+    if (!coverLetter || coverLetter.trim().length < 50) {
+        return res.status(400).json({ message: 'Cover letter is required and must be at least 50 characters.' });
+    }
 
     try {
-        // 1. Fetch User details
+        // 1. Fetch User and Profile details
         const user = await User.findById(seekerId);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        // 2. Comprehensive Validation with Specific Error Codes/Messages
+        const profile = await Profile.findOne({ userId: seekerId });
 
-        // KYC Check
-        if (user.kycStatus !== 'approved') {
-            return res.status(403).json({
-                code: 'KYC_REQUIRED',
-                message: 'Your KYC verification is pending or missing. Please verify your identity to apply.'
-            });
-        }
+        // 2. Determine Resume URL based on resumeType
+        let finalResumeUrl = '';
+        let finalResumeType = resumeType || 'External'; // Default to External if not specified
 
-        // Resume Check
-        const hasResume = (user.resume && user.resume.fileUrl) || user.resume_url;
-        if (!hasResume) {
-            return res.status(400).json({
-                code: 'RESUME_REQUIRED',
-                message: 'You need to upload a resume to apply.'
-            });
-        }
-
-        // Skills Check (Backend logic for >5 skills as per request, though some might have different rules, sticking to prompt)
-        const skillsCount = user.skills ? (Array.isArray(user.skills) ? user.skills.length : user.skills.split(',').length) : 0;
-        if (skillsCount < 5) {
-            return res.status(400).json({
-                code: 'SKILLS_REQUIRED',
-                message: 'Please add at least 5 core skills to your profile to improve matching.'
-            });
-        }
-
-        // Profile Strength Check
-        if (!user.profileStrength || user.profileStrength < 70) {
-            return res.status(400).json({
-                code: 'PROFILE_WEAK',
-                message: 'Your profile strength is too low. Complete at least 70% of your profile to apply.'
-            });
+        if (finalResumeType === 'Generated') {
+            // Check if profile has a generated resume
+            if (profile?.resume?.source === 'generated' && profile?.resume?.fileUrl) {
+                finalResumeUrl = profile.resume.fileUrl;
+            } else {
+                return res.status(400).json({
+                    message: 'No generated resume found on your profile. Please generate one first.'
+                });
+            }
+        } else if (finalResumeType === 'Uploaded' || finalResumeType === 'External') {
+            // Check for uploaded file in this request
+            if (req.file) {
+                finalResumeUrl = `/uploads/applications/${req.file.filename}`;
+            } else if (user.resume?.fileUrl) {
+                // Fallback to existing profile resume if no new file uploaded
+                finalResumeUrl = user.resume.fileUrl;
+            } else if (profile?.resume?.fileUrl) {
+                finalResumeUrl = profile.resume.fileUrl;
+            } else {
+                return res.status(400).json({
+                    message: 'Please upload a resume file.'
+                });
+            }
+        } else {
+            return res.status(400).json({ message: 'Invalid resume type selected.' });
         }
 
         // 3. Prevent Duplicate Applications
         const existing = await Application.findOne({ job_id, seeker_id: seekerId });
         if (existing) {
-            return res.status(400).json({
+            return res.status(409).json({
                 code: 'DUPLICATE_APPLICATION',
-                message: 'You have already applied for this position.'
+                message: 'You have already applied for this job'
             });
         }
 
@@ -213,24 +258,33 @@ router.post('/apply', async (req, res) => {
         const application = new Application({
             job_id,
             seeker_id: seekerId,
-            status: 'Applied',
+            status: 'applied',
             personalInfo: {
                 fullName: user.fullName,
                 email: user.email,
-                phone: user.phoneNumber,
+                phone: user.phoneNumber || profile?.phoneNumber, // Autofill
+                address: user.location || profile?.location
             },
-            coverLetter: coverLetter || `I am writing to express my interest in the ${job.title} position at ${job.company_name}. Please find my resume attached.`,
-            resumeType: 'External',
-            resumeUrl: user.resume?.fileUrl || user.resume_url,
+            coverLetter: coverLetter || `I am writing to express my interest in the ${job.title} position at ${job.company_name}.`,
+            resumeType: finalResumeType === 'Generated' ? 'Generated' : 'External',
+            resumeUrl: finalResumeUrl,
             appliedAt: new Date()
         });
 
         await application.save();
 
-        // Increment applicant count (optional but good practice)
-        // await Job.findByIdAndUpdate(job_id, { $inc: { applicants_count: 1 } });
+        // LOG ACTIVITY
+        if (logUserActivity) {
+            await logUserActivity(seekerId, 'APPLIED_JOB', {
+                jobId: job_id,
+                jobTitle: job.title
+            });
+        }
 
-        res.status(201).json({ success: true, message: 'Application submitted successfully' });
+        // Log system activity
+        await logActivity(seekerId, role, 'JOB_APPLICATION', `Applied for job '${job.title}' at ${job.company_name}.`, 'Application', application._id);
+
+        res.status(201).json({ success: true, message: 'Application submitted successfully', applicationId: application._id });
 
     } catch (error) {
         console.error("Application error:", error);
@@ -238,145 +292,216 @@ router.post('/apply', async (req, res) => {
     }
 });
 
-// Update application status (KYC-approved recruiters only)
-router.put('/:id/status', requireKycApproved, async (req, res) => {
-    const { id } = req.params;
-    const { status } = req.body;
 
-    // Validate against model enum
-    const validStatuses = ['Applied', 'Under Review', 'Interview Scheduled', 'Interview Canceled', 'Offer Extended', 'Rejected'];
-    if (!validStatuses.includes(status)) {
-        return res.status(400).json({ message: 'Invalid status value' });
-    }
+// ========================
+// CENTRALIZED ATS PIPELINE
+// ========================
+
+/**
+ * 1) Advance Application (Recruiter only)
+ * Moves application to the next step in the pipeline.
+ * applied → in_review → interview → offered → hired
+ */
+router.patch('/:id/advance', requireKycApproved, requireRole('recruiter', 'admin'), async (req, res) => {
+    const { id } = req.params;
+    const recruiterId = req.user.id;
 
     try {
-        // Ownership verification
-        const recruiterId = req.user.id;
         const application = await Application.findById(id).populate('job_id');
         if (!application) return res.status(404).json({ message: 'Application not found' });
 
-        if (!application.job_id || application.job_id.recruiter_id.toString() !== recruiterId) {
-            return res.status(403).json({ message: 'Unauthorized: You do not own the job for this application' });
-        }
-
-        application.status = status;
-        await application.save();
-        res.json({ success: true, message: 'Status updated', application });
-    } catch (error) {
-        console.error("Update status error:", error);
-        res.status(500).json({ message: 'Error updating status' });
-    }
-});
-
-// Schedule Interview
-router.put('/:id/schedule-interview', requireKycApproved, async (req, res) => {
-    const { id } = req.params;
-    const { date, time, mode, location, meetLink, duration, interviewer, notes } = req.body;
-
-    try {
-        const recruiterId = req.user.id;
-        const application = await Application.findById(id).populate('job_id');
-        if (!application) return res.status(404).json({ message: 'Application not found' });
-
-        if (!application.job_id || application.job_id.recruiter_id.toString() !== recruiterId) {
+        // Authorization: Recruiter must own the job
+        if (application.job_id.recruiter_id.toString() !== recruiterId && req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Unauthorized access' });
         }
 
-        const interviewData = {
-            date, time, mode, location, meetLink, duration, interviewer, notes,
-            scheduledAt: new Date()
-        };
+        const currentStatus = application.status;
+        const pipeline = ['applied', 'in_review', 'interview', 'offered', 'hired'];
+        const currentIndex = pipeline.indexOf(currentStatus);
 
-        application.interview = interviewData;
-        application.status = 'Interview Scheduled';
-        application.interviewHistory.push({
-            action: 'Scheduled',
-            details: interviewData,
-            timestamp: new Date()
-        });
+        if (currentIndex === -1 || currentStatus === 'rejected' || currentStatus === 'withdrawn') {
+            return res.status(400).json({ message: `Cannot advance from final state: ${currentStatus}` });
+        }
 
+        if (currentIndex === pipeline.length - 1) {
+            return res.status(400).json({ message: 'Application is already at the final stage (hired).' });
+        }
+
+        const nextStatus = pipeline[currentIndex + 1];
+
+        // Specific requirements for 'interview' stage
+        if (nextStatus === 'interview') {
+            const { date, time, mode, location, meetLink, notes } = req.body;
+            if (!date || !time || !mode) {
+                return res.status(400).json({
+                    message: 'Date, time, and mode are required to advance to interview stage.'
+                });
+            }
+
+            application.interview = { date, time, mode, location, meetLink, notes, scheduledAt: new Date() };
+            application.interviewHistory.push({
+                action: 'Scheduled',
+                details: application.interview,
+                timestamp: new Date()
+            });
+        }
+
+        application.status = nextStatus;
         await application.save();
-        res.json({ success: true, message: 'Interview scheduled', application });
+
+        console.log(`[ADVANCE] Application ${id} advanced from ${currentStatus} to ${nextStatus}`);
+        console.log(`[ADVANCE] Interview details:`, application.interview);
+
+        // Create notification for jobseeker
+        if (nextStatus === 'interview') {
+            const { createNotification } = await import('../utils/notificationUtils.js');
+            await createNotification(
+                application.seeker_id,
+                'INTERVIEW_SCHEDULED',
+                `Your interview for ${application.job_id?.title || 'the position'} has been scheduled`,
+                application._id
+            );
+            console.log(`[ADVANCE] Notification sent to jobseeker ${application.seeker_id}`);
+        }
+
+        // Log activity
+        await logActivity(recruiterId, 'recruiter', 'APPLICATION_ADVANCED', `Advanced application to ${nextStatus}`, 'Application', application._id);
+
+        res.json({
+            success: true,
+            message: `Advanced to ${nextStatus}`,
+            application
+        });
     } catch (error) {
-        console.error("Schedule interview error:", error);
-        res.status(500).json({ message: 'Error scheduling interview' });
+        console.error("[ADVANCE] Advance error:", error);
+        res.status(500).json({ message: 'Error advancing application' });
     }
 });
 
-// Update/Reschedule Interview
-router.put('/:id/reschedule-interview', requireKycApproved, async (req, res) => {
+/**
+ * 2) Reject Application (Recruiter only)
+ * Marks application as rejected from any non-final stage.
+ */
+router.patch('/:id/reject', requireKycApproved, requireRole('recruiter', 'admin'), async (req, res) => {
     const { id } = req.params;
-    const { date, time, mode, location, meetLink, duration, interviewer, notes } = req.body;
+    const { reason } = req.body;
+    const recruiterId = req.user.id;
 
     try {
-        const recruiterId = req.user.id;
         const application = await Application.findById(id).populate('job_id');
         if (!application) return res.status(404).json({ message: 'Application not found' });
 
-        if (!application.job_id || application.job_id.recruiter_id.toString() !== recruiterId) {
+        if (application.job_id.recruiter_id.toString() !== recruiterId && req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Unauthorized access' });
         }
 
-        if (new Date(date) < new Date().setHours(0, 0, 0, 0)) {
-            return res.status(400).json({ message: 'Interview cannot be scheduled in the past' });
+        const finalStates = ['rejected', 'withdrawn', 'hired'];
+        if (finalStates.includes(application.status)) {
+            return res.status(400).json({ message: `Cannot reject an application that is already ${application.status}.` });
         }
 
-        const oldInterview = application.interview;
-        const updatedInterview = {
-            date, time, mode, location, meetLink, duration, interviewer, notes,
-            scheduledAt: application.interview?.scheduledAt || new Date()
-        };
-
-        application.interview = updatedInterview;
-        application.rescheduledAt = new Date();
-        application.interviewHistory.push({
-            action: 'Rescheduled',
-            details: updatedInterview,
-            reason: 'Recruiter requested reschedule',
-            timestamp: new Date()
-        });
-
+        application.status = 'rejected';
+        application.cancelReason = reason; // Store reason if provided
         await application.save();
-        res.json({ success: true, message: 'Interview rescheduled', application });
+
+        res.json({ success: true, message: 'Application rejected', application });
     } catch (error) {
-        console.error("Reschedule interview error:", error);
-        res.status(500).json({ message: 'Error rescheduling interview' });
+        console.error("Reject error:", error);
+        res.status(500).json({ message: 'Error rejecting application' });
     }
 });
 
-// Cancel Interview
-router.delete('/:id/cancel-interview', requireKycApproved, async (req, res) => {
+/**
+ * 3) Withdraw Application (Jobseeker only)
+ * Jobseekers can withdraw their own application before it reaches a final stage.
+ */
+router.patch('/:id/withdraw', async (req, res) => {
     const { id } = req.params;
-    const { reason } = req.body; // Reason should be provided in body
+    const seekerId = req.user?.id;
+    const { reason } = req.body;
+
+    if (req.user?.role !== 'jobseeker') {
+        return res.status(403).json({ message: 'Only jobseekers can withdraw applications' });
+    }
 
     try {
-        const recruiterId = req.user.id;
+        const application = await Application.findById(id);
+        if (!application) return res.status(404).json({ message: 'Application not found' });
+
+        if (application.seeker_id.toString() !== seekerId) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        const finalStates = ['rejected', 'withdrawn', 'hired'];
+        if (finalStates.includes(application.status)) {
+            return res.status(400).json({ message: `Cannot withdraw an application that is already ${application.status}.` });
+        }
+
+        // Optional: Block withdrawal after interview/offer
+        if (['interview', 'offered'].includes(application.status)) {
+            // We can allow it but maybe log/notify
+        }
+
+        application.status = 'withdrawn';
+        application.cancelReason = reason || 'Withdrawn by candidate';
+        await application.save();
+
+        res.json({ success: true, message: 'Application withdrawn successfully', application });
+    } catch (error) {
+        console.error("Withdraw error:", error);
+        res.status(500).json({ message: 'Error withdrawing application' });
+    }
+});
+
+/**
+ * 4) Accept Offer (Jobseeker only)
+ * Jobseeker accepts the job offer, moving status from 'offered' to 'hired'.
+ */
+router.patch('/:id/accept-offer', requireAuth, async (req, res) => {
+    const { id } = req.params;
+    const seekerId = req.user?.id;
+
+    if (req.user?.role !== 'jobseeker') {
+        return res.status(403).json({ message: 'Only jobseekers can accept offers' });
+    }
+
+    try {
         const application = await Application.findById(id).populate('job_id');
         if (!application) return res.status(404).json({ message: 'Application not found' });
 
-        if (!application.job_id || application.job_id.recruiter_id.toString() !== recruiterId) {
-            return res.status(403).json({ message: 'Unauthorized access' });
+        if (application.seeker_id.toString() !== seekerId) {
+            return res.status(403).json({ message: 'Unauthorized access to this application' });
         }
 
-        const canceledDetails = application.interview;
-        application.interview = undefined;
-        application.status = 'Interview Canceled';
-        application.canceledAt = new Date();
-        application.cancelReason = reason || 'No reason provided';
+        if (application.status !== 'offered') {
+            return res.status(400).json({ message: 'Can only accept applications in "offered" status' });
+        }
 
-        application.interviewHistory.push({
-            action: 'Canceled',
-            details: canceledDetails,
-            reason: application.cancelReason,
-            timestamp: new Date()
-        });
-
+        application.status = 'hired';
         await application.save();
-        res.json({ success: true, message: 'Interview canceled', application });
+
+        // Log activity
+        await logActivity(seekerId, 'jobseeker', 'OFFER_ACCEPTED', `Accepted job offer for '${application.job_id?.title || 'position'}'.`, 'Application', application._id);
+
+        // Create notification for recruiter
+        const { createNotification } = await import('../utils/notificationUtils.js');
+        await createNotification(
+            application.job_id.recruiter_id,
+            'OFFER_ACCEPTED',
+            `${req.user.fullName || 'A candidate'} accepted the offer for ${application.job_id?.title || 'your job posting'}`,
+            application._id
+        );
+
+        res.json({ success: true, message: 'Offer accepted successfully! Welcome aboard.', application });
     } catch (error) {
-        console.error("Cancel interview error:", error);
-        res.status(500).json({ message: 'Error canceling interview' });
+        console.error("Accept offer error:", error);
+        res.status(500).json({ message: 'Error accepting offer' });
     }
+});
+
+// Deprecated endpoint
+router.put('/:id/status', (req, res) => {
+    res.status(405).json({ message: 'Generic status updates disabled. Use /advance, /reject, or /withdraw.' });
 });
 
 // Request Reschedule (Jobseeker only)

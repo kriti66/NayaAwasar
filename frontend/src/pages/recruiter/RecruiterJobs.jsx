@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import RecruiterLayout from '../../components/layouts/RecruiterLayout';
 import api from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,6 +20,7 @@ import { toast } from 'react-hot-toast';
 
 const RecruiterJobs = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [jobs, setJobs] = useState([]);
     const [stats, setStats] = useState({ total: 0, active: 0, applicants: 0, closed: 0 });
     const [loading, setLoading] = useState(true);
@@ -87,7 +88,7 @@ const RecruiterJobs = () => {
     };
 
     return (
-        <RecruiterLayout>
+        <>
             <main className="flex-1 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full py-10">
 
                 {/* Page Header */}
@@ -224,7 +225,10 @@ const RecruiterJobs = () => {
                                 </div>
 
                                 <div className="mt-6 md:mt-0 flex flex-col items-end gap-3 justify-center pl-0 md:pl-6 md:border-l border-gray-100">
-                                    <button className="w-full md:w-auto px-4 py-2 bg-[#2D9B82] text-white text-xs font-bold rounded-lg hover:bg-[#25836d] shadow-sm shadow-[#2D9B82]/20 flex items-center justify-center gap-2 transition-all">
+                                    <button
+                                        onClick={() => navigate(`/recruiter/jobs/${job.id || job._id}/analytics`)}
+                                        className="w-full md:w-auto px-4 py-2 bg-[#2D9B82] text-white text-xs font-bold rounded-lg hover:bg-[#25836d] shadow-sm shadow-[#2D9B82]/20 flex items-center justify-center gap-2 transition-all"
+                                    >
                                         <PieChart size={14} />
                                         View Analytics
                                     </button>
@@ -273,7 +277,7 @@ const RecruiterJobs = () => {
                 )}
 
             </main>
-        </RecruiterLayout>
+        </>
     );
 };
 

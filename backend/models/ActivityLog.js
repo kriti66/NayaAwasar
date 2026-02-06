@@ -1,23 +1,32 @@
+
 import mongoose from 'mongoose';
 
 const activityLogSchema = new mongoose.Schema({
-    type: {
+    actorId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    actorRole: {
         type: String,
         required: true,
-        enum: ['registration', 'kyc_approved', 'kyc_rejected', 'job_added', 'location_updated', 'user_updated', 'system']
+        enum: ['jobseeker', 'recruiter', 'admin', 'system']
+    },
+    action: {
+        type: String,
+        required: true
+    },
+    targetType: {
+        type: String,
+        required: false // e.g., 'Job', 'Application', 'User'
+    },
+    targetId: {
+        type: mongoose.Schema.Types.ObjectId,
+        required: false
     },
     message: {
         type: String,
         required: true
-    },
-    performedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: false // Some actions like registration are performed by the user themselves before being fully authenticated in some contexts, or system actions
-    },
-    metadata: {
-        type: mongoose.Schema.Types.Mixed,
-        required: false
     }
 }, { timestamps: true });
 

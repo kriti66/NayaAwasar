@@ -102,6 +102,12 @@ const userSchema = new mongoose.Schema({
         seniority: { type: String, default: 'Entry Level' }
     },
 
+    // Saved Jobs
+    savedJobs: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Job'
+    }],
+
     // Projects
     projects: [{
         title: String,

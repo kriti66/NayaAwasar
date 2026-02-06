@@ -3,6 +3,7 @@ import KYC from '../models/KYC.js';
 import ActivityLog from '../models/ActivityLog.js';
 import Company from '../models/Company.js';
 import Job from '../models/Job.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 /**
  * GET /api/admin/stats
@@ -39,7 +40,7 @@ export const getActivityLogs = async (req, res) => {
         const activities = await ActivityLog.find({})
             .sort({ createdAt: -1 })
             .limit(parseInt(limit))
-            .populate('performedBy', 'fullName role')
+            .populate('actorId', 'fullName email role')
             .lean();
 
         res.json(activities);
@@ -140,11 +141,7 @@ export const updateCompanyStatus = async (req, res) => {
         await company.save();
 
         // Log Activity
-        await ActivityLog.create({
-            message: `Company '${company.name}' status updated to ${status}`,
-            type: 'system',
-            performedBy: req.user.id
-        });
+        await logActivity(req.user.id, req.user.role, 'COMPANY_STATUS_UPDATE', `Company '${company.name}' status updated to ${status}`, 'Company', company._id);
 
         res.json({ message: `Company status updated to ${status}`, company });
     } catch (error) {
@@ -152,4 +149,5 @@ export const updateCompanyStatus = async (req, res) => {
         res.status(500).json({ message: 'Error updating company status' });
     }
 };
+
 

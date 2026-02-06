@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import DashboardNavbar from '../../components/dashboard/DashboardNavbar';
 import applicationService from '../../services/applicationService';
 import { Calendar as CalendarIcon, Clock, MapPin, Video, User, Link as LinkIcon, X, AlertCircle, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -172,9 +171,12 @@ const SeekerInterviews = () => {
                                                 Request Reschedule
                                             </button>
                                         )}
-                                        <button className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">
+                                        <Link
+                                            to={`/jobseeker/jobs/${app.job_id?._id || app.job_id}`}
+                                            className="px-8 py-3 bg-white border border-slate-200 text-slate-600 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all text-center flex items-center justify-center font-bold"
+                                        >
                                             View Details
-                                        </button>
+                                        </Link>
                                     </div>
                                 </div>
                             </div>
@@ -262,18 +264,8 @@ const SeekerInterviews = () => {
         </div>
     );
 
-    if (isFocused) {
-        return (
-            <div className="min-h-screen bg-[#FDFEFE] font-sans flex flex-col">
-                <MainContent />
-            </div>
-        );
-    }
-
     return (
-        <div className="min-h-screen flex flex-col bg-[#FDFEFE] font-sans">
-            <DashboardNavbar />
-
+        <>
             <div className="flex-1 flex flex-col w-full">
                 <header className="h-16 bg-white border-b border-slate-100 flex items-center px-4 sm:px-6 lg:px-8 sticky top-0 z-30 justify-between">
                     <div className="flex items-center gap-2">
@@ -284,7 +276,7 @@ const SeekerInterviews = () => {
 
                 <MainContent />
             </div>
-        </div>
+        </>
     );
 };
 

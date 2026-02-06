@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Mail, Briefcase, GraduationCap, Link as LinkIcon, Box, Info, Settings } from 'lucide-react';
 import SeekerLayout from '../../components/layouts/SeekerLayout';
 import profileService from '../../services/profileService';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 
 // Components
 import ProfileHeader from '../../components/profile/ProfileHeader';
@@ -26,7 +24,7 @@ const ProfileManagement = () => {
     const [profile, setProfile] = useState(null);
     const [editSection, setEditSection] = useState(null);
     const [formData, setFormData] = useState({});
-    const resumeRef = useRef();
+    const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
         fetchProfile();
@@ -59,8 +57,15 @@ const ProfileManagement = () => {
         try {
             toast.loading(`Saving ${sectionLabel}...`, { id: "save-profile" });
             const result = await profileService.updateProfile(formData);
-            if (result.success) {
-                setProfile(result.user);
+            if (result.success) { // Assuming result returns the updated profile or similar
+                // If result is the profile object itself (based on backend controller logic usually returning updated profile)
+                // logic in controller: res.json(profile);
+                setProfile(result);
+                setEditSection(null);
+                toast.success(`${sectionLabel} updated!`, { id: "save-profile" });
+            } else {
+                // Fallback if structure is different
+                setProfile(result);
                 setEditSection(null);
                 toast.success(`${sectionLabel} updated!`, { id: "save-profile" });
             }
@@ -81,10 +86,10 @@ const ProfileManagement = () => {
 
     const handleTogglePublic = async (isPublic) => {
         try {
-            const result = await profileService.updateProfile({ isPublic });
-            if (result.success) {
-                setProfile(prev => ({ ...prev, isPublic }));
-                toast.success(`Profile visibility set to ${isPublic ? 'Public' : 'Private'}`);
+            const result = await profileService.updateVisibility(isPublic);
+            if (result) {
+                setProfile(prev => ({ ...prev, visibleToRecruiters: result.visible }));
+                toast.success(`Profile visibility set to ${result.visible ? 'Public' : 'Private'}`);
             }
         } catch (error) {
             toast.error("Failed to update visibility");
@@ -96,47 +101,54 @@ const ProfileManagement = () => {
         if (!file) return;
 
         const uploadData = new FormData();
-        uploadData.append('cv', file);
+        uploadData.append('resume', file); // Field name must match backend 'upload.single("resume")'
         try {
             toast.loading("Uploading resume...", { id: "upload" });
             const res = await profileService.uploadResume(uploadData);
-            if (res.success) {
-                setProfile(prev => ({ ...prev, resume_url: res.url }));
+            // res is expected to be the resume object: { fileUrl, fileName, ... }
+            if (res) {
+                setProfile(prev => ({ ...prev, resume: res }));
                 toast.success("Resume uploaded successfully!", { id: "upload" });
             }
         } catch (error) {
+            console.error(error);
             toast.error("Failed to upload resume", { id: "upload" });
         }
     };
 
-    const handleDownloadGeneratedCV = async () => {
-        const element = resumeRef.current;
-        if (!element) return;
-
+    const handleAutoGenerateCV = async () => {
+        setIsGenerating(true);
         try {
-            toast.loading("Generating professional PDF...", { id: "pdf-gen" });
-
-            const canvas = await html2canvas(element, {
-                scale: 3,
-                useCORS: true,
-                backgroundColor: '#ffffff',
-                logging: false,
-                width: 800,
-                windowWidth: 800
-            });
-
-            const imgData = canvas.toDataURL('image/png');
-            const pdf = new jsPDF('p', 'mm', 'a4');
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
-            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-            pdf.save(`${profile.fullName.replace(/\s+/g, '_')}_Resume.pdf`);
-
-            toast.success("Resume PDF downloaded!", { id: "pdf-gen" });
+            toast.loading("Generating professional CV...", { id: "cv-gen" });
+            const res = await profileService.generateCV();
+            // Expected response: { success: true, resume: { ... } }
+            if (res.success && res.resume) {
+                setProfile(prev => ({ ...prev, resume: res.resume }));
+                toast.success("CV generated successfully!", { id: "cv-gen" });
+            }
         } catch (error) {
-            console.error("PDF generation error:", error);
-            toast.error("Failed to generate PDF", { id: "pdf-gen" });
+            console.error("CV Gen error:", error);
+            toast.error("Failed to generate CV", { id: "cv-gen" });
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleDownloadResume = async () => {
+        try {
+            const blob = await profileService.downloadResume();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', profile?.resume?.fileName || 'resume.pdf');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            toast.success("Download started");
+        } catch (error) {
+            console.error("Download error:", error);
+            toast.error("Failed to download resume");
         }
     };
 
@@ -347,8 +359,10 @@ const ProfileManagement = () => {
                         {/* Resume Management */}
                         <ResumeManagementCard
                             profile={profile}
-                            onDownloadPDF={handleDownloadGeneratedCV}
+                            onDownloadPDF={handleDownloadResume}
                             onUploadClick={handleFileUpload}
+                            onAutoGenerate={handleAutoGenerateCV}
+                            isGenerating={isGenerating}
                         />
 
                         {/* Job Preferences (UI Card) */}
@@ -378,77 +392,13 @@ const ProfileManagement = () => {
 
                         {/* Visibility */}
                         <ProfileVisibilityCard
-                            isPublic={profile?.isPublic}
+                            isPublic={profile?.visibleToRecruiters}
                             onToggle={handleTogglePublic}
                         />
 
                     </aside>
                 </div>
             </main>
-
-            {/* Hidden Resume Template for PDF Generation */}
-            <div className="fixed -left-[2000px] top-0 pointer-events-none">
-                <div ref={resumeRef} className="bg-white p-12" style={{ width: '800px', minHeight: '1131px' }}>
-                    <div className="border-b-4 border-[#2D9B82] pb-8 mb-10">
-                        <h1 className="text-4xl font-extrabold text-gray-900 uppercase tracking-tight mb-2">{profile?.fullName}</h1>
-                        <p className="text-lg font-bold text-[#2D9B82] uppercase tracking-widest">{profile?.professionalHeadline}</p>
-                        <div className="flex gap-6 mt-4 text-sm text-gray-500 font-bold">
-                            <span>{profile?.email}</span>
-                            <span>{profile?.phoneNumber}</span>
-                            <span>{profile?.location}</span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-10">
-                        <section>
-                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-[0.2em] mb-4 border-l-4 border-[#2D9B82] pl-3">Professional Summary</h3>
-                            <p className="text-sm text-gray-600 leading-relaxed text-justify font-medium">{profile?.bio}</p>
-                        </section>
-
-                        <section>
-                            <h3 className="text-sm font-black text-gray-900 uppercase tracking-[0.2em] mb-6 border-l-4 border-[#2D9B82] pl-3">Experience</h3>
-                            <div className="space-y-8">
-                                {profile?.workExperience?.map((exp, i) => (
-                                    <div key={i}>
-                                        <div className="flex justify-between items-baseline mb-1">
-                                            <h4 className="text-base font-bold text-gray-800">{exp.title}</h4>
-                                            <span className="text-xs text-gray-400 font-bold">{exp.duration}</span>
-                                        </div>
-                                        <p className="text-sm font-bold text-[#2D9B82] mb-2">{exp.company}</p>
-                                        <p className="text-xs text-gray-600 leading-relaxed text-justify font-medium whitespace-pre-line">{exp.description}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-
-                        <div className="grid grid-cols-2 gap-10">
-                            <section>
-                                <h3 className="text-sm font-black text-gray-900 uppercase tracking-[0.2em] mb-4 border-l-4 border-[#2D9B82] pl-3">Education</h3>
-                                <div className="space-y-6">
-                                    {profile?.education?.map((edu, i) => (
-                                        <div key={i}>
-                                            <h4 className="text-sm font-bold text-gray-800">{edu.degree}</h4>
-                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-tight">{edu.institution}</p>
-                                            <p className="text-[10px] text-[#2D9B82] font-black mt-1 font-mono">{edu.year}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </section>
-
-                            <section>
-                                <h3 className="text-sm font-black text-gray-900 uppercase tracking-[0.2em] mb-4 border-l-4 border-[#2D9B82] pl-3">Skills</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {profile?.skills?.split(',').map((s, i) => (
-                                        <span key={i} className="px-3 py-1.5 bg-gray-50 border border-gray-100 rounded-lg text-[10px] font-black uppercase text-gray-600 tracking-tighter">
-                                            {s.trim()}
-                                        </span>
-                                    ))}
-                                </div>
-                            </section>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </SeekerLayout>
     );
 };

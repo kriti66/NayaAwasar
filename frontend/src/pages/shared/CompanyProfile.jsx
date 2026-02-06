@@ -3,13 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
     Building2, MapPin, Globe, Users, Calendar, Mail, Link as LinkIcon,
     Linkedin, Github, ExternalLink, CheckCircle, Clock, ShieldCheck,
-    Briefcase, Cpu, Gift, TrendingUp, Info, Edit3, Save, X, Plus, Sparkles, ChevronDown
+    Briefcase, Cpu, Gift, TrendingUp, Info, Edit3, Save, X, Plus, Sparkles, ChevronDown, ShieldAlert
 } from 'lucide-react';
-import DashboardNavbar from '../../components/dashboard/DashboardNavbar';
 import companyService from '../../services/companyService';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
-import GlobalFooter from '../../components/GlobalFooter';
 
 const CompanyProfile = () => {
     const { id } = useParams(); // For public view / ADMIN view
@@ -39,8 +37,9 @@ const CompanyProfile = () => {
     const isRecruiter = authUser?.role === 'recruiter';
     const isAdmin = authUser?.role === 'admin';
     const isAdminView = window.location.pathname.startsWith('/admin');
+    const isSeekerView = window.location.pathname.startsWith('/seeker');
     const isOwner = isRecruiter && company?.recruiters?.some(r => r._id === authUser.id || r === authUser.id);
-    const canEdit = (isOwner || isAdmin) && !isAdminView; // Admin can edit only if not in "Review Mode" (technically admin can always edit but we want a review view)
+    const canEdit = (isOwner || isAdmin) && !isAdminView; // Admin can edit only if not in "Review Mode"
     const canReview = isAdmin && isAdminView;
 
     useEffect(() => {
@@ -58,30 +57,25 @@ const CompanyProfile = () => {
                     data = await companyService.getCompanyById(id);
                 }
             } else if (isRecruiter) {
-                // Fetch recruiter's own company
                 data = await companyService.getMyCompany();
             } else {
-                // No ID and not recruiter? Redirect or error
                 toast.error("Company ID missing");
-                navigate('/seeker/dashboard');
+                navigate('/jobs');
                 return;
             }
             setCompany(data);
             setEditData(data);
 
-            // Set stats from company object if available
             if (data.stats) {
                 setStats(data.stats);
             }
 
-            // Fetch recent jobs
             if (data._id) {
                 let jobs;
                 if (!id && isRecruiter) {
                     jobs = await companyService.getMyJobs();
                 } else {
                     jobs = await companyService.getCompanyRecentJobs(data._id);
-                    // Also refresh stats for my view if specifically asked via separate API
                     if (!id && isRecruiter) {
                         const s = await companyService.getCompanyStats();
                         setStats(s);
@@ -92,7 +86,6 @@ const CompanyProfile = () => {
         } catch (error) {
             console.error("Error fetching company:", error);
             if (error.response?.status === 404 && isRecruiter && !id) {
-                // Recruiter doesn't have a company yet - offer to create one
                 setCompany({ name: 'Create Your Company', isNew: true });
             } else {
                 toast.error("Failed to load company profile");
@@ -116,7 +109,6 @@ const CompanyProfile = () => {
                 toast.success("Business profile synchronized!");
             }
 
-            // Handle Image Uploads
             if (logoFile) {
                 await companyService.uploadLogo(companyId, logoFile);
                 toast.success("Logo uploaded successfully");
@@ -125,10 +117,10 @@ const CompanyProfile = () => {
             if (photoFiles.length > 0) {
                 await companyService.uploadPhotos(companyId, photoFiles);
                 toast.success("Photos uploaded successfully");
-                setPhotoFiles([]); // Clear after upload
+                setPhotoFiles([]);
             }
 
-            setLogoFile(null); // Clear after upload
+            setLogoFile(null);
             setShowEditModal(false);
             fetchCompany();
         } catch (error) {
@@ -139,9 +131,8 @@ const CompanyProfile = () => {
 
     const handleVerify = async (status) => {
         if (!isAdmin) return;
-
         if (status === 'approved') {
-            if (window.confirm("Are you sure you want to APPROVE this company? This will enable them to post jobs.")) {
+            if (window.confirm("Are you sure you want to APPROVE this company?")) {
                 performStatusUpdate('approved', null);
             }
         } else if (status === 'rejected') {
@@ -193,11 +184,8 @@ const CompanyProfile = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
-                <DashboardNavbar />
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="w-12 h-12 border-4 border-[#2D9B82]/30 border-t-[#2D9B82] rounded-full animate-spin"></div>
-                </div>
+            <div className="flex-1 flex items-center justify-center min-h-[400px]">
+                <div className="w-12 h-12 border-4 border-[#2D9B82]/30 border-t-[#2D9B82] rounded-full animate-spin"></div>
             </div>
         );
     }
@@ -205,7 +193,7 @@ const CompanyProfile = () => {
     if (!company) return null;
 
     return (
-        <div className="min-h-screen bg-[#F3F4F6] font-sans flex flex-col text-gray-900 relative">
+        <div className="flex-1 font-sans flex flex-col text-gray-900 relative bg-[#F3F4F6] pb-12">
             {/* Rejection Modal */}
             {showRejectModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -217,7 +205,7 @@ const CompanyProfile = () => {
                         </div>
                         <div className="p-6 space-y-4">
                             <p className="text-sm text-gray-600">
-                                Please provide a detailed reason for rejection. This feedback will be visible to the recruiter.
+                                Please provide a detailed reason for rejection.
                             </p>
                             <textarea
                                 className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none text-sm"
@@ -246,9 +234,7 @@ const CompanyProfile = () => {
                 </div>
             )}
 
-            <DashboardNavbar />
-
-            <main className="flex-1 py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+            <main className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
                 {/* Visual Header / Banner Area */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
                     <div className="flex flex-col md:flex-row gap-8 items-start">
@@ -281,13 +267,13 @@ const CompanyProfile = () => {
                                         </span>
                                     )}
                                 </div>
-                                {canEdit && company.status !== 'approved' && company.status !== 'pending' && (
+                                {canEdit && (
                                     <button
                                         onClick={() => setShowEditModal(true)}
                                         className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#2D9B82] hover:bg-[#25836d] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D9B82] transition-colors uppercase tracking-wide"
                                     >
-                                        <CheckCircle className="w-4 h-4 mr-2" />
-                                        Complete Company Profile
+                                        <Edit3 className="w-4 h-4 mr-2" />
+                                        Edit Company Profile
                                     </button>
                                 )}
 
@@ -334,7 +320,7 @@ const CompanyProfile = () => {
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
                                         <MapPin className="w-3 h-3" /> Headquarters
                                     </p>
-                                    <p className="text-sm font-bold text-gray-900 truncate">{company.headquarters || 'Itahari-2 sundarharicha'}</p>
+                                    <p className="text-sm font-bold text-gray-900 truncate">{company.headquarters || 'Not listed'}</p>
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
@@ -347,72 +333,31 @@ const CompanyProfile = () => {
                                     ) : <p className="text-sm font-bold text-gray-900">Not listed</p>}
                                 </div>
                             </div>
-
-                            {isAdmin && company._id && (
-                                <div className="mt-6 flex gap-3">
-                                    <button onClick={() => handleVerify('approved')} className="px-3 py-1.5 bg-emerald-600 text-white rounded text-xs font-bold hover:bg-emerald-700">Approve</button>
-                                    <button onClick={() => handleVerify('rejected')} className="px-3 py-1.5 bg-red-600 text-white rounded text-xs font-bold hover:bg-red-700">Reject</button>
-                                </div>
-                            )}
                         </div>
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* 1. Main Content Left */}
                     <div className="lg:col-span-2 space-y-8">
-                        {/* Company Info */}
-                        <SectionCard title="Company Information">
-                            {/* Re-using header info logic here is redundant based on design, design puts it in card headers. 
-                                Actually design has "COMPANY INFORMATION" card with logo/details, but we did that in header.
-                                Let's follow the Sidebar/Content split properly. 
-                                Based on image: 
-                                Left Col (Main) has "COMPANY INFORMATION" again? No.
-                                It has "About Company" block on the Right.
-                                Wait, image order:
-                                Top: Header "COMPANY PROFILE" + Button.
-                                Left Block: "COMPANY INFORMATION" (Logo, Name, Details).
-                                Below Left: "HIRING INFORMATION".
-                                Below Left: "CONTACT INFORMATION".
-                                Below Left: "SOCIAL".
-                                Right Block: "ABOUT COMPANY".
-                                Right Block: "COMPANY STATISTICS".
-                                Right Block: "RECENT POSTINGS".
-                                
-                                Okay, I will adjust layout to match IMAGE exactly.
-                                2 Columns. Left is Info/Hiring/Contact. Right is About/Stats/Jobs.
-                             */}
-                            {/* Actually, looking at the image: 
-                                "Company Information" serves as the header card. I already built that as a full width header. 
-                                Let's stick to my robust layout: 
-                                Left: Details (About, Hiring, Jobs).
-                                Right: Sidebar (Stats, Contact, Social).
-                                This is standard "Profile" UX. The user image shows distinct cards.
-                             */}
+                        <SectionCard title="About Company">
+                            <div className="space-y-8">
+                                <AboutItem label="Mission" value={company.about?.mission} />
+                                <AboutItem label="Services & Products" value={company.about?.services} />
+                                <AboutItem label="Goals" value={company.about?.goals} />
+                                <AboutItem label="Culture" value={company.about?.culture} />
+                            </div>
+                        </SectionCard>
 
-                            {/* About Company */}
-                            <SectionCard title="About Company">
-                                <div className="space-y-8">
-                                    <AboutItem label="Mission" value={company.about?.mission} />
-                                    <AboutItem label="Services & Products" value={company.about?.services} />
-                                    <AboutItem label="Goals" value={company.about?.goals} />
-                                    <AboutItem label="Culture" value={company.about?.culture} />
-                                </div>
-                            </SectionCard>
-
-                            {/* Hiring Infrastructure */}
-                            <SectionCard title="Hiring Information">
-                                <div className="space-y-6">
-                                    <HiringTagGroup label="Job Types Offered" value={company.hiringInfo?.jobTypes} icon={<Briefcase />} />
-                                    <HiringTagGroup label="Primary Hiring Locations" value={company.hiringInfo?.locations} icon={<MapPin />} />
-                                    <HiringTagGroup label="Technologies & Tools" value={company.hiringInfo?.technologies} icon={<Cpu />} />
-                                    <HiringTagGroup label="Optional Benefits" value={company.hiringInfo?.benefits} icon={<Gift />} />
-                                </div>
-                            </SectionCard>
+                        <SectionCard title="Hiring Information">
+                            <div className="space-y-6">
+                                <HiringTagGroup label="Job Types Offered" value={company.hiringInfo?.jobTypes} icon={<Briefcase />} />
+                                <HiringTagGroup label="Primary Hiring Locations" value={company.hiringInfo?.locations} icon={<MapPin />} />
+                                <HiringTagGroup label="Technologies & Tools" value={company.hiringInfo?.technologies} icon={<Cpu />} />
+                                <HiringTagGroup label="Optional Benefits" value={company.hiringInfo?.benefits} icon={<Gift />} />
+                            </div>
                         </SectionCard>
                     </div>
 
-                    {/* 2. Sidebar Right */}
                     <div className="space-y-8">
                         {/* Company Stats */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -436,7 +381,7 @@ const CompanyProfile = () => {
                                     <div
                                         key={job._id}
                                         className="p-4 border border-gray-100 rounded-lg bg-white hover:shadow-md transition-all cursor-pointer group"
-                                        onClick={() => navigate(`/jobs/${job._id}`)}
+                                        onClick={() => navigate(isSeekerView ? `/jobseeker/jobs/${job._id}` : `/jobs/${job._id}`)}
                                     >
                                         <h4 className="text-sm font-bold text-gray-900 uppercase mb-1">{job.title}</h4>
                                         <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
@@ -460,7 +405,7 @@ const CompanyProfile = () => {
                             </div>
                             {recentJobs.length > 0 && (
                                 <button
-                                    onClick={() => navigate('/jobs')}
+                                    onClick={() => navigate(isSeekerView ? '/seeker/jobs' : '/jobs')}
                                     className="w-full mt-6 py-3 text-xs font-bold text-[#2D9B82] uppercase tracking-widest hover:bg-emerald-50 rounded transition-colors"
                                 >
                                     View All Opportunities
@@ -468,7 +413,7 @@ const CompanyProfile = () => {
                             )}
                         </div>
 
-                        {/* Contact Context */}
+                        {/* Contact Info */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#2D9B82] pl-3">
                                 Contact Information
@@ -476,15 +421,11 @@ const CompanyProfile = () => {
                             <div className="space-y-6">
                                 <div>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Official Email</p>
-                                    <a href={`mailto:${company.contact?.email}`} className="text-sm font-bold text-[#2D9B82] hover:underline break-all">{company.contact?.email || 'surya23@gmail.com'}</a>
+                                    <a href={`mailto:${company.contact?.email}`} className="text-sm font-bold text-[#2D9B82] hover:underline break-all">{company.contact?.email || 'Not listed'}</a>
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Business Address</p>
-                                    <p className="text-sm font-bold text-gray-900">{company.contact?.address || company.headquarters || 'Itahari-2 sundarharicha'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Platform Status</p>
-                                    <p className="text-sm font-black text-gray-900 uppercase">{company.status || 'APPROVED'}</p>
+                                    <p className="text-sm font-bold text-gray-900">{company.contact?.address || company.headquarters || 'Not listed'}</p>
                                 </div>
                             </div>
                         </div>
@@ -492,7 +433,7 @@ const CompanyProfile = () => {
                         {/* Social Links */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#2D9B82] pl-3">
-                                Social & External Links
+                                Social Links
                             </h3>
                             <div className="space-y-4">
                                 <SocialLinkItem icon={<Linkedin />} label="LinkedIn" value={company.socialLinks?.linkedin} />
@@ -507,28 +448,15 @@ const CompanyProfile = () => {
                                 <header className="flex items-center gap-3 mb-4">
                                     <ShieldCheck className="w-5 h-5 text-[#2D9B82]" />
                                     <div>
-                                        <h3 className="text-sm font-bold uppercase tracking-wide">Admin Only: Compliance & Internal Details</h3>
-                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Authorized Access Restricted</p>
+                                        <h3 className="text-sm font-bold uppercase tracking-wide">Admin Access Restricted</h3>
                                     </div>
                                 </header>
                                 <div className="space-y-4 pt-4 border-t border-gray-800">
                                     <div>
-                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Ownership Linkage to Recruiters</p>
-                                        <div className="text-xs font-bold text-white">
-                                            {company.recruiters?.map((r, i) => (
-                                                <div key={i}>{r.fullName || 'Surya Bista (ID: 4x8trj)'}</div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-2">
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Moderation Status</p>
                                         <span className="px-2 py-1 bg-red-600 text-white text-[10px] font-bold uppercase rounded">
-                                            {company.adminFields?.moderationStatus?.toUpperCase() || 'APPROVED'}
+                                            {company.status?.toUpperCase() || 'DRAFT'}
                                         </span>
-                                    </div>
-                                    <div className="p-3 bg-gray-800 rounded border border-gray-700">
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Most Recent Admin Action</p>
-                                        <p className="text-xs font-bold text-white">"Status updated to approved"</p>
-                                        <p className="text-[10px] text-gray-500 mt-1">Last Evaluated: 2/3/2026</p>
                                     </div>
                                 </div>
                             </div>
@@ -544,7 +472,6 @@ const CompanyProfile = () => {
                         <header className="p-6 border-b border-gray-100 flex justify-between items-center bg-white sticky top-0 z-10">
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900">Edit Company Profile</h3>
-                                <p className="text-sm text-gray-500 mt-1">Update your business information and public presence.</p>
                             </div>
                             <button onClick={() => setShowEditModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600">
                                 <X className="w-6 h-6" />
@@ -552,15 +479,6 @@ const CompanyProfile = () => {
                         </header>
 
                         <div className="flex-1 overflow-y-auto p-8 space-y-8 bg-gray-50/50">
-                            {/* Compliance Awareness */}
-                            <div className="p-4 bg-emerald-50/50 rounded-lg border border-emerald-100 flex items-start gap-4">
-                                <Info className="w-5 h-5 text-[#2D9B82] shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="text-sm font-bold text-[#2D9B82] mb-1">Verified Information</p>
-                                    <p className="text-sm text-[#25836d]">Company Name and Industry are verified fields. To change these, please contact support.</p>
-                                </div>
-                            </div>
-
                             <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-8">
                                 {/* Basic Information */}
                                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6">
@@ -573,6 +491,7 @@ const CompanyProfile = () => {
                                                 value={editData.size || ''}
                                                 onChange={(e) => handleChange(e, 'size')}
                                             >
+                                                <option value="">Select Size</option>
                                                 {['1-10 employees', '11-50 employees', '51-200 employees', '201-500 employees', '501-1000 employees', '1000+ employees'].map(opt => (
                                                     <option key={opt} value={opt}>{opt}</option>
                                                 ))}
@@ -602,28 +521,10 @@ const CompanyProfile = () => {
                                             <input
                                                 type="file"
                                                 accept="image/*"
-                                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#2D9B82]/10 file:text-[#2D9B82] hover:file:bg-[#2D9B82]/20"
+                                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
                                                 onChange={(e) => setLogoFile(e.target.files[0])}
                                             />
-                                            {editData.logo && !logoFile && (
-                                                <div className="mt-2">
-                                                    <p className="text-xs text-gray-500">Current Logo:</p>
-                                                    <img src={getImageUrl(editData.logo)} alt="Current Logo" className="h-12 w-12 object-contain mt-1 border border-gray-200 rounded" />
-                                                </div>
-                                            )}
                                         </div>
-                                    </div>
-
-                                    <div className="space-y-2 mt-4 pt-4 border-t border-gray-100">
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Company Photos (Gallery)</label>
-                                        <input
-                                            type="file"
-                                            multiple
-                                            accept="image/*"
-                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#2D9B82]/10 file:text-[#2D9B82] hover:file:bg-[#2D9B82]/20"
-                                            onChange={(e) => setPhotoFiles(Array.from(e.target.files))}
-                                        />
-                                        <p className="text-[10px] text-gray-400">Select multiple images to add to your company gallery.</p>
                                     </div>
                                 </div>
 
@@ -638,7 +539,6 @@ const CompanyProfile = () => {
                                                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
                                                 value={editData.headquarters || ''}
                                                 onChange={(e) => handleChange(e, 'headquarters')}
-                                                placeholder="City, Country"
                                             />
                                         </div>
                                         <div className="space-y-2">
@@ -648,15 +548,6 @@ const CompanyProfile = () => {
                                                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
                                                 value={editData.contact?.email || ''}
                                                 onChange={(e) => handleChange(e, 'contact.email')}
-                                            />
-                                        </div>
-                                        <div className="md:col-span-2 space-y-2">
-                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Full Address</label>
-                                            <input
-                                                type="text"
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
-                                                value={editData.contact?.address || ''}
-                                                onChange={(e) => handleChange(e, 'contact.address')}
                                             />
                                         </div>
                                     </div>
@@ -672,17 +563,6 @@ const CompanyProfile = () => {
                                             <AboutItem label="Goals" isEditing={true} value={editData.about?.goals} onChange={(e) => handleChange(e, 'about.goals')} />
                                             <AboutItem label="Culture" isEditing={true} value={editData.about?.culture} onChange={(e) => handleChange(e, 'about.culture')} />
                                         </div>
-                                    </div>
-                                </div>
-
-                                {/* Hiring Data */}
-                                <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6">
-                                    <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider pb-2 border-b border-gray-100">Hiring Info</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <HiringTagGroup label="Job Roles" isEditing={true} value={editData.hiringInfo?.jobTypes} onChange={(e) => handleArrayChange(e, 'jobTypes')} icon={<Briefcase />} />
-                                        <HiringTagGroup label="Locations" isEditing={true} value={editData.hiringInfo?.locations} onChange={(e) => handleArrayChange(e, 'locations')} icon={<MapPin />} />
-                                        <HiringTagGroup label="Technologies" isEditing={true} value={editData.hiringInfo?.technologies} onChange={(e) => handleArrayChange(e, 'technologies')} icon={<Cpu />} />
-                                        <HiringTagGroup label="Benefits" isEditing={true} value={editData.hiringInfo?.benefits} onChange={(e) => handleArrayChange(e, 'benefits')} icon={<Gift />} />
                                     </div>
                                 </div>
 
@@ -725,8 +605,6 @@ const CompanyProfile = () => {
                     </div>
                 </div>
             )}
-
-            <GlobalFooter />
         </div>
     );
 };
@@ -780,7 +658,6 @@ const HiringTagGroup = ({ label, value, isEditing, onChange, icon }) => (
             <div className="mt-1">
                 {value?.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
-                        {/* If it's just a comma separated string in current data structure? No, it's array. */}
                         <p className="text-sm font-bold text-gray-800">{value.join(', ')}</p>
                     </div>
                 ) : <span className="text-sm text-gray-400 italic">None listed</span>}
@@ -798,23 +675,14 @@ const StatItem = ({ label, value, color = "text-gray-900" }) => (
 
 const SocialLinkItem = ({ icon, label, value }) => (
     <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-all border border-transparent hover:border-gray-100 group">
-        <div className="w-8 h-8 flex items-center justify-center text-gray-400 bg-gray-50 rounded-lg border border-gray-200 group-hover:text-[#2D9B82] transition-colors">
-            {React.cloneElement(icon, { className: 'w-4 h-4' })}
-        </div>
+        <div className="text-gray-400 group-hover:text-[#2D9B82] transition-colors">{React.cloneElement(icon, { className: 'w-5 h-5' })}</div>
         <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">{label}</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
             {value ? (
-                <a
-                    href={value}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-bold text-[#2D9B82] hover:underline block truncate"
-                >
-                    Add Link
+                <a href={value} target="_blank" rel="noreferrer" className="text-sm font-bold text-gray-900 truncate block hover:underline">
+                    {value.replace(/^https?:\/\/(www\.)?/, '')}
                 </a>
-            ) : (
-                <span className="text-xs font-bold text-red-400">Add Link</span>
-            )}
+            ) : <p className="text-xs text-gray-400 italic">Not connected</p>}
         </div>
     </div>
 );

@@ -22,14 +22,18 @@ const KYCStatus = () => {
         fetchStatus();
     }, []);
 
-    // If KYC not started, redirect to appropriate form
-    if (user?.kycStatus === 'not_started' || user?.kycStatus === 'not_submitted') {
-        if (user.role === 'recruiter') {
-            navigate('/kyc/recruiter', { replace: true });
-        } else {
-            navigate('/kyc/job-seeker', { replace: true });
+    useEffect(() => {
+        if (user?.kycStatus === 'not_started' || user?.kycStatus === 'not_submitted') {
+            if (user.role === 'recruiter') {
+                navigate('/kyc/recruiter', { replace: true });
+            } else {
+                navigate('/kyc/job-seeker', { replace: true });
+            }
         }
-        return null;
+    }, [user, navigate]);
+
+    if (user?.kycStatus === 'not_started' || user?.kycStatus === 'not_submitted') {
+        return null; // Render nothing while redirecting
     }
 
     const renderStatus = () => {

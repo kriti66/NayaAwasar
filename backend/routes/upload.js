@@ -31,17 +31,29 @@ uploadDirs.forEach(dir => {
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         try {
+            // Debug Log
+            const debugMsg = `[${new Date().toISOString()}] Processing file: ${file.fieldname}\n`;
+            fs.appendFileSync('upload_debug.txt', debugMsg);
+
             let targetSubdir = 'kyc';
             if (file.fieldname === 'avatar') targetSubdir = 'avatars';
             else if (file.fieldname === 'cv') targetSubdir = 'cvs';
 
             const dest = path.join(uploadBaseDir, targetSubdir);
+
+            // Log destination
+            fs.appendFileSync('upload_debug.txt', `Target Dir: ${dest}\n`);
+
             // double check existence just in case
-            if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+            if (!fs.existsSync(dest)) {
+                fs.mkdirSync(dest, { recursive: true });
+                fs.appendFileSync('upload_debug.txt', `Created Dir: ${dest}\n`);
+            }
 
             cb(null, dest);
         } catch (error) {
             console.error("Multer destination error:", error);
+            try { fs.appendFileSync('upload_debug.txt', `ERROR: ${error.message}\n`); } catch (e) { }
             cb(error);
         }
     },
@@ -80,37 +92,46 @@ const upload = multer({
 
 // Custom middleware to handle multer errors for KYC
 router.post('/kyc', (req, res) => {
-    console.log("📥 Received KYC upload request. Files count:", req.headers['content-length']);
-    upload.any()(req, res, (err) => {
-        if (err) {
-            console.error("Multer/Upload error during KYC:", err);
-            if (err instanceof multer.MulterError) {
-                return res.status(400).json({ message: `Upload error: ${err.message}` });
+    try {
+        console.log(`📥 Received KYC upload request. Content-Length: ${req.headers['content-length']}`);
+
+        upload.any()(req, res, (err) => {
+            if (err) {
+                console.error("❌ Multer/Upload error during KYC:", err);
+                if (err instanceof multer.MulterError) {
+                    if (err.code === 'LIMIT_FILE_SIZE') {
+                        return res.status(400).json({ message: 'File too large. Maximum size is 10MB.' });
+                    }
+                    return res.status(400).json({ message: `Upload error: ${err.message}` });
+                }
+                return res.status(400).json({ message: err.message || 'Error uploading files' });
             }
-            return res.status(400).json({ message: err.message || 'Error uploading files' });
-        }
 
-        if (!req.files || req.files.length === 0) {
-            console.warn("⚠️ KYC Upload: No files found in request");
-            return res.status(400).json({ message: 'No files uploaded' });
-        }
+            if (!req.files || req.files.length === 0) {
+                console.warn("⚠️ KYC Upload: No files found in request");
+                return res.status(400).json({ message: 'No files uploaded' });
+            }
 
-        const fileUrls = {};
-        req.files.forEach(file => {
-            // Store path relative to the uploads folder or as a full URL path
-            // The frontend expects paths like /uploads/kyc/...
-            const relativePath = path.relative(rootDir, file.path).replace(/\\/g, '/');
-            fileUrls[file.fieldname] = `/${relativePath}`;
+            const fileUrls = {};
+            req.files.forEach(file => {
+                // Store path relative to the uploads folder or as a full URL path
+                // The frontend expects paths like /uploads/kyc/...
+                const relativePath = path.relative(rootDir, file.path).replace(/\\/g, '/');
+                fileUrls[file.fieldname] = `/${relativePath}`;
+            });
+
+            console.log("✅ KYC files uploaded successfully:", Object.keys(fileUrls));
+
+            res.json({
+                success: true,
+                message: 'KYC files uploaded successfully',
+                files: fileUrls
+            });
         });
-
-        console.log("✅ KYC files uploaded successfully:", Object.keys(fileUrls));
-
-        res.json({
-            success: true,
-            message: 'KYC files uploaded successfully',
-            files: fileUrls
-        });
-    });
+    } catch (error) {
+        console.error("🔥 Critical Error in KYC upload handler:", error);
+        res.status(500).json({ message: 'Internal Server Error during upload init' });
+    }
 });
 
 import User from '../models/User.js';

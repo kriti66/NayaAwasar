@@ -48,7 +48,7 @@ router.post('/register', async (req, res) => {
         await user.save();
 
         // Log registration activity
-        await logActivity('registration', `New user '${user.fullName}' registered.`, user._id);
+        await logActivity(user._id, normalizeRole(role), 'USER_REGISTERED', `New user '${user.fullName}' registered.`, 'User', user._id);
 
         const token = jwt.sign(
             { id: user._id.toString(), role: user.role, isKycVerified: user.isKycVerified },

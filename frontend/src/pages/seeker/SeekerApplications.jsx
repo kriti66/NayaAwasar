@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import SeekerLayout from '../../components/layouts/SeekerLayout';
 import ApplicationATSCard from '../../components/applications/ApplicationATSCard';
 import api from '../../services/api';
 import {
@@ -33,24 +32,27 @@ const SeekerApplications = () => {
 
     const stats = useMemo(() => {
         const total = applications.length;
-        const active = applications.filter(app => !['Rejected', 'Withdrawn', 'rejected'].includes(app.status)).length;
-        const interviews = applications.filter(app => ['Interview Scheduled', 'interview', 'Interview'].includes(app.status)).length;
-        const offers = applications.filter(app => ['Offer Extended', 'offer', 'Offer'].includes(app.status)).length;
+        const active = applications.filter(app => !['rejected', 'withdrawn', 'hired'].includes(app.status)).length;
+        const interviews = applications.filter(app => app.status === 'interview').length;
+        const offers = applications.filter(app => app.status === 'offered').length;
         return { total, active, interviews, offers };
     }, [applications]);
 
     const filteredApplications = useMemo(() => {
         return applications.filter(app => {
-            const matchesSearch = (app.job_title || app.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (app.company_name || '').toLowerCase().includes(searchQuery.toLowerCase());
+            const jobTitle = app.job_id?.title || app.job_title || app.title || '';
+            const companyName = app.job_id?.company_name || app.company_name || '';
+            const matchesSearch = jobTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                companyName.toLowerCase().includes(searchQuery.toLowerCase());
 
             const normalizedStatus = (app.status || '').toLowerCase();
             const filterMap = {
-                'Applied': ['pending', 'applied'],
-                'In Review': ['under review', 'in review', 'shortlisted'],
-                'Interview': ['interview scheduled', 'interview'],
-                'Offer': ['offer extended', 'offer'],
-                'Rejected': ['rejected']
+                'Applied': ['applied'],
+                'In Review': ['in_review'],
+                'Interview': ['interview'],
+                'Offer': ['offered'],
+                'Hired': ['hired'],
+                'Rejected': ['rejected', 'withdrawn']
             };
 
             const matchesStatus = statusFilter === 'All' || (filterMap[statusFilter] && filterMap[statusFilter].includes(normalizedStatus));
@@ -77,19 +79,17 @@ const SeekerApplications = () => {
 
     if (loading) {
         return (
-            <SeekerLayout>
-                <div className="flex items-center justify-center min-h-[60vh]">
-                    <div className="flex flex-col items-center gap-4">
-                        <div className="w-12 h-12 border-4 border-[#2D9B82] border-t-transparent rounded-full animate-spin"></div>
-                        <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Loading Applications...</p>
-                    </div>
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-12 h-12 border-4 border-[#2D9B82] border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Loading Applications...</p>
                 </div>
-            </SeekerLayout>
+            </div>
         );
     }
 
     return (
-        <SeekerLayout>
+        <>
             <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
@@ -146,7 +146,7 @@ const SeekerApplications = () => {
 
                         <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
                             <div className="flex bg-gray-50 p-1 rounded-xl">
-                                {['All', 'Applied', 'In Review', 'Interview', 'Offer', 'Rejected'].map(tab => (
+                                {['All', 'Applied', 'In Review', 'Interview', 'Offer', 'Hired', 'Rejected'].map(tab => (
                                     <button
                                         key={tab}
                                         onClick={() => setStatusFilter(tab)}
@@ -190,7 +190,7 @@ const SeekerApplications = () => {
                     )}
                 </div>
             </main>
-        </SeekerLayout>
+        </>
     );
 };
 

@@ -208,5 +208,45 @@ router.put('/jobs/:id', requireAuth, async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+// @route   GET /api/recruiter/applications
+// @desc    Get all applications for the logged-in recruiter (Dashboard view)
+router.get('/applications', requireAuth, async (req, res) => {
+    try {
+        const recruiterId = req.user.id;
+
+        // 1. Find all jobs posted by this recruiter
+        const jobs = await Job.find({ recruiter_id: recruiterId }).select('_id title status');
+        const jobIds = jobs.map(j => j._id);
+
+        if (jobIds.length === 0) {
+            return res.json([]);
+        }
+
+        // 2. Find applications for these jobs
+        const applications = await Application.find({ job_id: { $in: jobIds } })
+            .populate('seeker_id', 'fullName email') // Populate basic user info
+            .populate('job_id', 'title status location') // Populate job info
+            .sort({ createdAt: -1 });
+
+        // 3. Format response
+        const formattedApplications = applications.map(app => ({
+            _id: app._id,
+            applicantName: app.personalInfo?.fullName || app.seeker_id?.fullName || 'Unknown',
+            applicantEmail: app.personalInfo?.email || app.seeker_id?.email,
+            jobTitle: app.job_id?.title || 'Unknown Job',
+            jobId: app.job_id?._id,
+            status: app.status,
+            appliedAt: app.createdAt,
+            resumeUrl: app.resumeUrl,
+            resumeType: app.resumeType,
+            coverLetter: app.coverLetter
+        }));
+
+        res.json(formattedApplications);
+    } catch (error) {
+        console.error("Fetch recruiter applications error:", error);
+        res.status(500).json({ message: 'Error fetching applications' });
+    }
+});
 
 export default router;

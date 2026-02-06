@@ -11,10 +11,18 @@ const applicationSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    recruiter_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+        // required: true // Made optional for backward compatibility or migration
+    },
+    matchScore: { type: Number, default: null },
+    applicantLocation: { type: String, default: '' },
+    applicantExperienceLevel: { type: String, default: '' },
     status: {
         type: String,
-        enum: ['Applied', 'Under Review', 'Interview Scheduled', 'Interview Canceled', 'Offer Extended', 'Rejected'],
-        default: 'Applied'
+        enum: ['applied', 'in_review', 'interview', 'offered', 'hired', 'rejected', 'withdrawn'],
+        default: 'applied'
     },
     // Snapshot of personal info at time of application
     personalInfo: {

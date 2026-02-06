@@ -3,35 +3,75 @@ import { Link } from 'react-router-dom';
 import {
     Building2, MapPin, Calendar, ChevronDown, ChevronUp,
     ExternalLink, CheckCircle2, Circle, Clock, MessageSquare,
-    XSquare, ArrowRight, LayoutDashboard, Info
+    XSquare, ArrowRight, Info, Download, CheckCircle
 } from 'lucide-react';
+import api from '../../services/api';
+import { toast } from 'react-hot-toast';
 
-const ApplicationATSCard = ({ application }) => {
+const ApplicationATSCard = ({ application: initialApp }) => {
     const [isExpanded, setIsExpanded] = useState(false);
-    const { job_id, status, createdAt, interview_details, offer_details } = application;
+    const [application, setApplication] = useState(initialApp);
+    const { job_id, status, createdAt, interview } = application;
 
     const statusSteps = [
-        { key: 'Applied', label: 'Applied' },
-        { key: 'In Review', label: 'In Review' },
-        { key: 'Interview', label: 'Interview' },
-        { key: 'Offer', label: 'Offer' }
+        { key: 'applied', label: 'Applied' },
+        { key: 'in_review', label: 'In Review' },
+        { key: 'interview', label: 'Interview' },
+        { key: 'offered', label: 'Offer' },
+        { key: 'hired', label: 'Hired' }
     ];
 
-    const currentStatusSource = status === 'Under Review' ? 'In Review' :
-        status === 'Interview Scheduled' ? 'Interview' :
-            status === 'Offer Extended' ? 'Offer' :
-                status === 'Rejected' ? 'Rejected' : 'Applied';
-
-    const activeIndex = status === 'Rejected' ? -1 : statusSteps.findIndex(s => s.key === currentStatusSource);
+    const activeIndex = ['rejected', 'withdrawn'].includes(status) ? -1 : statusSteps.findIndex(s => s.key === status);
 
     const getStatusStyles = (s) => {
         switch (s) {
-            case 'Under Review': return 'bg-blue-50 text-blue-600 border-blue-100';
-            case 'Interview Scheduled': return 'bg-purple-50 text-purple-600 border-purple-100';
-            case 'Offer Extended': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-            case 'Rejected': return 'bg-rose-50 text-rose-600 border-rose-100';
-            case 'Withdrawn': return 'bg-gray-50 text-gray-500 border-gray-100';
+            case 'applied': return 'bg-slate-50 text-slate-600 border-slate-100';
+            case 'in_review': return 'bg-blue-50 text-blue-600 border-blue-100';
+            case 'interview': return 'bg-purple-50 text-purple-600 border-purple-100';
+            case 'offered': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+            case 'hired': return 'bg-[#2D9B82]/10 text-[#2D9B82] border-[#2D9B82]/20';
+            case 'rejected': return 'bg-rose-50 text-rose-600 border-rose-100';
+            case 'withdrawn': return 'bg-gray-50 text-gray-500 border-gray-100';
             default: return 'bg-slate-50 text-slate-600 border-slate-100';
+        }
+    };
+
+    const getStatusLabel = (s) => {
+        const labels = {
+            applied: 'Applied',
+            in_review: 'In Review',
+            interview: 'Interviewing',
+            offered: 'Offer Received',
+            hired: 'Hired',
+            rejected: 'Rejected',
+            withdrawn: 'Withdrawn'
+        };
+        return labels[s] || s;
+    };
+
+    const handleWithdraw = async () => {
+        if (!window.confirm("Are you sure you want to withdraw this application? This action cannot be undone.")) return;
+
+        try {
+            const res = await api.patch(`/applications/${application._id || application.id}/withdraw`);
+            setApplication({ ...application, status: 'withdrawn' });
+            toast.success("Application withdrawn");
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Failed to withdraw application");
+        }
+    };
+
+    const handleAcceptOffer = async () => {
+        if (!window.confirm("Are you sure you want to accept this offer? This will mark you as hired.")) return;
+
+        try {
+            const res = await api.patch(`/applications/${application._id || application.id}/accept-offer`);
+            // Update with the full application object from backend
+            setApplication(res.data.application);
+            toast.success("Congratulations! Offer accepted successfully. Welcome aboard!");
+        } catch (error) {
+            console.error("Accept offer error:", error);
+            toast.error(error.response?.data?.message || "Failed to accept offer");
         }
     };
 
@@ -48,10 +88,10 @@ const ApplicationATSCard = ({ application }) => {
                         )}
                     </div>
                     <div className="flex-1">
-                        <h3 className="text-xl font-bold text-gray-900 mb-1.5 hover:text-[#2D9B82] transition-colors cursor-pointer">{job_id?.title}</h3>
+                        <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-xl font-bold text-gray-900 mb-1.5 hover:text-[#2D9B82] transition-colors">{job_id?.title || 'Job Position'}</Link>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-gray-500 text-sm font-semibold">
-                            <span className="flex items-center gap-1.5">{job_id?.company_name}</span>
-                            <span className="flex items-center gap-1.5 shadow-sm px-2 py-0.5 bg-gray-50 rounded-lg"><MapPin size={14} className="text-[#2D9B82]" /> {job_id?.location}</span>
+                            <span className="flex items-center gap-1.5">{job_id?.company_name || 'Company'}</span>
+                            <span className="flex items-center gap-1.5 shadow-sm px-2 py-0.5 bg-gray-50 rounded-lg"><MapPin size={14} className="text-[#2D9B82]" /> {job_id?.location || 'Remote'}</span>
                             <span className="flex items-center gap-1.5"><Calendar size={14} className="text-gray-300" /> Applied {new Date(createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                         </div>
                     </div>
@@ -60,14 +100,12 @@ const ApplicationATSCard = ({ application }) => {
                 <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto">
                     <div className="flex flex-col items-end gap-2">
                         <span className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusStyles(status)} shadow-sm`}>
-                            {status === 'Under Review' ? 'In Review' :
-                                status === 'Interview Scheduled' ? 'Interview' :
-                                    status === 'Offer Extended' ? 'Offer' : status}
+                            {getStatusLabel(status)}
                         </span>
                     </div>
 
                     <div className="flex items-center gap-4">
-                        {status === 'Interview Scheduled' ? (
+                        {status === 'interview' ? (
                             <Link to="/seeker/interviews?focused=true" className="text-xs font-black text-[#2D9B82] hover:underline uppercase tracking-tight flex items-center gap-1.5">
                                 View Interview <ArrowRight size={14} />
                             </Link>
@@ -100,12 +138,12 @@ const ApplicationATSCard = ({ application }) => {
                                     <div className="absolute top-4 left-0 right-0 h-1 bg-gray-100 -translate-y-1/2 rounded-full"></div>
                                     <div
                                         className="absolute top-4 left-0 h-1 bg-[#2D9B82] -translate-y-1/2 rounded-full transition-all duration-1000 shadow-sm"
-                                        style={{ width: `${(activeIndex / (statusSteps.length - 1)) * 100}%` }}
+                                        style={{ width: activeIndex >= 0 ? `${(activeIndex / (statusSteps.length - 1)) * 100}%` : '0%' }}
                                     ></div>
 
                                     {statusSteps.map((step, idx) => {
-                                        const isDone = status !== 'Rejected' && idx <= activeIndex;
-                                        const isCurrent = status !== 'Rejected' && idx === activeIndex;
+                                        const isDone = !['rejected', 'withdrawn'].includes(status) && idx <= activeIndex;
+                                        const isCurrent = !['rejected', 'withdrawn'].includes(status) && idx === activeIndex;
                                         return (
                                             <div key={idx} className="relative flex flex-col items-center">
                                                 <div className={`w-8 h-8 rounded-full border-4 border-white flex items-center justify-center z-10 transition-all duration-700 shadow-sm ${isCurrent ? 'bg-[#2D9B82] text-white ring-4 ring-[#2D9B82]/10 scale-125' :
@@ -125,7 +163,7 @@ const ApplicationATSCard = ({ application }) => {
                                 <p className="text-sm text-gray-600 font-medium leading-relaxed line-clamp-3">
                                     {job_id?.description || "No description available for this role. Click on 'View Original Listing' to see the full job details on the main page."}
                                 </p>
-                                <Link to={`/jobs/${job_id?._id}`} className="text-[#2D9B82] text-xs font-bold hover:underline mt-4 inline-flex items-center gap-1.5">
+                                <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-[#2D9B82] text-xs font-bold hover:underline mt-4 inline-flex items-center gap-1.5">
                                     Read Full Description <ExternalLink size={12} />
                                 </Link>
                             </div>
@@ -135,73 +173,90 @@ const ApplicationATSCard = ({ application }) => {
                         <div className="bg-[#F8FAFC] rounded-[28px] p-6 lg:p-8 border border-gray-100 relative group/next">
                             <div className="flex justify-between items-start mb-6">
                                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Next Action</h4>
-                                <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-tight ${getStatusStyles(status)}`}>{currentStatusSource}</span>
+                                <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-tight ${getStatusStyles(status)}`}>{getStatusLabel(status)}</span>
                             </div>
 
                             <div className="flex gap-5">
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${status === 'Interview Scheduled' ? 'bg-purple-600 text-white shadow-purple-500/20' :
-                                    status === 'Offer Extended' ? 'bg-[#2D9B82] text-white shadow-[#2D9B82]/20' :
-                                        status === 'Rejected' ? 'bg-rose-600 text-white shadow-rose-500/20' : 'bg-blue-600 text-white shadow-blue-500/20'
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${status === 'interview' ? 'bg-purple-600 text-white shadow-purple-500/20' :
+                                    status === 'offered' ? 'bg-[#2D9B82] text-white shadow-[#2D9B82]/20' :
+                                        status === 'hired' ? 'bg-emerald-600 text-white shadow-emerald-500/20' :
+                                            ['rejected', 'withdrawn'].includes(status) ? 'bg-rose-600 text-white shadow-rose-500/20' :
+                                                'bg-blue-600 text-white shadow-blue-500/20'
                                     }`}>
-                                    {status === 'Interview Scheduled' ? <MessageSquare size={22} /> :
-                                        status === 'Offer Extended' ? <CheckCircle2 size={22} /> :
-                                            status === 'Rejected' ? <XSquare size={22} /> : <Clock size={22} />}
+                                    {status === 'interview' ? <MessageSquare size={22} /> :
+                                        status === 'offered' ? <CheckCircle2 size={22} /> :
+                                            status === 'hired' ? <CheckCircle size={22} /> :
+                                                ['rejected', 'withdrawn'].includes(status) ? <XSquare size={22} /> : <Clock size={22} />}
                                 </div>
                                 <div className="flex-1">
                                     <h5 className="text-lg font-bold text-gray-900 mb-2">
-                                        {status === 'Interview Scheduled' ? (interview_details?.type || 'Technical Round') :
-                                            status === 'Offer Extended' ? 'Review Offer Letter' :
-                                                status === 'Rejected' ? 'Application Closed' : 'Application Review'}
+                                        {status === 'interview' ? (interview?.mode === 'Online' ? 'Join Online Interview' : 'Prepare for Onsite Interview') :
+                                            status === 'offered' ? 'Review Job Offer' :
+                                                status === 'hired' ? 'Onboarding Started' :
+                                                    ['rejected', 'withdrawn'].includes(status) ? 'Process Concluded' : 'Application Under Evaluation'}
                                     </h5>
 
-                                    {status === 'Interview Scheduled' && (
+                                    {status === 'interview' && (
                                         <div className="space-y-4 mb-8">
                                             <div className="flex items-center gap-4 text-sm text-gray-600 font-medium">
                                                 <div className="flex items-center gap-2 px-3 py-1 bg-white border border-gray-100 rounded-lg shadow-sm">
                                                     <Calendar size={14} className="text-[#2D9B82]" />
-                                                    <span>{interview_details?.date ? new Date(interview_details.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'TBD'}</span>
+                                                    <span>{interview?.date ? new Date(interview.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'TBD'}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2 px-3 py-1 bg-white border border-gray-100 rounded-lg shadow-sm">
                                                     <Clock size={14} className="text-[#2D9B82]" />
-                                                    <span>{interview_details?.time || 'TBD'}</span>
+                                                    <span>{interview?.time || 'TBD'}</span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
-                                                <LinkIcon size={14} />
-                                                <span>{interview_details?.location || 'Online (Google Meet)'}</span>
+                                                <Info size={14} className="text-[#2D9B82]" />
+                                                <span>{interview?.mode === 'Online' ? 'Google Meet / Zoom' : (interview?.location || 'Office Address')}</span>
                                             </div>
                                         </div>
                                     )}
 
-                                    {status === 'Offer Extended' && (
-                                        <p className="text-sm text-gray-500 font-medium mb-8 leading-relaxed">Congratulations! You've successfully cleared all rounds. Please review and respond to the offer by the due date.</p>
+                                    {status === 'offered' && (
+                                        <p className="text-sm text-gray-500 font-medium mb-8 leading-relaxed">Congratulations! You've received a job offer. Please contact the recruiter or check your portal for the offer documents.</p>
                                     )}
 
-                                    {(status === 'Applied' || status === 'Under Review') && (
+                                    {status === 'hired' && (
+                                        <p className="text-sm text-gray-500 font-medium mb-8 leading-relaxed">You are hired! Welcome to the team at {job_id?.company_name || 'your new company'}. Your onboarding documents will be shared soon.</p>
+                                    )}
+
+                                    {status === 'applied' || status === 'in_review' ? (
                                         <p className="text-sm text-gray-500 font-medium mb-8 leading-relaxed">The hiring team is currently evaluating your profile. You'll be notified of any further steps via email.</p>
-                                    )}
+                                    ) : null}
 
-                                    {status === 'Rejected' && (
-                                        <p className="text-sm text-gray-500 font-medium mb-8 leading-relaxed">We appreciate your interest. While this isn't a match, keep exploring other opportunities on Naya Awasar.</p>
+                                    {['rejected', 'withdrawn'].includes(status) && (
+                                        <p className="text-sm text-gray-500 font-medium mb-8 leading-relaxed">This position is no longer active for you. Keep exploring other opportunities on our platform.</p>
                                     )}
 
                                     <div className="space-y-3">
-                                        {status === 'Interview Scheduled' ? (
+                                        {status === 'interview' ? (
                                             <>
-                                                <button className="w-full py-3.5 bg-[#2D9B82] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#25836d] transition-all shadow-lg shadow-[#2D9B82]/10 transform active:scale-95">Join Meeting</button>
-                                                <button className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all transform active:scale-95">Prepare for Interview</button>
+                                                {interview?.meetLink && (
+                                                    <a href={interview.meetLink} target="_blank" rel="noreferrer" className="w-full py-3.5 bg-[#2D9B82] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#25836d] transition-all flex items-center justify-center shadow-lg shadow-[#2D9B82]/10 transform active:scale-95">Join Meeting</a>
+                                                )}
+                                                <Link to="/seeker/interviews" className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center justify-center transform active:scale-95">View Interview Details</Link>
                                             </>
-                                        ) : status === 'Offer Extended' ? (
-                                            <>
-                                                <button className="w-full py-3.5 bg-[#2D9B82] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#25836d] transition-all shadow-lg shadow-[#2D9B82]/10 transform active:scale-95">View & Accept Offer</button>
-                                                <button className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all transform active:scale-95">Decline Offer</button>
-                                            </>
-                                        ) : status === 'Rejected' ? (
+                                        ) : status === 'offered' ? (
+                                            <button
+                                                onClick={handleAcceptOffer}
+                                                className="w-full py-3.5 bg-[#2D9B82] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#25836d] transition-all shadow-lg shadow-[#2D9B82]/10 transform active:scale-95"
+                                            >
+                                                Accept Offer
+                                            </button>
+                                        ) : ['rejected', 'withdrawn', 'hired'].includes(status) ? (
                                             <Link to="/seeker/jobs" className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center justify-center transform active:scale-95">Find Similar Jobs</Link>
                                         ) : (
                                             <>
-                                                <button className="w-full py-3.5 bg-[#2D9B82] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#25836d] transition-all transform active:scale-95">Check Detailed Status</button>
-                                                <button className="w-full py-3.5 bg-transparent text-gray-400 font-black text-[10px] uppercase tracking-widest hover:text-rose-500 transition-all">Withdraw Application</button>
+                                                <button className="w-full py-3.5 bg-white border border-gray-200 text-[#2D9B82] rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all transform active:scale-95">Check Detailed Status</button>
+                                                <button
+                                                    onClick={handleWithdraw}
+                                                    className="w-full py-3.5 bg-transparent text-gray-400 font-black text-[10px] uppercase tracking-widest hover:text-rose-500 transition-all"
+                                                >
+                                                    Withdraw Application
+                                                </button>
                                             </>
                                         )}
                                     </div>
@@ -209,7 +264,7 @@ const ApplicationATSCard = ({ application }) => {
                             </div>
 
                             <div className="mt-8 pt-4 border-t border-gray-200/50 flex justify-between items-center opacity-0 group-hover/next:opacity-100 transition-opacity">
-                                <Link to={`/jobs/${job_id?._id}`} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#2D9B82] flex items-center gap-1">
+                                <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#2D9B82] flex items-center gap-1">
                                     View Original Listing <ExternalLink size={10} />
                                 </Link>
                                 <Info size={14} className="text-gray-200" />
@@ -221,9 +276,5 @@ const ApplicationATSCard = ({ application }) => {
         </div>
     );
 };
-
-const LinkIcon = ({ size }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-);
 
 export default ApplicationATSCard;

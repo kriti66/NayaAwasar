@@ -3,7 +3,7 @@ import Layout from '../../components/Layout';
 
 const Home = () => {
     return (
-        <Layout>
+        <>
             {/* Hero Section */}
             <div className="relative bg-white border-b border-gray-100">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32 flex flex-col lg:flex-row items-center gap-12">
@@ -169,7 +169,7 @@ const Home = () => {
                     </div>
                 </div>
             </div>
-        </Layout>
+        </>
     );
 };
 

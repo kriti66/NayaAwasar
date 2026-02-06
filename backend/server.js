@@ -3,7 +3,29 @@ import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
+
+// 🛑 Crash Logger
+const logCrash = (type, error) => {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] ${type}: ${error.stack || error}\n`;
+    try {
+        fs.appendFileSync('crash_log.txt', logMessage);
+        console.error(logMessage);
+    } catch (fsErr) {
+        console.error("Failed to write to crash log:", fsErr);
+    }
+};
+
+process.on('uncaughtException', (err) => {
+    logCrash('UNCAUGHT_EXCEPTION', err);
+    // process.exit(1); // Optional: keep it running if possible for debugging, but usually bad practice
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    logCrash('UNHANDLED_REJECTION', reason);
+});
 
 // MongoDB: required for JWT-based auth and user management (User, KYC, Job, Application)
 const MONGO_URI = process.env.MONGO_URI;
@@ -76,6 +98,13 @@ import locationRoutes from './routes/location.js';
 import companyRoutes from './routes/companies.js';
 import recruiterRoutes from './routes/recruiter.js';
 import { requireAuth } from './middleware/auth.js';
+import projectRoutes from './routes/projects.js';
+import activityRoutes from './routes/activity.js';
+import notificationRoutes from './routes/notifications.js';
+import analyticsRoutes from './routes/analytics.js';
+
+app.use('/api', analyticsRoutes); // Mounts /jobs/:jobId/view and /recruiter/jobs/:jobId/analytics
+
 
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
@@ -86,10 +115,23 @@ app.use('/api/admin/users', requireAuth, userRoutes);
 app.use('/api/users', requireAuth, userProfileRoutes); // Mounts /profile and /profile-image
 app.use('/api/admin', adminRoutes);
 app.use('/api/profile', requireAuth, profileRoutes);
+app.use('/api/projects', requireAuth, projectRoutes);
+app.use('/api/activity', requireAuth, activityRoutes);
+app.use('/api/notifications', requireAuth, notificationRoutes);
+
 app.use('/api/kyc', requireAuth, kycRoutes);
 app.use('/api/location', locationRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/recruiter', recruiterRoutes);
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+    console.error("🔥 Global Error Handler:", err);
+    res.status(500).json({
+        message: 'Internal Server Error',
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+});
 
 app.listen(PORT, () => {
     console.log(`\n========================================`);
