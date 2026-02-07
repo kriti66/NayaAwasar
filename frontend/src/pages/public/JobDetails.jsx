@@ -46,12 +46,29 @@ const JobDetails = () => {
     useEffect(() => {
         const fetchJob = async () => {
             try {
-                // Parallel fetch: job details + view tracking
-                const [res] = await Promise.all([
+                const promises = [
                     api.get(`/jobs/${id}`),
                     api.post(`/jobs/${id}/view`).catch(err => console.error("View tracking failed", err))
-                ]);
-                setJob(res.data);
+                ];
+
+                // If user is logged in as jobseeker, fetch their applications to check status
+                if (user?.role === 'jobseeker') {
+                    promises.push(api.get('/applications/my'));
+                }
+
+                const results = await Promise.all(promises);
+                const jobData = results[0].data;
+                setJob(jobData);
+
+                if (user?.role === 'jobseeker' && results[2]) {
+                    const myApps = results[2].data || [];
+                    // Check if any application matches this job ID
+                    const hasAppliedToJob = Array.isArray(myApps) && myApps.some(app => {
+                        const appId = app.job_id?._id || app.job_id;
+                        return String(appId) === String(id);
+                    });
+                    setHasApplied(hasAppliedToJob);
+                }
             } catch (error) {
                 console.error("Error fetching job details:", error);
             } finally {
@@ -60,7 +77,7 @@ const JobDetails = () => {
         };
 
         fetchJob();
-    }, [id]);
+    }, [id, user]);
 
     const handleApplyClick = () => {
         if (!user) {

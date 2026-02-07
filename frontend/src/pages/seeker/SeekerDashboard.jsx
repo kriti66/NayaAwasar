@@ -42,7 +42,10 @@ const SeekerDashboard = () => {
                 setStats(statsRes.data);
                 setRecommendedJobs(jobsRes.data);
                 setSavedJobIds(profileRes.data.savedJobs || []);
-                setAppliedJobIds(appsRes.data.map(app => typeof app.job_id === 'object' ? app.job_id._id : app.job_id));
+                setAppliedJobIds(appsRes.data.map(app => {
+                    if (!app.job_id) return null;
+                    return typeof app.job_id === 'object' ? app.job_id._id : app.job_id;
+                }).filter(id => id));
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
             } finally {

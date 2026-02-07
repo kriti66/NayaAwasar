@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { toast } from 'react-hot-toast';
-import { Download, Search, Briefcase, ChevronDown, MapPin } from 'lucide-react';
+import { Download, Search, Briefcase, ChevronDown, MapPin, AlertCircle } from 'lucide-react';
 import ScheduleInterviewModal from './ScheduleInterviewModal';
 
 const RecruiterApplicants = () => {
@@ -16,6 +16,7 @@ const RecruiterApplicants = () => {
     const [isInterviewModalOpen, setIsInterviewModalOpen] = useState(false);
     const [selectedApplicantId, setSelectedApplicantId] = useState(null);
     const [isScheduling, setIsScheduling] = useState(false);
+    const [rescheduleModalData, setRescheduleModalData] = useState(null);
 
     const [stats, setStats] = useState({
         total: 0,
@@ -81,78 +82,110 @@ const RecruiterApplicants = () => {
         fetchApplicants();
     }, [selectedJobId]);
 
-    const handleAction = async (id, action, payload = {}) => {
-        // Intercept Advance action for Interview stage
-        const currentApp = applicants.find(app => (app._id || app.id) === id);
-
-        if (action === 'Advance' && currentApp.status === 'in_review') {
-            setSelectedApplicantId(id);
+    const handleStatusChange = async (appId, newStatus) => {
+        // If status is interview, we need to collect details first
+        if (newStatus === 'interview') {
+            setSelectedApplicantId(appId);
+            setRescheduleModalData(null); // Explicitly clear any reschedule data for normal flow
             setIsInterviewModalOpen(true);
             return;
         }
 
+        // For other statuses, update immediately
+        if (window.confirm(`Are you sure you want to change the status to ${newStatus.replace('_', ' ')}?`)) {
+            await updateApplicationStatus(appId, newStatus);
+        }
+    };
+
+    const handleApproveReschedule = (app) => {
+        setSelectedApplicantId(app._id || app.id);
+        const preferredDate = app.rescheduleRequest?.preferredDate ? new Date(app.rescheduleRequest.preferredDate) : null;
+
+        setRescheduleModalData({
+            date: preferredDate,
+            time: app.rescheduleRequest?.preferredTime,
+            notes: `Candidate reschedule request: "${app.rescheduleRequest?.reason}"`
+        });
+        setIsInterviewModalOpen(true);
+    };
+
+    const handleRejectReschedule = async (app) => {
+        if (!window.confirm("Are you sure you want to REJECT this reschedule request? The original interview time will stand.")) return;
+
         try {
-            let endpoint = '';
-            if (action === 'Advance') endpoint = `/applications/${id}/advance`;
-            else if (action === 'Reject') endpoint = `/applications/${id}/reject`;
-            else if (action === 'Withdraw') endpoint = `/applications/${id}/withdraw`;
+            const appId = app._id || app.id;
+            await api.put(`/applications/${appId}/reject-reschedule-request`, {
+                feedback: 'Time not suitable, sticking to original schedule.'
+            });
+            toast.success("Reschedule request rejected.");
 
-            console.log(`[RecruiterApplicants] ${action} application ${id}`);
-            console.log(`[RecruiterApplicants] Endpoint: ${endpoint}`);
-            console.log(`[RecruiterApplicants] Payload:`, payload);
+            // Refresh
+            const res = await api.get(`/applications/job/${selectedJobId}`);
+            setApplicants(res.data);
+        } catch (error) {
+            console.error("Reject reschedule error:", error);
+            toast.error("Failed to reject reschedule request");
+        }
+    };
 
-            await api.patch(endpoint, payload);
+    const updateApplicationStatus = async (appId, status, payload = {}) => {
+        try {
+            console.log(`[RecruiterApplicants] Updating status for ${appId} to ${status}`);
 
-            toast.success(`Application updated successfully`);
+            await api.patch(`/applications/${appId}/status`, {
+                status,
+                ...payload
+            });
 
-            // Optimistic update
+            toast.success(`Application status updated to ${status.replace('_', ' ')}`);
+
+            // Update local state
             setApplicants(prev => prev.map(app => {
-                if ((app._id || app.id) !== id) return app;
-
-                const pipeline = ['applied', 'in_review', 'interview', 'offered', 'hired'];
-                if (action === 'Reject') return { ...app, status: 'rejected' };
-                if (action === 'Advance') {
-                    const idx = pipeline.indexOf(app.status);
-                    if (idx < pipeline.length - 1) {
-                        // If we just scheduled an interview, update the interview object too if needed locally,
-                        // but ideally we should refetch or the backend returns the updated app.
-                        // For now just status update is enough for UI feedback.
-                        return { ...app, status: pipeline[idx + 1], interview: payload };
-                    }
+                if ((app._id || app.id) !== appId) return app;
+                let updatedApp = { ...app, status };
+                if (status === 'interview' && payload.interviewDetails) {
+                    updatedApp.interview = payload.interviewDetails;
                 }
-                return app;
+                return updatedApp;
             }));
 
+            // Recalculate stats
+            const res = await api.get(`/applications/job/${selectedJobId}`);
+            setApplicants(res.data);
+
+            const newStats = { total: res.data.length, applied: 0, inReview: 0, interview: 0, offered: 0, hired: 0, rejected: 0 };
+            res.data.forEach(a => {
+                const statusKey = a.status === 'in_review' ? 'inReview' : a.status;
+                if (newStats[statusKey] !== undefined) newStats[statusKey]++;
+            });
+            setStats(newStats);
+
         } catch (error) {
-            console.error("Action error", error);
-            toast.error(error.response?.data?.message || "Failed to update application");
+            console.error("Status update error", error);
+            toast.error(error.response?.data?.message || "Failed to update status");
         }
     };
 
     const handleScheduleSubmit = async (interviewData) => {
         setIsScheduling(true);
         try {
-            console.log('[RecruiterApplicants] Scheduling interview with data:', interviewData);
-            console.log('[RecruiterApplicants] For applicant ID:', selectedApplicantId);
+            if (rescheduleModalData) {
+                // We are approving a reschedule request
+                await api.put(`/applications/${selectedApplicantId}/approve-reschedule-request`, interviewData);
+                toast.success("Reschedule request APPROVED and interview updated.");
 
-            await handleAction(selectedApplicantId, 'Advance', interviewData);
-
-            // Refetch applications to get updated data from backend
-            console.log('[RecruiterApplicants] Interview scheduled successfully, refetching applications...');
-            const res = await api.get(`/applications/job/${selectedJobId}`);
-            setApplicants(res.data);
-
-            // Recalculate stats
-            const newStats = { total: res.data.length, applied: 0, inReview: 0, interview: 0, offered: 0, hired: 0, rejected: 0 };
-            res.data.forEach(app => {
-                const statusKey = app.status === 'in_review' ? 'inReview' : app.status;
-                if (newStats[statusKey] !== undefined) newStats[statusKey]++;
-            });
-            setStats(newStats);
-
+                // Refresh list
+                const res = await api.get(`/applications/job/${selectedJobId}`);
+                setApplicants(res.data);
+            } else {
+                // Normal scheduling
+                await updateApplicationStatus(selectedApplicantId, 'interview', { interviewDetails: interviewData });
+            }
             setIsInterviewModalOpen(false);
+            setRescheduleModalData(null);
         } catch (error) {
             console.error('[RecruiterApplicants] Error scheduling interview:', error);
+            toast.error("Failed to schedule interview");
         } finally {
             setIsScheduling(false);
         }
@@ -182,6 +215,15 @@ const RecruiterApplicants = () => {
             default: return 'bg-gray-100 text-gray-500';
         }
     };
+
+    const availableStatuses = [
+        { value: 'applied', label: 'Applied' },
+        { value: 'in_review', label: 'In Review' },
+        { value: 'interview', label: 'Interview' },
+        { value: 'offered', label: 'Offered' },
+        { value: 'hired', label: 'Hired' },
+        { value: 'rejected', label: 'Rejected' }
+    ];
 
     return (
         <div className="bg-gray-50/50 min-h-screen pb-20">
@@ -269,8 +311,8 @@ const RecruiterApplicants = () => {
                                                 </div>
                                             </div>
 
-                                            {/* Action Buttons based on Stage */}
-                                            <div className="flex items-center gap-2">
+                                            {/* Actions */}
+                                            <div className="flex items-center gap-4">
                                                 {/* Resume Download */}
                                                 {app.resumeUrl && (
                                                     <a
@@ -284,72 +326,60 @@ const RecruiterApplicants = () => {
                                                     </a>
                                                 )}
 
-                                                {/* ATS Transition Buttons */}
-                                                {app.status === 'applied' && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleAction(app._id || app.id, 'Advance')}
-                                                            className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors"
-                                                        >
-                                                            Move to In Review
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleAction(app._id || app.id, 'Reject')}
-                                                            className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-bold rounded-lg hover:bg-gray-200 transition-colors"
-                                                        >
-                                                            Reject
-                                                        </button>
-                                                    </>
-                                                )}
-
-                                                {app.status === 'in_review' && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleAction(app._id || app.id, 'Advance')}
-                                                            className="px-4 py-2 bg-purple-600 text-white text-xs font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-lg shadow-purple-500/20"
-                                                        >
-                                                            Schedule Interview
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleAction(app._id || app.id, 'Reject')}
-                                                            className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-bold rounded-lg hover:bg-gray-200 transition-colors"
-                                                        >
-                                                            Reject
-                                                        </button>
-                                                    </>
-                                                )}
-
-                                                {app.status === 'interview' && (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleAction(app._id || app.id, 'Advance')}
-                                                            className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/20"
-                                                        >
-                                                            Extend Offer
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleAction(app._id || app.id, 'Reject')}
-                                                            className="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-bold rounded-lg hover:bg-gray-200 transition-colors"
-                                                        >
-                                                            Reject
-                                                        </button>
-                                                    </>
-                                                )}
-
-                                                {app.status === 'offered' && (
-                                                    <button
-                                                        onClick={() => handleAction(app._id || app.id, 'Advance')}
-                                                        className="px-4 py-2 bg-[#2D9B82] text-white text-xs font-bold rounded-lg hover:bg-[#25836d] transition-colors shadow-lg shadow-[#2D9B82]/20"
+                                                {/* Status Selector */}
+                                                <div className="relative">
+                                                    <select
+                                                        value={app.status === 'withdrawn' ? '' : app.status}
+                                                        onChange={(e) => handleStatusChange(app._id || app.id, e.target.value)}
+                                                        disabled={app.status === 'withdrawn'}
+                                                        className={`appearance-none pl-4 pr-10 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all border ${app.status === 'withdrawn'
+                                                            ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                            : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300 focus:ring-gray-200'
+                                                            }`}
                                                     >
-                                                        Mark Hired
-                                                    </button>
-                                                )}
-
-                                                {['rejected', 'withdrawn'].includes(app.status) && (
-                                                    <span className="text-gray-400 text-xs font-medium italic">Application Closed</span>
-                                                )}
+                                                        {app.status === 'withdrawn' && <option value="">Withdrawn</option>}
+                                                        {availableStatuses.map(status => (
+                                                            <option key={status.value} value={status.value}>
+                                                                {status.label}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                                </div>
                                             </div>
                                         </div>
+
+                                        {/* Reschedule Request Banner */}
+                                        {app.rescheduleRequest?.status === 'pending' && (
+                                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full animate-in fade-in slide-in-from-top-2">
+                                                <div className="flex gap-3">
+                                                    <div className="p-2 bg-amber-100 rounded-lg text-amber-600 shrink-0">
+                                                        <AlertCircle size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <h5 className="text-sm font-bold text-amber-900">Reschedule Requested</h5>
+                                                        <div className="text-xs text-amber-800 mt-1 space-y-0.5">
+                                                            <p>Using Reason: <span className="font-medium italic">"{app.rescheduleRequest.reason}"</span></p>
+                                                            <p>Preferred: <span className="font-bold">{app.rescheduleRequest.preferredDate ? new Date(app.rescheduleRequest.preferredDate).toLocaleDateString() : 'No date'}</span> at <span className="font-bold">{app.rescheduleRequest.preferredTime || 'No time'}</span></p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                    <button
+                                                        onClick={() => handleRejectReschedule(app)}
+                                                        className="flex-1 sm:flex-none px-4 py-2 bg-white border border-amber-200 text-amber-800 text-xs font-bold rounded-lg hover:bg-amber-100 transition-colors"
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleApproveReschedule(app)}
+                                                        className="flex-1 sm:flex-none px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 shadow-lg shadow-amber-500/20 transition-colors"
+                                                    >
+                                                        Review & Reschedule
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -368,9 +398,10 @@ const RecruiterApplicants = () => {
 
             <ScheduleInterviewModal
                 isOpen={isInterviewModalOpen}
-                onClose={() => setIsInterviewModalOpen(false)}
+                onClose={() => { setIsInterviewModalOpen(false); setRescheduleModalData(null); }}
                 onSubmit={handleScheduleSubmit}
                 isSubmitting={isScheduling}
+                initialData={rescheduleModalData}
             />
         </div>
     );

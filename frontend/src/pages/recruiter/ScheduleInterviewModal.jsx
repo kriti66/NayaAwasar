@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, MapPin, Link as LinkIcon, FileText } from 'lucide-react';
 
-const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting }) => {
+const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initialData }) => {
     const [formData, setFormData] = useState({
         date: '',
         time: '',
@@ -10,6 +10,19 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting }) => 
         meetLink: '',
         notes: ''
     });
+
+    React.useEffect(() => {
+        if (isOpen) {
+            setFormData({
+                date: initialData?.date ? new Date(initialData.date).toISOString().split('T')[0] : '', // Format date for input
+                time: initialData?.time || '',
+                mode: initialData?.mode || 'Online',
+                location: initialData?.location || '',
+                meetLink: initialData?.meetLink || '',
+                notes: initialData?.notes || ''
+            });
+        }
+    }, [isOpen, initialData]);
 
     if (!isOpen) return null;
 

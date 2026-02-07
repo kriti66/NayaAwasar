@@ -33,12 +33,26 @@ const ApplyJob = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [jobRes, profileRes] = await Promise.all([
+                const [jobRes, profileRes, appsRes] = await Promise.all([
                     api.get(`/jobs/${jobId}`),
-                    api.get('/profile/me')
+                    api.get('/profile/me'),
+                    api.get('/applications/my').catch(() => ({ data: [] }))
                 ]);
                 setJob(jobRes.data);
                 setProfile(profileRes.data);
+
+                // Check if already applied
+                const hasApplied = appsRes.data.some(app => {
+                    const appId = (app.job_id && typeof app.job_id === 'object') ? app.job_id._id : app.job_id;
+                    return String(appId) === String(jobId);
+                });
+
+                if (hasApplied) {
+                    toast.error("You have already applied for this job.");
+                    // Use replace to prevent back navigation loop
+                    navigate('/seeker/applications', { replace: true });
+                    return;
+                }
 
                 // Set default cover letter
                 setCoverLetter(`Dear Hiring Manager,\n\nI am writing to express my enthusiastic interest in the ${jobRes.data.title} position at ${jobRes.data.company_name}. With my background and skills, I am confident that I can contribute effectively to your team.`);

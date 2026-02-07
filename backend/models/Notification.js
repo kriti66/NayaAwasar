@@ -8,7 +8,7 @@ const notificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['JOB_ALERT', 'Application', 'System', 'Profile'],
+        enum: ['JOB_ALERT', 'Application', 'System', 'Profile', 'INTERVIEW_SCHEDULED', 'RESCHEDULE_APPROVED', 'RESCHEDULE_REJECTED', 'RESCHEDULE_REQUESTED', 'OFFER_ACCEPTED', 'STATUS_UPDATE', 'OFFER_EXTENDED'],
         required: true
     },
     message: {

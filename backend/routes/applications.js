@@ -3,7 +3,7 @@ import Application from '../models/Application.js';
 import User from '../models/User.js';
 import Job from '../models/Job.js';
 import Profile from '../models/Profile.js';
-import { requireKycApproved, requireKycVerified, requireRole } from '../middleware/auth.js';
+import { requireAuth, requireKycApproved, requireKycVerified, requireRole } from '../middleware/auth.js';
 import { logUserActivity } from '../utils/userActivityLogger.js';
 import { logActivity } from '../utils/activityLogger.js';
 
@@ -71,6 +71,7 @@ router.put('/:id/approve-reschedule-request', requireKycApproved, async (req, re
         application.interview = updatedInterview;
         application.rescheduledAt = new Date();
         application.rescheduleRequest.status = 'approved';
+        application.status = 'interview'; // Ensure status is set to interview
 
         application.interviewHistory.push({
             action: 'Rescheduled',
@@ -80,6 +81,25 @@ router.put('/:id/approve-reschedule-request', requireKycApproved, async (req, re
         });
 
         await application.save();
+
+        // Notifications & Logging
+        const { createNotification } = await import('../utils/notificationUtils.js');
+        await createNotification(
+            application.seeker_id,
+            'RESCHEDULE_APPROVED',
+            `Your interview reschedule request for ${application.job_id.title} has been APPROVED. New time: ${date} at ${time}.`,
+            application._id
+        );
+
+        await logActivity(
+            recruiterId,
+            'recruiter',
+            'RESCHEDULE_APPROVED',
+            `Approved reschedule request for ${application.job_id.title}`,
+            'Application',
+            application._id
+        );
+
         res.json({ success: true, message: 'Reschedule request approved and interview updated', application });
     } catch (error) {
         console.error("Approve reschedule error:", error);
@@ -110,6 +130,25 @@ router.put('/:id/reject-reschedule-request', requireKycApproved, async (req, res
         });
 
         await application.save();
+
+        // Notifications & Logging
+        const { createNotification } = await import('../utils/notificationUtils.js');
+        await createNotification(
+            application.seeker_id,
+            'RESCHEDULE_REJECTED',
+            `Your interview reschedule request for ${application.job_id.title} was declined. The original schedule stands unless communicated otherwise.`,
+            application._id
+        );
+
+        await logActivity(
+            recruiterId,
+            'recruiter',
+            'RESCHEDULE_REJECTED',
+            `Rejected reschedule request for ${application.job_id.title}`,
+            'Application',
+            application._id
+        );
+
         res.json({ success: true, message: 'Reschedule request rejected', application });
     } catch (error) {
         console.error("Reject reschedule error:", error);
@@ -283,6 +322,15 @@ router.post('/apply', requireKycVerified, upload.single('resume'), async (req, r
 
         // Log system activity
         await logActivity(seekerId, role, 'JOB_APPLICATION', `Applied for job '${job.title}' at ${job.company_name}.`, 'Application', application._id);
+
+        // Create notification for recruiter
+        const { createNotification } = await import('../utils/notificationUtils.js');
+        await createNotification(
+            job.recruiter_id,
+            'Application',
+            `New application received for ${job.title} from ${user.fullName}`,
+            application._id
+        );
 
         res.status(201).json({ success: true, message: 'Application submitted successfully', applicationId: application._id });
 
@@ -499,9 +547,95 @@ router.patch('/:id/accept-offer', requireAuth, async (req, res) => {
     }
 });
 
-// Deprecated endpoint
-router.put('/:id/status', (req, res) => {
-    res.status(405).json({ message: 'Generic status updates disabled. Use /advance, /reject, or /withdraw.' });
+// Update Application Status (Flexible - Recruiter only)
+router.patch('/:id/status', requireKycApproved, requireRole('recruiter', 'admin'), async (req, res) => {
+    const { id } = req.params;
+    const { status, interviewDetails, notes } = req.body;
+    const recruiterId = req.user.id;
+
+    const validStatuses = ['applied', 'in_review', 'interview', 'offered', 'hired', 'rejected', 'withdrawn'];
+
+    if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: 'Invalid status value' });
+    }
+
+    try {
+        const application = await Application.findById(id).populate('job_id');
+        if (!application) return res.status(404).json({ message: 'Application not found' });
+
+        // Authorization check
+        if (application.job_id.recruiter_id.toString() !== recruiterId && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Unauthorized access to this application' });
+        }
+
+        const previousStatus = application.status;
+
+        // Specific logic for 'interview' status
+        if (status === 'interview') {
+            if (!interviewDetails) {
+                // If moving to interview but no details provided, check if existing details exist, otherwise error?
+                // For flexibility, we might allow it, but better to enforce details if coming from UI modal.
+                // However, user might just be correcting status. Let's validate if details are passed.
+            }
+
+            if (interviewDetails) {
+                const { date, time, mode, location, meetLink, notes: interviewNotes } = interviewDetails;
+                application.interview = {
+                    date, time, mode, location, meetLink,
+                    notes: interviewNotes,
+                    scheduledAt: new Date()
+                };
+
+                // Add to history
+                application.interviewHistory.push({
+                    action: 'Scheduled',
+                    details: application.interview,
+                    timestamp: new Date()
+                });
+            }
+        }
+
+        // Update status
+        application.status = status;
+
+        // Handle rejection reason if provided
+        if (status === 'rejected' && notes) {
+            application.cancelReason = notes;
+        }
+
+        await application.save();
+
+        // Notifications & Logging
+        if (status !== previousStatus) {
+            const { createNotification } = await import('../utils/notificationUtils.js');
+
+            let notifMessage = `Your application status for ${application.job_id.title} has been updated to ${status.replace('_', ' ')}.`;
+            if (status === 'interview') notifMessage = `GREAT NEWS! You have an interview scheduled for ${application.job_id.title}. Check details in dashboard.`;
+            if (status === 'offered') notifMessage = `CONGRATULATIONS! You have received an offer for ${application.job_id.title}.`;
+
+            await createNotification(
+                application.seeker_id,
+                'STATUS_UPDATE',
+                notifMessage,
+                application._id
+            );
+
+            await logActivity(
+                recruiterId,
+                'recruiter',
+                'STATUS_CHANGE',
+                `Changed application status to ${status}`,
+                'Application',
+                application._id
+            );
+        }
+
+        res.json({ success: true, message: `Status updated to ${status}`, application });
+
+    } catch (error) {
+        console.error("Status update error:", error);
+        res.status(500).json({ message: 'Error updating application status' });
+    }
 });
 
 // Request Reschedule (Jobseeker only)
@@ -520,7 +654,7 @@ router.post('/:id/request-reschedule', async (req, res) => {
     }
 
     try {
-        const application = await Application.findById(id);
+        const application = await Application.findById(id).populate('job_id');
         if (!application) return res.status(404).json({ message: 'Application not found' });
 
         if (application.seeker_id.toString() !== seekerId) {
@@ -537,6 +671,25 @@ router.post('/:id/request-reschedule', async (req, res) => {
         };
 
         await application.save();
+
+        // Notifications & Logging
+        const { createNotification } = await import('../utils/notificationUtils.js');
+        await createNotification(
+            application.job_id.recruiter_id,
+            'RESCHEDULE_REQUESTED',
+            `Candidate ${req.user.fullName || 'Jobseeker'} requested a reschedule for the interview.`,
+            application._id
+        );
+
+        await logActivity(
+            seekerId,
+            'jobseeker',
+            'RESCHEDULE_REQUESTED',
+            `Requested reschedule for interview at ${application.job_id.title}`,
+            'Application',
+            application._id
+        );
+
         res.json({ success: true, message: 'Reschedule request submitted', application });
     } catch (error) {
         console.error("Request reschedule error:", error);
