@@ -1,9 +1,9 @@
 import express from 'express';
 import Company from '../models/Company.js';
 import Job from '../models/Job.js';
-import KYC from '../models/KYC.js';
+import RecruiterKyc from '../models/RecruiterKyc.js'; // Correct model
 import Application from '../models/Application.js';
-import { requireAuth, requireAdmin, getJwtSecret } from '../middleware/auth.js';
+import { requireAuth, requireRole, requireKycApproved, requireCompanyApproved, requireAdmin, getJwtSecret } from '../middleware/auth.js';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import path from 'path';
@@ -42,13 +42,16 @@ const upload = multer({
 // @route   POST /api/companies
 // @desc    Create a new company (Recruiter Only)
 // @access  Private
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireKycApproved, async (req, res) => {
     try {
         if (req.user.role !== 'recruiter' && req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Only recruiters can create companies' });
         }
 
-        const { name, industry, size, headquarters, contact, website } = req.body;
+        const {
+            name, industry, size, headquarters, contact, website,
+            about, socialLinks, hiringInfo
+        } = req.body;
 
         const newCompany = new Company({
             name,
@@ -57,6 +60,9 @@ router.post('/', requireAuth, async (req, res) => {
             headquarters,
             contact,
             website,
+            about,
+            socialLinks,
+            hiringInfo,
             recruiters: [req.user.id] // Link the creator
         });
 
@@ -64,7 +70,7 @@ router.post('/', requireAuth, async (req, res) => {
         res.status(201).json(newCompany);
     } catch (error) {
         console.error("Error creating company:", error);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: error.message || 'Server error' });
     }
 });
 
@@ -78,7 +84,7 @@ router.get('/my', requireAuth, async (req, res) => {
         if (!company) {
             // Check if user has a recruiter KYC (only if recruiter)
             if (req.user.role === 'recruiter') {
-                const kyc = await KYC.findOne({ userId: req.user.id, role: 'recruiter' });
+                const kyc = await RecruiterKyc.findOne({ userId: req.user.id }); // Removed role check as specific model implies it
 
                 if (kyc) {
                     // Create company from KYC data (non-sensitive fields only)
@@ -306,6 +312,28 @@ router.put('/:id', requireAuth, async (req, res) => {
         if (req.user.role !== 'admin') {
             delete updates.name;
             delete updates.industry;
+        }
+
+        // Deep merge updates
+        // Mongoose might not update nested fields if we just do Object.assign on the root doc 
+        // when the update payload has nested objects (e.g., about: { mission: ... }).
+        // Instead, we should loop and set them, or use a utility.
+        // Or simply:
+        if (updates.about) {
+            company.about = { ...company.about, ...updates.about };
+            delete updates.about;
+        }
+        if (updates.contact) {
+            company.contact = { ...company.contact, ...updates.contact };
+            delete updates.contact;
+        }
+        if (updates.socialLinks) {
+            company.socialLinks = { ...company.socialLinks, ...updates.socialLinks };
+            delete updates.socialLinks;
+        }
+        if (updates.hiringInfo) {
+            company.hiringInfo = { ...company.hiringInfo, ...updates.hiringInfo };
+            delete updates.hiringInfo;
         }
 
         Object.assign(company, updates);

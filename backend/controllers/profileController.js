@@ -89,8 +89,15 @@ export const updateProfile = async (req, res) => {
         // Log Profile Update
         await logActivity(req.user.id, req.user.role, 'PROFILE_UPDATED', 'User profile updated.', 'Profile', profile._id);
 
-        const { createNotification } = await import('../utils/notificationUtils.js');
-        await createNotification(req.user.id, 'Profile', 'You successfully updated your profile.', profile._id);
+        const { createNotification } = await import('./notificationController.js');
+        await createNotification({
+            recipient: req.user.id,
+            type: 'system', // or 'profile_update' if added to enum, but 'system' works
+            title: 'Profile Updated',
+            message: 'You successfully updated your profile.',
+            link: '/profile',
+            sender: req.user.id
+        });
 
         res.json(profile);
 

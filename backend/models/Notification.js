@@ -6,17 +6,26 @@ const notificationSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    sender: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
     type: {
         type: String,
-        enum: ['JOB_ALERT', 'Application', 'System', 'Profile', 'INTERVIEW_SCHEDULED', 'RESCHEDULE_APPROVED', 'RESCHEDULE_REJECTED', 'RESCHEDULE_REQUESTED', 'OFFER_ACCEPTED', 'STATUS_UPDATE', 'OFFER_EXTENDED'],
+        enum: ['job_post', 'application_update', 'offer', 'kyc_update', 'system'],
+        required: true
+    },
+    title: {
+        type: String,
         required: true
     },
     message: {
         type: String,
         required: true
     },
-    relatedId: {
-        type: mongoose.Schema.Types.ObjectId
+    link: {
+        type: String, // URL or route to redirect to
+        default: ''
     },
     isRead: {
         type: Boolean,
@@ -26,6 +35,14 @@ const notificationSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
+}, {
+    timestamps: true
 });
 
-export default mongoose.model('Notification', notificationSchema);
+// Index for faster queries
+notificationSchema.index({ recipient: 1, createdAt: -1 });
+notificationSchema.index({ recipient: 1, isRead: 1 });
+
+const Notification = mongoose.model('Notification', notificationSchema);
+
+export default Notification;

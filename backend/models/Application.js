@@ -46,13 +46,12 @@ const applicationSchema = new mongoose.Schema({
         notes: String,
         scheduledAt: Date
     },
-    rescheduleRequest: {
-        reason: String,
+    reschedule: {
+        requested: { type: Boolean, default: false },
+        reason: { type: String, default: '' },
         preferredDate: Date,
         preferredTime: String,
-        status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
-        requestedBy: { type: String, default: 'jobseeker' },
-        requestedAt: { type: Date, default: Date.now }
+        reviewed: { type: Boolean, default: false }
     },
     // Audit fields for ATS logic
     rescheduledAt: Date,

@@ -2,6 +2,7 @@ import KYC from '../models/KYC.js';
 import User from '../models/User.js';
 import { validateJobSeekerKYC, validateRecruiterKYC } from '../services/kycValidation.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { createNotification } from './notificationController.js';
 
 /**
  * POST /api/kyc/submit
@@ -184,6 +185,16 @@ export const approveKYCByUserId = async (req, res) => {
         const approvedUser = await User.findById(userId);
         await logActivity(req.user.id, req.user.role, 'KYC_APPROVED', `KYC for '${approvedUser?.fullName || 'User'}' approved.`, 'User', userId);
 
+        // Notify User
+        await createNotification({
+            recipient: userId,
+            type: 'kyc_update',
+            title: 'KYC Approved',
+            message: 'Your KYC application has been approved. You now have full access to platform features.',
+            link: '/dashboard', // Changed from /kyc/status since dashboard is more relevant now
+            sender: req.user.id
+        });
+
         return res.json({ success: true, message: 'KYC approved successfully' });
     } catch (error) {
         console.error('Approve KYC By UserId Error:', error);
@@ -230,6 +241,16 @@ export const rejectKYCByUserId = async (req, res) => {
         // Log KYC rejection activity
         const rejectedUser = await User.findById(userId);
         await logActivity(req.user.id, req.user.role, 'KYC_REJECTED', `KYC for '${rejectedUser?.fullName || 'User'}' rejected.`, 'User', userId);
+
+        // Notify User
+        await createNotification({
+            recipient: userId,
+            type: 'kyc_update',
+            title: 'KYC Application Rejected',
+            message: `Your KYC application was rejected. Reason: ${reason}. Please update your documents and resubmit.`,
+            link: '/kyc/status',
+            sender: req.user.id
+        });
 
         return res.json({ success: true, message: 'KYC rejected successfully' });
     } catch (error) {

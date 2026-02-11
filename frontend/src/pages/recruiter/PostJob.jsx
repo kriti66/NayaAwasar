@@ -22,6 +22,9 @@ const PostJob = () => {
     });
 
     useEffect(() => {
+        if (user.kycStatus !== 'approved' && user.role === 'recruiter') {
+            return;
+        }
         const fetchRecruiterCompany = async () => {
             try {
                 const myCompany = await companyService.getMyCompany();
@@ -40,7 +43,36 @@ const PostJob = () => {
             }
         };
         fetchRecruiterCompany();
-    }, []);
+    }, [user.kycStatus, user.role]);
+
+    if (user.kycStatus !== 'approved' && user.role === 'recruiter') {
+        return (
+            <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full">
+                <div className="bg-red-50 border-l-4 border-red-400 p-6 rounded-r-lg shadow-sm">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <AlertTriangle className="h-6 w-6 text-red-500" />
+                        </div>
+                        <div className="ml-4">
+                            <h3 className="text-xl font-bold text-red-800">Identity Verification Required</h3>
+                            <div className="mt-2 text-sm text-red-700">
+                                <p className="mb-4">
+                                    You must complete and get your <strong>Personal KYC</strong> approved before you can post jobs or create a company profile.
+                                    Your current KYC status is: <strong>{user.kycStatus?.toUpperCase() || 'NOT SUBMITTED'}</strong>.
+                                </p>
+                                <button
+                                    onClick={() => navigate('/kyc/recruiter')}
+                                    className="font-bold underline text-red-800 hover:text-red-900"
+                                >
+                                    Go to KYC Verification &rarr;
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        );
+    }
 
     if (loadingCompany) {
         return (

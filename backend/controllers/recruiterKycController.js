@@ -1,0 +1,175 @@
+import User from '../models/User.js';
+import RecruiterKyc from '../models/RecruiterKyc.js';
+import ActivityLog from '../models/ActivityLog.js';
+import { createNotification } from './notificationController.js';
+
+// Submit Recruiter KYC
+// Submit Recruiter KYC
+export const submitRecruiterKyc = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const {
+            fullName, jobTitle, officialEmail, phoneNumber,
+            companyName, industry, registrationNumber, companyAddress, website,
+            idType, idNumber,
+            idFront, idBack, registrationDocument,
+            companyLogo // Ensure this is captured
+        } = req.body;
+
+        console.log(`[KYC] Received submission for user: ${userId}`);
+
+        // data payload
+        const kycData = {
+            userId,
+            fullName,
+            jobTitle,
+            officialEmail,
+            phoneNumber,
+            companyName,
+            industry,
+            registrationNumber,
+            companyAddress,
+            website,
+            idType,
+            idNumber,
+            idFrontUrl: idFront,
+            idBackUrl: idBack,
+            registrationDocUrl: registrationDocument,
+            taxDocUrl: req.body.taxDocument || 'not-provided',
+            companyLogo: companyLogo || '', // Add logo
+            status: 'pending',
+            submissionDate: new Date()
+        };
+
+        // Check if exists
+        let existingKyc = await RecruiterKyc.findOne({ userId });
+
+        if (existingKyc) {
+            console.log(`[KYC] Updating existing record for user: ${userId}`);
+            // If it was already approved, maybe we shouldn't allow simple overwrite?
+            // But usually re-submission implies updating details.
+            // If it's pending, user might be updating files.
+
+            // We update it and set status to pending for review
+            await RecruiterKyc.findByIdAndUpdate(existingKyc._id, kycData);
+        } else {
+            console.log(`[KYC] Creating new record for user: ${userId}`);
+            await RecruiterKyc.create(kycData);
+        }
+
+        // Update User Status
+        await User.findByIdAndUpdate(userId, {
+            recruiterKycStatus: 'pending',
+            kycStatus: 'pending', // Sync global status
+            isKycSubmitted: true
+        });
+
+        // Log Activity
+        await ActivityLog.create({
+            actorId: userId,
+            actorRole: 'recruiter',
+            action: 'KYC_SUBMITTED',
+            message: `Recruiter submitted KYC verification from ${req.ip}`
+        });
+
+        res.status(200).json({ success: true, message: 'KYC submitted successfully.' });
+
+    } catch (error) {
+        console.error("[KYC Submit Error]:", error);
+        res.status(500).json({ success: false, message: 'Server error during KYC submission.', error: error.message });
+    }
+};
+
+// Get Recruiter KYC Status
+export const getRecruiterKycStatus = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('recruiterKycStatus kycRejectionReason');
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const kyc = await RecruiterKyc.findOne({ userId: req.user.id });
+
+        res.json({
+            status: user.recruiterKycStatus,
+            rejectionReason: kyc?.rejectionReason || null,
+            submittedAt: kyc?.updatedAt || kyc?.createdAt
+        });
+    } catch (error) {
+        console.error("[KYC Status Error]:", error);
+        res.status(500).json({ message: 'Server error retrieving status.' });
+    }
+};
+
+// Admin: Get Pending Recruiter KYCs
+export const getPendingRecruiterKycs = async (req, res) => {
+    try {
+        console.log("[Admin] Fetching pending recruiter KYCs");
+        const kycs = await RecruiterKyc.find({ status: 'pending' })
+            .populate('userId', 'email fullName role') // Include role
+            .sort({ createdAt: 1 });
+
+        console.log(`[Admin] Found ${kycs.length} pending recruiter KYCs`);
+        res.json(kycs);
+    } catch (error) {
+        console.error("[Admin KYC List Error]:", error);
+        res.status(500).json({ message: 'Server error retrieving KYC list.' });
+    }
+};
+
+// Admin: Review Recruiter KYC
+export const reviewRecruiterKyc = async (req, res) => {
+    try {
+        const { kycId } = req.params;
+        const { decision, reason } = req.body; // approved or rejected
+
+        if (!['approved', 'rejected'].includes(decision)) {
+            return res.status(400).json({ message: 'Invalid decision.' });
+        }
+
+        const kyc = await RecruiterKyc.findById(kycId);
+        if (!kyc) return res.status(404).json({ message: 'KYC not found.' });
+
+        // Update KYC
+        kyc.status = decision;
+        kyc.reviewedBy = req.user.id;
+        kyc.reviewedAt = new Date();
+        if (decision === 'rejected') {
+            kyc.rejectionReason = reason;
+        }
+        await kyc.save();
+
+        // Update User
+        const updatedUser = await User.findByIdAndUpdate(kyc.userId, {
+            recruiterKycStatus: decision,
+            kycStatus: decision, // Sync global status
+            isKycVerified: decision === 'approved',
+            kycRejectionReason: decision === 'rejected' ? reason : null,
+            kycVerifiedAt: decision === 'approved' ? new Date() : null
+        });
+
+        // Notify Recruiter
+        await createNotification({
+            recipient: kyc.userId,
+            type: 'kyc_update',
+            title: `Recruiter KYC ${decision === 'approved' ? 'Approved' : 'Rejected'}`,
+            message: decision === 'approved'
+                ? 'Your Recruiter Identity has been verified. You can now post jobs and create a company profile.'
+                : `Your Recruiter KYC was rejected. Reason: ${reason}`,
+            link: '/kyc/recruiter',
+            sender: req.user.id
+        });
+
+        // Log Activity
+        await ActivityLog.create({
+            actorId: req.user.id,
+            actorRole: 'admin',
+            action: `KYC_${decision.toUpperCase()}`,
+            message: `Admin ${decision} recruiter KYC for ${updatedUser ? updatedUser.fullName : kyc.fullName}.`
+        });
+
+        res.json({ message: `KYC ${decision} successfully.` });
+
+    } catch (error) {
+        console.error("KYC Review Error:", error);
+        res.status(500).json({ message: 'Server error during review.' });
+    }
+};

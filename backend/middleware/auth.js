@@ -150,6 +150,33 @@ export const requireRole = (...allowedRoles) => {
     };
 };
 
+export const requireRecruiter = requireRole('recruiter');
+
+// Middleware to require recruiter KYC approval
+export const requireRecruiterKycApproved = async (req, res, next) => {
+    try {
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        if (user.role === 'recruiter' && user.recruiterKycStatus === 'approved') {
+            return next();
+        }
+
+        // Admins can bypass
+        if (user.role === 'admin') {
+            return next();
+        }
+
+        return res.status(403).json({
+            code: 'KYC_REQUIRED',
+            message: 'Recruiter KYC verification required to perform this action.'
+        });
+    } catch (error) {
+        console.error("KYC Check Error:", error);
+        res.status(500).json({ message: 'Server error checking KYC status.' });
+    }
+};
+
 export const getJwtSecret = () => process.env.JWT_SECRET || 'supersecretkey';
 
 

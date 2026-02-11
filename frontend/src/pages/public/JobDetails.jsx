@@ -26,6 +26,7 @@ const JobDetails = () => {
     const [job, setJob] = useState(null);
     const [loading, setLoading] = useState(true);
     const [hasApplied, setHasApplied] = useState(false);
+    const [applicationStatus, setApplicationStatus] = useState(null);
     const { savedJobIds, setSavedJobIds, toggleSaveJob } = useJobSaver();
 
     // Fetch saved jobs on mount
@@ -63,11 +64,18 @@ const JobDetails = () => {
                 if (user?.role === 'jobseeker' && results[2]) {
                     const myApps = results[2].data || [];
                     // Check if any application matches this job ID
-                    const hasAppliedToJob = Array.isArray(myApps) && myApps.some(app => {
+                    const existingApp = Array.isArray(myApps) ? myApps.find(app => {
                         const appId = app.job_id?._id || app.job_id;
                         return String(appId) === String(id);
-                    });
-                    setHasApplied(hasAppliedToJob);
+                    }) : null;
+
+                    if (existingApp) {
+                        setHasApplied(true);
+                        setApplicationStatus(existingApp.status);
+                    } else {
+                        setHasApplied(false);
+                        setApplicationStatus(null);
+                    }
                 }
             } catch (error) {
                 console.error("Error fetching job details:", error);
@@ -89,6 +97,45 @@ const JobDetails = () => {
             return;
         }
         navigate(`/apply/${id}`);
+    };
+
+    // Helper to render application button state
+    const renderApplicationButton = () => {
+        if (!hasApplied) {
+            return (
+                <button
+                    onClick={handleApplyClick}
+                    className="w-full py-4 bg-[#2D9B82] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#25836d] transition-all shadow-xl shadow-[#2D9B82]/20 transform active:scale-95 mb-4 group flex items-center justify-center gap-2"
+                >
+                    Apply Now <ChevronLeft size={16} className="rotate-180 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+            );
+        }
+
+        if (applicationStatus === 'withdrawn') {
+            return (
+                <button
+                    onClick={handleApplyClick}
+                    className="w-full py-4 bg-[#2D9B82] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#25836d] transition-all shadow-xl shadow-[#2D9B82]/20 transform active:scale-95 mb-4 group flex items-center justify-center gap-2"
+                >
+                    Reapply <ChevronLeft size={16} className="rotate-180 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+            );
+        }
+
+        if (applicationStatus === 'rejected') {
+            return (
+                <div className="w-full py-4 bg-red-50 text-red-500 rounded-2xl text-center font-black text-xs uppercase tracking-widest border border-red-100 mb-4 cursor-not-allowed">
+                    Application Rejected
+                </div>
+            );
+        }
+
+        return (
+            <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl text-center font-black text-xs uppercase tracking-widest border border-gray-200 mb-4 cursor-default">
+                Application Submitted
+            </div>
+        );
     };
 
     if (loading) {
@@ -263,18 +310,7 @@ const JobDetails = () => {
                                 <p className="text-xs font-medium text-gray-500 leading-relaxed">Join a fast-growing company and build your future.</p>
                             </div>
 
-                            {hasApplied ? (
-                                <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl text-center font-black text-xs uppercase tracking-widest border border-gray-200">
-                                    Application Submitted
-                                </div>
-                            ) : (
-                                <button
-                                    onClick={handleApplyClick}
-                                    className="w-full py-4 bg-[#2D9B82] text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-[#25836d] transition-all shadow-xl shadow-[#2D9B82]/20 transform active:scale-95 mb-4 group flex items-center justify-center gap-2"
-                                >
-                                    Apply Now <ChevronLeft size={16} className="rotate-180 group-hover:translate-x-0.5 transition-transform" />
-                                </button>
-                            )}
+                            {renderApplicationButton()}
 
                             <div className="grid grid-cols-2 gap-3">
                                 <button

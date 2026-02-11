@@ -99,12 +99,13 @@ const RecruiterApplicants = () => {
 
     const handleApproveReschedule = (app) => {
         setSelectedApplicantId(app._id || app.id);
-        const preferredDate = app.rescheduleRequest?.preferredDate ? new Date(app.rescheduleRequest.preferredDate) : null;
+        const rescheduleData = app.reschedule || {}; // Fallback if undefined, though banner check protects this
+        const preferredDate = rescheduleData.preferredDate ? new Date(rescheduleData.preferredDate) : null;
 
         setRescheduleModalData({
             date: preferredDate,
-            time: app.rescheduleRequest?.preferredTime,
-            notes: `Candidate reschedule request: "${app.rescheduleRequest?.reason}"`
+            time: rescheduleData.preferredTime,
+            notes: `Candidate reschedule request: "${rescheduleData.reason}"`
         });
         setIsInterviewModalOpen(true);
     };
@@ -350,30 +351,37 @@ const RecruiterApplicants = () => {
                                         </div>
 
                                         {/* Reschedule Request Banner */}
-                                        {app.rescheduleRequest?.status === 'pending' && (
-                                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full animate-in fade-in slide-in-from-top-2">
-                                                <div className="flex gap-3">
-                                                    <div className="p-2 bg-amber-100 rounded-lg text-amber-600 shrink-0">
-                                                        <AlertCircle size={20} />
+                                        {app.reschedule?.requested && (
+                                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full animate-in fade-in slide-in-from-top-2">
+                                                <div className="flex gap-4">
+                                                    <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600 shrink-0">
+                                                        <AlertCircle size={24} />
                                                     </div>
                                                     <div>
-                                                        <h5 className="text-sm font-bold text-amber-900">Reschedule Requested</h5>
-                                                        <div className="text-xs text-amber-800 mt-1 space-y-0.5">
-                                                            <p>Using Reason: <span className="font-medium italic">"{app.rescheduleRequest.reason}"</span></p>
-                                                            <p>Preferred: <span className="font-bold">{app.rescheduleRequest.preferredDate ? new Date(app.rescheduleRequest.preferredDate).toLocaleDateString() : 'No date'}</span> at <span className="font-bold">{app.rescheduleRequest.preferredTime || 'No time'}</span></p>
+                                                        <h5 className="text-sm font-black text-amber-900 tracking-tight">Reschedule Requested</h5>
+                                                        <div className="mt-1.5 space-y-1">
+                                                            <p className="text-xs text-amber-800/80 leading-relaxed max-w-md">
+                                                                Candidate Reason: <span className="font-medium italic text-amber-900">"{app.reschedule.reason}"</span>
+                                                            </p>
+                                                            <div className="flex items-center gap-2 text-xs font-bold text-amber-900 bg-amber-100/50 px-2.5 py-1 rounded-md w-fit">
+                                                                <span>Preferred:</span>
+                                                                <span>{app.reschedule.preferredDate ? new Date(app.reschedule.preferredDate).toLocaleDateString() : 'No date'}</span>
+                                                                <span className="opacity-50">•</span>
+                                                                <span>{app.reschedule.preferredTime || 'No time'}</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                <div className="flex items-center gap-3 w-full sm:w-auto pl-12 sm:pl-0">
                                                     <button
                                                         onClick={() => handleRejectReschedule(app)}
-                                                        className="flex-1 sm:flex-none px-4 py-2 bg-white border border-amber-200 text-amber-800 text-xs font-bold rounded-lg hover:bg-amber-100 transition-colors"
+                                                        className="flex-1 sm:flex-none px-4 py-2.5 bg-white border border-amber-200 text-amber-700 text-xs font-bold rounded-xl hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800 transition-all shadow-sm"
                                                     >
-                                                        Reject
+                                                        Reject Request
                                                     </button>
                                                     <button
                                                         onClick={() => handleApproveReschedule(app)}
-                                                        className="flex-1 sm:flex-none px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 shadow-lg shadow-amber-500/20 transition-colors"
+                                                        className="flex-1 sm:flex-none px-4 py-2.5 bg-amber-500 text-white text-xs font-bold rounded-xl hover:bg-amber-600 shadow-lg shadow-amber-500/20 transition-all"
                                                     >
                                                         Review & Reschedule
                                                     </button>

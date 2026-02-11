@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import Layout from '../../components/Layout';
+
 import api from '../../services/api';
 
 const Contact = () => {

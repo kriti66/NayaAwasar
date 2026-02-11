@@ -70,6 +70,18 @@ const DashboardNavbar = () => {
         navigate('/login', { replace: true });
     };
 
+    const [companyStatus, setCompanyStatus] = useState(null);
+
+    useEffect(() => {
+        if (user?.role === 'recruiter') {
+            api.get('/companies/my')
+                .then(res => setCompanyStatus(res.data.status))
+                .catch(() => setCompanyStatus(null));
+        } else {
+            setCompanyStatus(null);
+        }
+    }, [user]);
+
     const navLinks = {
         admin: [
             { label: 'Dashboard', path: '/admin/dashboard' },
@@ -82,7 +94,8 @@ const DashboardNavbar = () => {
         recruiter: [
             { label: 'Dashboard', path: '/recruiter/dashboard' },
             { label: 'Profile', path: '/recruiter/profile' },
-            { label: 'Post a Job', path: '/recruiter/post-job' },
+            // Only show Post Job if BOTH Recruiter KYC and Company Profile are approved
+            ...((user?.kycStatus === 'approved' && companyStatus === 'approved') ? [{ label: 'Post a Job', path: '/recruiter/post-job' }] : []),
             { label: 'My Jobs', path: '/recruiter/jobs' },
             { label: 'Applications', path: '/recruiter/applications' },
             { label: 'Company Profile', path: '/recruiter/company' }
@@ -144,53 +157,94 @@ const DashboardNavbar = () => {
                         <div className="relative" ref={notificationRef}>
                             <button
                                 onClick={() => setIsNotificationOpen(!isNotificationOpen)}
-                                className="relative w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-all"
+                                className={`relative w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isNotificationOpen ? 'bg-gray-800 text-white' : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                                    }`}
                             >
                                 <Bell size={20} />
                                 {unreadCount > 0 && (
-                                    <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-gray-900 animate-pulse"></span>
+                                    <span className="absolute top-2 right-2 flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border-2 border-gray-900"></span>
+                                    </span>
                                 )}
                             </button>
 
                             {isNotificationOpen && (
-                                <div className="absolute right-0 mt-3 w-80 bg-gray-900 rounded-2xl shadow-2xl shadow-black/50 border border-gray-800 overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2 duration-200">
-                                    <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
-                                        <h3 className="text-sm font-bold text-white">Notifications</h3>
+                                <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-gray-900 rounded-2xl shadow-2xl shadow-black/80 border border-gray-800 overflow-hidden z-[60] animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="px-5 py-4 border-b border-gray-800 flex justify-between items-center bg-gray-900/95 backdrop-blur-sm">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-white tracking-wide">Notifications</h3>
+                                            <p className="text-[10px] font-medium text-gray-500 mt-0.5">You have {unreadCount} unread messages</p>
+                                        </div>
                                         {unreadCount > 0 && (
                                             <button
                                                 onClick={markAllRead}
-                                                className="text-[10px] font-bold text-blue-500 hover:text-blue-400 uppercase tracking-wide"
+                                                className="text-[10px] font-bold text-blue-500 hover:text-blue-400 uppercase tracking-widest hover:underline decoration-blue-500/30 underline-offset-4 transition-all"
                                             >
                                                 Mark all read
                                             </button>
                                         )}
                                     </div>
-                                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
+
+                                    <div className="max-h-[28rem] overflow-y-auto custom-scrollbar">
                                         {notifications.length > 0 ? (
                                             notifications.map((notif) => (
                                                 <div
                                                     key={notif._id}
-                                                    onClick={() => markRead(notif._id)}
-                                                    className={`px-4 py-3 border-b border-gray-800 hover:bg-gray-800/50 transition-colors cursor-pointer ${!notif.isRead ? 'bg-gray-800/20' : ''}`}
+                                                    onClick={() => {
+                                                        markRead(notif._id);
+                                                        if (notif.link) {
+                                                            setIsNotificationOpen(false);
+                                                            navigate(notif.link);
+                                                        }
+                                                    }}
+                                                    className={`group px-5 py-4 border-b border-gray-800 hover:bg-gray-800/60 transition-all cursor-pointer relative ${!notif.isRead ? 'bg-gray-800/30' : ''
+                                                        }`}
                                                 >
-                                                    <div className="flex gap-3">
-                                                        <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${!notif.isRead ? 'bg-blue-500' : 'bg-transparent'}`}></div>
-                                                        <div>
-                                                            <p className={`text-sm ${!notif.isRead ? 'text-white font-semibold' : 'text-gray-400'}`}>
+                                                    {!notif.isRead && (
+                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-600"></div>
+                                                    )}
+
+                                                    <div className="flex gap-4">
+                                                        <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${!notif.isRead ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'bg-transparent'}`}></div>
+                                                        <div className="flex-1 min-w-0"> {/* min-w-0 ensures truncation works */}
+                                                            <div className="flex justify-between items-start gap-2 mb-1">
+                                                                <h4 className={`text-sm ${!notif.isRead ? 'text-white font-bold' : 'text-gray-300 font-semibold'} line-clamp-1`}>
+                                                                    {notif.title || 'Notification'}
+                                                                </h4>
+                                                                <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider shrink-0 whitespace-nowrap">
+                                                                    {new Date(notif.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                                </span>
+                                                            </div>
+                                                            <p className={`text-xs leading-relaxed ${!notif.isRead ? 'text-gray-300' : 'text-gray-500'} line-clamp-2 break-words`}>
                                                                 {notif.message}
                                                             </p>
-                                                            <span className="text-[10px] font-bold text-gray-600 uppercase tracking-wider mt-1 block">
-                                                                {new Date(notif.createdAt).toLocaleDateString()}
-                                                            </span>
                                                         </div>
                                                     </div>
                                                 </div>
                                             ))
                                         ) : (
-                                            <div className="p-8 text-center text-gray-500 text-sm font-medium">
-                                                No notifications yet.
+                                            <div className="py-12 px-8 text-center">
+                                                <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-600">
+                                                    <Bell size={20} />
+                                                </div>
+                                                <p className="text-gray-400 text-sm font-medium">No notifications yet</p>
+                                                <p className="text-gray-600 text-xs mt-1">We'll notify you when something important happens.</p>
                                             </div>
                                         )}
+                                    </div>
+
+                                    <div className="p-2 border-t border-gray-800 bg-gray-900/90 backdrop-blur-sm">
+                                        <Link
+                                            to={`/${(currentRole === 'jobseeker' || currentRole === 'job_seeker') ? 'seeker' : currentRole}/notifications`}
+                                            className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-xs font-bold text-gray-400 hover:text-white hover:bg-gray-800 transition-all uppercase tracking-wide group"
+                                            onClick={() => setIsNotificationOpen(false)}
+                                        >
+                                            View All Notification
+                                            <svg className="w-3 h-3 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                                            </svg>
+                                        </Link>
                                     </div>
                                 </div>
                             )}

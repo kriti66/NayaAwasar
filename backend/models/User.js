@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema({
         enum: ['not_submitted', 'pending', 'approved', 'rejected'],
         default: 'not_submitted'
     },
+    recruiterKycStatus: {
+        type: String,
+        enum: ['not_submitted', 'pending', 'approved', 'rejected'],
+        default: 'not_submitted'
+    },
     isKycSubmitted: { type: Boolean, default: false },
     isKycVerified: { type: Boolean, default: false },
     kycRejectionReason: {

@@ -36,8 +36,28 @@ const AdminKYCPanel = () => {
 
     const fetchPendingKYC = async () => {
         try {
-            const res = await api.get('/admin/kyc/pending');
-            setPendingKYC(res.data);
+            const [seekerRes, recruiterRes] = await Promise.all([
+                api.get('/admin/kyc/pending'),
+                api.get('/admin/kyc/recruiter/pending')
+            ]);
+
+            // Transform Recruiter Data to match UI structure if needed
+            const recruiterData = recruiterRes.data.map(k => ({
+                ...k,
+                role: 'recruiter', // Ensure role identifies it
+                fullName: k.userId?.fullName || k.fullName,
+                email: k.userId?.email || k.officialEmail,
+                userId: k.userId
+            }));
+
+            // Transform Seeker Data just in case
+            const seekerData = seekerRes.data.map(k => ({
+                ...k,
+                role: k.role || 'jobseeker' // Default if not present
+            }));
+
+            // Merge
+            setPendingKYC([...seekerData, ...recruiterData]);
         } catch (err) {
             console.error('Error fetching KYC:', err);
         } finally {
@@ -46,16 +66,22 @@ const AdminKYCPanel = () => {
     };
 
     const getUserId = (kyc) => {
-        const id = kyc.userId?._id ?? kyc.userId ?? kyc._id;
-        return id != null ? String(id) : '';
+        // Handle different ID structures
+        return kyc.userId?._id || kyc.userId || kyc._id;
     };
 
     const handleApprove = async (kycRecord) => {
         const userId = getUserId(kycRecord);
+        const kycId = kycRecord._id; // Recruiter kyc uses its own ID for review
         setProcessing(true);
         try {
-            await api.patch(`/admin/kyc/${userId}/approve`);
-            setPendingKYC((prev) => prev.filter((k) => getUserId(k) !== String(userId)));
+            if (kycRecord.role === 'recruiter') {
+                await api.put(`/admin/kyc/recruiter/review/${kycId}`, { decision: 'approved' });
+            } else {
+                await api.patch(`/admin/kyc/${userId}/approve`);
+            }
+            // Remove from list
+            setPendingKYC((prev) => prev.filter((k) => k._id !== kycId && getUserId(k) !== userId));
             setSelectedKYC(null);
         } catch (err) {
             alert(err.response?.data?.message || 'Approval failed');
@@ -70,10 +96,16 @@ const AdminKYCPanel = () => {
             return;
         }
         const userId = getUserId(kycRecord);
+        const kycId = kycRecord._id;
         setProcessing(true);
         try {
-            await api.patch(`/admin/kyc/${userId}/reject`, { rejectionReason: rejectionReason.trim() });
-            setPendingKYC((prev) => prev.filter((k) => getUserId(k) !== String(userId)));
+            if (kycRecord.role === 'recruiter') {
+                await api.put(`/admin/kyc/recruiter/review/${kycId}`, { decision: 'rejected', reason: rejectionReason.trim() });
+            } else {
+                await api.patch(`/admin/kyc/${userId}/reject`, { rejectionReason: rejectionReason.trim() });
+            }
+
+            setPendingKYC((prev) => prev.filter((k) => k._id !== kycId && getUserId(k) !== userId));
             setSelectedKYC(null);
             setRejectionReason('');
         } catch (err) {

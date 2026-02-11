@@ -38,8 +38,8 @@ const CompanyProfile = () => {
     const isAdmin = authUser?.role === 'admin';
     const isAdminView = window.location.pathname.startsWith('/admin');
     const isSeekerView = window.location.pathname.startsWith('/seeker');
-    const isOwner = isRecruiter && company?.recruiters?.some(r => r._id === authUser.id || r === authUser.id);
-    const canEdit = (isOwner || isAdmin) && !isAdminView; // Admin can edit only if not in "Review Mode"
+    const isOwner = isRecruiter && company && (company.isNew || company.recruiters?.some(r => r._id === authUser.id || r === authUser.id));
+    const canEdit = (isOwner || isAdmin) && !isAdminView;
     const canReview = isAdmin && isAdminView;
 
     useEffect(() => {
@@ -86,7 +86,21 @@ const CompanyProfile = () => {
         } catch (error) {
             console.error("Error fetching company:", error);
             if (error.response?.status === 404 && isRecruiter && !id) {
-                setCompany({ name: 'Create Your Company', isNew: true });
+                // Initialize default structure for new company to avoid "property of undefined" errors
+                const defaultCompany = {
+                    name: 'Create Your Company',
+                    isNew: true,
+                    industry: '',
+                    size: '1-10 employees',
+                    headquarters: '',
+                    website: '',
+                    contact: { email: authUser?.email || '', address: '' },
+                    about: { mission: '', services: '', goals: '', culture: '' },
+                    socialLinks: { linkedin: '', portfolio: '', github: '' },
+                    hiringInfo: { jobTypes: [], locations: [], technologies: [], benefits: [] }
+                };
+                setCompany(defaultCompany);
+                setEditData(defaultCompany);
             } else {
                 toast.error("Failed to load company profile");
             }
@@ -167,7 +181,10 @@ const CompanyProfile = () => {
             const [parent, child] = path.split('.');
             setEditData(prev => ({
                 ...prev,
-                [parent]: { ...prev[parent], [child]: value }
+                [parent]: {
+                    ...(prev[parent] || {}), // Ensure parent object exists
+                    [child]: value
+                }
             }));
         } else {
             setEditData(prev => ({ ...prev, [path]: value }));
@@ -191,6 +208,35 @@ const CompanyProfile = () => {
     }
 
     if (!company) return null;
+
+    if (isRecruiter && !id && authUser.kycStatus !== 'approved') {
+        return (
+            <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full">
+                <div className="bg-red-50 border-l-4 border-red-400 p-6 rounded-r-lg shadow-sm">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <ShieldAlert className="h-6 w-6 text-red-500" />
+                        </div>
+                        <div className="ml-4">
+                            <h3 className="text-xl font-bold text-red-800">Identity Verification Required</h3>
+                            <div className="mt-2 text-sm text-red-700">
+                                <p className="mb-4">
+                                    You must complete and get your <strong>Personal KYC</strong> approved before you can create or manage a company profile.
+                                    Your current KYC status is: <strong>{authUser.kycStatus?.toUpperCase() || 'NOT SUBMITTED'}</strong>.
+                                </p>
+                                <button
+                                    onClick={() => navigate('/kyc/recruiter')}
+                                    className="font-bold underline text-red-800 hover:text-red-900"
+                                >
+                                    Go to KYC Verification &rarr;
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        );
+    }
 
     return (
         <div className="flex-1 font-sans flex flex-col text-gray-900 relative bg-[#F3F4F6] pb-12">

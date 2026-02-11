@@ -3,7 +3,7 @@ import Job from '../models/Job.js';
 import Application from '../models/Application.js';
 import Company from '../models/Company.js';
 import User from '../models/User.js';
-import { requireAuth, requireKycApproved, requireAdmin, requireCompanyApproved, requireKycVerified } from '../middleware/auth.js';
+import { requireAuth, requireRole, requireKycApproved, requireAdmin, requireCompanyApproved, requireKycVerified, requireRecruiterKycApproved } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
 
 const router = express.Router();
@@ -14,7 +14,10 @@ router.get('/', async (req, res) => {
         const jobs = await Job.find({
             status: 'Active',
             moderationStatus: 'Approved'
-        }).sort({ createdAt: -1 });
+        })
+            .sort({ createdAt: -1 })
+            .populate('company_id', 'name logo location'); // Populate company details
+
         res.json(jobs);
     } catch (error) {
         console.error("Fetch jobs error:", error);
@@ -25,7 +28,9 @@ router.get('/', async (req, res) => {
 // Get all jobs for Admin (including flagged/hidden)
 router.get('/admin/all', requireAuth, requireAdmin, async (req, res) => {
     try {
-        const jobs = await Job.find({}).sort({ createdAt: -1 });
+        const jobs = await Job.find({})
+            .sort({ createdAt: -1 })
+            .populate('company_id', 'name logo');
         res.json(jobs);
     } catch (error) {
         console.error("Admin fetch jobs error:", error);
@@ -37,7 +42,10 @@ router.get('/admin/all', requireAuth, requireAdmin, async (req, res) => {
 router.get('/my-jobs', requireAuth, async (req, res) => {
     try {
         const recruiter_id = req.user.id;
-        const jobs = await Job.find({ recruiter_id }).sort({ createdAt: -1 }).lean();
+        const jobs = await Job.find({ recruiter_id })
+            .sort({ createdAt: -1 })
+            .populate('company_id', 'logo name')
+            .lean();
 
         // Fetch applicant counts for each job
         const jobsWithCounts = await Promise.all(jobs.map(async (job) => {
@@ -80,7 +88,31 @@ router.get('/recommended', async (req, res) => {
     try {
         const jobs = await Job.aggregate([
             { $match: { status: 'Active', moderationStatus: 'Approved' } },
-            { $sample: { size: 5 } }
+            { $sample: { size: 5 } },
+            {
+                $lookup: {
+                    from: 'companies',
+                    localField: 'company_id',
+                    foreignField: '_id',
+                    as: 'company_details'
+                }
+            },
+            {
+                $unwind: {
+                    path: '$company_details',
+                    preserveNullAndEmptyArrays: true
+                }
+            },
+            {
+                $addFields: {
+                    company_logo: { $ifNull: ['$company_details.logo', '$company_logo'] },
+                    // Fallback to existing company_logo field if join fails or is empty, 
+                    // but prefer the joined company's logo.
+                    // Also expose the full company object if needed by frontend as 'company_id' 
+                    // (though aggregate returns it as 'company_details', we can map it)
+                    company_id: '$company_details'
+                }
+            }
         ]);
         res.json(jobs);
     } catch (error) {
@@ -89,8 +121,8 @@ router.get('/recommended', async (req, res) => {
     }
 });
 
-// Post a job (KYC-approved recruiters only; backend blocks if not approved)
-router.post('/', requireAuth, requireKycApproved, requireCompanyApproved, async (req, res) => {
+// Post a job (KYC-approved recruiters only)
+router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruiterKycApproved, requireCompanyApproved, async (req, res) => {
     const {
         title, company_name, type, description, location,
         salary_range, requirements, experience_level
@@ -128,8 +160,18 @@ router.post('/', requireAuth, requireKycApproved, requireCompanyApproved, async 
         // Notify Seekers (Simplified: In a real app, optimize this to targeted users)
         // Here we just notify all active jobseekers for MVP or just log it.
         // For this task request: "if some company posted job then show in notification this company posted a job"
-        const { broadcastNotification } = await import('../utils/notificationUtils.js');
-        await broadcastNotification('jobseeker', 'JOB_ALERT', `${job.company_name} posted a new job: ${job.title}`, job._id);
+        // Notify Seekers (Simplified: In a real app, optimize this to targeted users)
+        // Here we just notify all active jobseekers for MVP or just log it.
+        // For this task request: "if some company posted job then show in notification this company posted a job"
+        const { broadcastNotification } = await import('../controllers/notificationController.js');
+        await broadcastNotification({
+            role: 'jobseeker',
+            type: 'job_post',
+            title: 'New Job Posted',
+            message: `${job.company_name} posted a new job: ${job.title}`,
+            link: `/jobs/${job._id}`,
+            sender: recruiter_id
+        });
 
         res.status(201).json({ success: true, id: job._id });
     } catch (error) {
@@ -142,7 +184,8 @@ router.post('/', requireAuth, requireKycApproved, requireCompanyApproved, async 
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        const job = await Job.findById(id).populate('company_id');
+        // Populate company details including logo
+        const job = await Job.findById(id).populate('company_id', 'name logo location website size industry');
         if (!job) return res.status(404).json({ message: 'Job not found' });
         res.json(job);
     } catch (error) {
