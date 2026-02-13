@@ -260,8 +260,13 @@ const DashboardNavbar = () => {
                                     <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{user?.role || 'Guest'}</p>
                                 </div>
                                 <div className={`w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border-2 transition-all ${isDropdownOpen ? 'border-blue-500 shadow-md shadow-blue-500/20' : 'border-gray-700 group-hover:border-blue-500/50'}`}>
-                                    {user?.avatar ? (
-                                        <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+                                    {user?.profileImage ? (
+                                        <img
+                                            src={`${import.meta.env.VITE_API_URL}${user.profileImage}`}
+                                            alt=""
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                        />
                                     ) : (
                                         <span className="text-xs font-bold text-gray-400">{user?.fullName?.charAt(0) || 'U'}</span>
                                     )}

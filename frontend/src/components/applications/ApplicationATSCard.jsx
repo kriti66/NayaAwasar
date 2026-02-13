@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
     Building2, MapPin, Calendar, ChevronDown, ChevronUp,
@@ -11,6 +11,11 @@ import { toast } from 'react-hot-toast';
 const ApplicationATSCard = ({ application: initialApp }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [application, setApplication] = useState(initialApp);
+
+    useEffect(() => {
+        setApplication(initialApp);
+    }, [initialApp]);
+
     const { job_id, status, createdAt, interview } = application;
 
     const statusSteps = [
@@ -106,7 +111,7 @@ const ApplicationATSCard = ({ application: initialApp }) => {
 
                     <div className="flex items-center gap-4">
                         {status === 'interview' ? (
-                            <Link to="/seeker/interviews?focused=true" className="text-xs font-black text-[#2D9B82] hover:underline uppercase tracking-tight flex items-center gap-1.5">
+                            <Link to="/seeker/interviews?focused=true&from=applications" className="text-xs font-black text-[#2D9B82] hover:underline uppercase tracking-tight flex items-center gap-1.5">
                                 View Interview <ArrowRight size={14} />
                             </Link>
                         ) : (
@@ -237,7 +242,7 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                                                 {interview?.meetLink && (
                                                     <a href={interview.meetLink} target="_blank" rel="noreferrer" className="w-full py-3.5 bg-[#2D9B82] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#25836d] transition-all flex items-center justify-center shadow-lg shadow-[#2D9B82]/10 transform active:scale-95">Join Meeting</a>
                                                 )}
-                                                <Link to="/seeker/interviews" className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center justify-center transform active:scale-95">View Interview Details</Link>
+                                                <Link to="/seeker/interviews?focused=true&from=applications" className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center justify-center transform active:scale-95">View Interview Details</Link>
                                             </>
                                         ) : status === 'offered' ? (
                                             <button

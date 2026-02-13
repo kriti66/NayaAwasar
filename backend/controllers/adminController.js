@@ -40,7 +40,7 @@ export const getActivityLogs = async (req, res) => {
         const activities = await ActivityLog.find({})
             .sort({ createdAt: -1 })
             .limit(parseInt(limit))
-            .populate('actorId', 'fullName email role')
+            .populate('userId', 'fullName email role')
             .lean();
 
         res.json(activities);
@@ -141,7 +141,12 @@ export const updateCompanyStatus = async (req, res) => {
         await company.save();
 
         // Log Activity
-        await logActivity(req.user.id, req.user.role, 'COMPANY_STATUS_UPDATE', `Company '${company.name}' status updated to ${status}`, 'Company', company._id);
+        await logActivity(
+            req.user.id,
+            'COMPANY_STATUS_UPDATE',
+            `Company '${company.name}' status updated to ${status}`,
+            { companyId: company._id }
+        );
 
         res.json({ message: `Company status updated to ${status}`, company });
     } catch (error) {

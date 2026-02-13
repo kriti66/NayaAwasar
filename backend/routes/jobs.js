@@ -155,7 +155,13 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
         await job.save();
 
         // Log job creation activity
-        await logActivity(recruiter_id, req.user.role, 'JOB_POSTED', `Job posting '${job.title}' added.`, 'Job', job._id);
+        // Log job creation activity
+        await logActivity(
+            recruiter_id,
+            'JOB_POSTED',
+            `Job posting '${job.title}' added.`,
+            { jobId: job._id }
+        );
 
         // Notify Seekers (Simplified: In a real app, optimize this to targeted users)
         // Here we just notify all active jobseekers for MVP or just log it.
@@ -202,7 +208,13 @@ router.delete('/:id', requireAuth, requireKycApproved, requireCompanyApproved, a
         if (!job) return res.status(404).json({ message: 'Job not found' });
 
         // Log job deletion activity
-        await logActivity(req.user.id, req.user.role, 'JOB_DELETED', `Job posting '${job.title}' deleted.`, 'Job', job._id);
+        // Log job deletion activity
+        await logActivity(
+            req.user.id,
+            'JOB_DELETED',
+            `Job posting '${job.title}' deleted.`,
+            { jobId: job._id }
+        );
 
         res.json({ success: true, message: 'Job deleted' });
     } catch (error) {
@@ -268,7 +280,12 @@ router.patch('/:id/moderate', requireAuth, requireAdmin, async (req, res) => {
 
         // Log moderation activity
         const modAction = moderationStatus === 'Approved' ? 'JOB_APPROVED' : 'JOB_REJECTED';
-        await logActivity(req.user.id, req.user.role, modAction, `Job '${job.title}' moderation status updated to ${moderationStatus}.`, 'Job', job._id);
+        await logActivity(
+            req.user.id,
+            modAction,
+            `Job '${job.title}' moderation status updated to ${moderationStatus}.`,
+            { jobId: job._id }
+        );
 
         res.json({ success: true, message: `Job moderation status updated to ${moderationStatus}`, job });
     } catch (error) {

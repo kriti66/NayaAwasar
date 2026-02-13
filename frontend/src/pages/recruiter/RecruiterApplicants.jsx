@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { toast } from 'react-hot-toast';
@@ -314,6 +315,26 @@ const RecruiterApplicants = () => {
 
                                             {/* Actions */}
                                             <div className="flex items-center gap-4">
+                                                {/* Start Interview Button */}
+                                                {app.status === 'interview' && app.interview?.mode === 'Online' && (
+                                                    app.interview?.interviewId ? (
+                                                        <Link
+                                                            to={`/interview/call/${app.interview.interviewId}`}
+                                                            className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1.5"
+                                                        >
+                                                            Start Interview
+                                                        </Link>
+                                                    ) : (
+                                                        <a
+                                                            href={app.interview?.meetLink}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-gray-200 transition-colors shadow-sm flex items-center gap-1.5"
+                                                        >
+                                                            Link Only
+                                                        </a>
+                                                    )
+                                                )}
                                                 {/* Resume Download */}
                                                 {app.resumeUrl && (
                                                     <a

@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 // Helper to get Projects and Profile (aligned with Profile.userId & Project.userId schema)
 const getProfileAndProjects = async (userId) => {
     // Profile model stores reference as `userId`
-    const profile = await Profile.findOne({ userId }).populate('userId', 'fullName email _id phoneNumber');
+    const profile = await Profile.findOne({ userId }).populate('userId', 'fullName email _id phoneNumber profileImage');
     if (!profile) return null;
 
     const { default: Project } = await import('../models/Project.js');

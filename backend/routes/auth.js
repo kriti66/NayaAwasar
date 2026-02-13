@@ -48,7 +48,12 @@ router.post('/register', async (req, res) => {
         await user.save();
 
         // Log registration activity
-        await logActivity(user._id, normalizeRole(role), 'USER_REGISTERED', `New user '${user.fullName}' registered.`, 'User', user._id);
+        await logActivity(
+            user._id,
+            'USER_REGISTERED',
+            `New user '${user.fullName}' registered.`,
+            { role: normalizeRole(role) }
+        );
 
         const token = jwt.sign(
             { id: user._id.toString(), role: user.role, isKycVerified: user.isKycVerified },
@@ -141,7 +146,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id)
-            .select('fullName email role kycStatus isKycSubmitted isKycVerified kycRejectionReason kycCompletedAt')
+            .select('fullName email role kycStatus isKycSubmitted isKycVerified kycRejectionReason kycCompletedAt profileImage')
             .lean();
         if (!user) return res.status(404).json({ message: 'User not found' });
         res.json({
@@ -153,7 +158,8 @@ router.get('/me', requireAuth, async (req, res) => {
             isKycSubmitted: user.isKycSubmitted || false,
             isKycVerified: user.isKycVerified || false,
             kycRejectionReason: user.kycRejectionReason || null,
-            kycCompletedAt: user.kycCompletedAt || null
+            kycCompletedAt: user.kycCompletedAt || null,
+            profileImage: user.profileImage || null
         });
     } catch (error) {
         console.error('Auth me error:', error);

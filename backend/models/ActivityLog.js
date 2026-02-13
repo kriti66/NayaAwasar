@@ -1,34 +1,28 @@
-
 import mongoose from 'mongoose';
 
 const activityLogSchema = new mongoose.Schema({
-    actorId: {
+    userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
-    },
-    actorRole: {
-        type: String,
         required: true,
-        enum: ['jobseeker', 'recruiter', 'admin', 'system']
+        index: true
     },
-    action: {
+    type: { // APPLIED_JOB, RECRUITER_VIEW, MESSAGE, STATUS_CHANGE
         type: String,
         required: true
-    },
-    targetType: {
-        type: String,
-        required: false // e.g., 'Job', 'Application', 'User'
-    },
-    targetId: {
-        type: mongoose.Schema.Types.ObjectId,
-        required: false
     },
     message: {
         type: String,
         required: true
+    },
+    meta: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
     }
 }, { timestamps: true });
+
+// Optimizes fetching latest activities for a user - critical for dashboard performance
+activityLogSchema.index({ userId: 1, createdAt: -1 });
 
 const ActivityLog = mongoose.model('ActivityLog', activityLogSchema);
 

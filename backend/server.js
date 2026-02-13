@@ -102,6 +102,7 @@ import projectRoutes from './routes/projects.js';
 import activityRoutes from './routes/activity.js';
 import notificationRoutes from './routes/notifications.js';
 import analyticsRoutes from './routes/analytics.js';
+import interviewRoutes from './routes/interviewRoutes.js';
 
 app.use('/api', analyticsRoutes); // Mounts /jobs/:jobId/view and /recruiter/jobs/:jobId/analytics
 
@@ -117,6 +118,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/profile', requireAuth, profileRoutes);
 app.use('/api/projects', requireAuth, projectRoutes);
 app.use('/api/activity', requireAuth, activityRoutes);
+app.use('/api/interviews', interviewRoutes);
 app.use('/api/notifications', requireAuth, notificationRoutes);
 
 app.use('/api/kyc', requireAuth, kycRoutes);

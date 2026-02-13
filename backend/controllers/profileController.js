@@ -30,7 +30,7 @@ export const getMyProfile = async (req, res) => {
         const profile = await getOrCreateProfile(userId);
 
         // Also fetch user basic info (name, email, etc.)
-        const user = await User.findById(userId).select('fullName email role isKycVerified professionalHeadline bio location skills workExperience education resume jobPreferences projects');
+        const user = await User.findById(userId).select('fullName email role isKycVerified professionalHeadline bio location skills workExperience education resume jobPreferences projects profileImage');
 
         if (!user) {
             return res.status(404).json({ message: 'User account not found' });
@@ -51,7 +51,8 @@ export const getMyProfile = async (req, res) => {
                 fullName: user.fullName,
                 email: user.email,
                 role: user.role,
-                isKycVerified: user.isKycVerified
+                isKycVerified: user.isKycVerified,
+                profileImage: user.profileImage
             },
             strengthLabel: label,
             tips
@@ -333,7 +334,12 @@ export const getPublicProfile = async (req, res) => {
         // Log functionality for recruiter view
         // req.user is the recruiter
         if (req.user && req.user.role === 'recruiter') {
-            await logUserActivity(userId, 'RECRUITER_VIEW', { recruiterId: req.user.id });
+            await logActivity(
+                userId,
+                'RECRUITER_VIEW',
+                'A recruiter viewed your profile',
+                { recruiterId: req.user.id }
+            );
         }
 
         // Return sanitized

@@ -42,14 +42,13 @@ const ApplyJob = () => {
                 setProfile(profileRes.data);
 
                 // Check if already applied
-                const hasApplied = appsRes.data.some(app => {
+                const existingApp = appsRes.data.find(app => {
                     const appId = (app.job_id && typeof app.job_id === 'object') ? app.job_id._id : app.job_id;
                     return String(appId) === String(jobId);
                 });
 
-                if (hasApplied) {
-                    toast.error("You have already applied for this job.");
-                    // Use replace to prevent back navigation loop
+                if (existingApp && existingApp.status !== 'withdrawn') {
+                    toast.error(`You have already applied for this job. Status: ${existingApp.status}`);
                     navigate('/seeker/applications', { replace: true });
                     return;
                 }
@@ -116,7 +115,7 @@ const ApplyJob = () => {
 
             const res = await api.post('/applications/apply', formData);
 
-            if (res.status === 201) {
+            if (res.status === 201 || res.status === 200) {
                 toast.success("Application submitted successfully. Recruiter will review your application.");
                 navigate('/seeker/applications');
             }

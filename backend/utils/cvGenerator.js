@@ -129,6 +129,9 @@ export const generateCV_PDF = async (profile) => {
         </head>
         <body>
             <div class="header">
+                ${profile.user?.profileImage ? `
+                    <img src="http://localhost:${process.env.PORT || 5001}${profile.user.profileImage}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; float: right; margin-top: 10px;" />
+                ` : ''}
                 <h1 class="name">${profile.user?.fullName || 'Job Seeker'}</h1>
                 <div class="headline">${profile.headline || 'Professional'}</div>
                 <div class="meta">

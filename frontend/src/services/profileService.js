@@ -114,6 +114,14 @@ const profileService = {
         // Usually handled by window.open or direct link, but API call allows blob handling
         const response = await api.get('/profile/me/resume/download', { responseType: 'blob' });
         return response.data;
+    },
+
+    // Profile Image
+    uploadProfileImage: async (formData) => {
+        const response = await api.patch('/users/upload-profile-image', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        return response.data;
     }
 };
 

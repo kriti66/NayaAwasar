@@ -21,14 +21,15 @@ const applicationSchema = new mongoose.Schema({
     applicantExperienceLevel: { type: String, default: '' },
     status: {
         type: String,
-        enum: ['applied', 'in_review', 'interview', 'offered', 'hired', 'rejected', 'withdrawn'],
+        enum: ['applied', 'in-review', 'interview', 'offered', 'hired', 'rejected', 'withdrawn'],
         default: 'applied'
     },
     // Snapshot of personal info at time of application
     personalInfo: {
         fullName: String,
         email: String,
-        phone: String
+        phone: String,
+        address: String
     },
     coverLetter: {
         type: String,
@@ -44,7 +45,11 @@ const applicationSchema = new mongoose.Schema({
         duration: String,
         interviewer: String,
         notes: String,
-        scheduledAt: Date
+        scheduledAt: Date,
+        interviewId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Interview'
+        }
     },
     reschedule: {
         requested: { type: Boolean, default: false },

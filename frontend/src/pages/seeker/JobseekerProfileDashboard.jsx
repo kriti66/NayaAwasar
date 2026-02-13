@@ -26,7 +26,7 @@ const JobseekerProfileDashboard = () => {
             const [profileData, projectsData, activityData] = await Promise.all([
                 profileService.getMyProfile(),
                 projectService.getMyProjects(),
-                activityService.getMyActivity()
+                activityService.getMyActivity(10)
             ]);
             setProfile(profileData);
             setProjects(projectsData);
@@ -157,8 +157,17 @@ const JobseekerProfileDashboard = () => {
                             {/* LEFT COLUMN: Avatar + Info */}
                             <div className="flex items-start gap-6 w-full md:w-3/5">
                                 {/* Avatar */}
-                                <div className="shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-full bg-emerald-50 border-2 border-emerald-100 flex items-center justify-center text-emerald-600 text-3xl font-bold shadow-sm">
-                                    {profile.user?.fullName?.[0] || 'U'}
+                                <div className="shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-full bg-emerald-50 border-2 border-emerald-100 flex items-center justify-center text-emerald-600 text-3xl font-bold shadow-sm overflow-hidden">
+                                    {profile.user?.profileImage ? (
+                                        <img
+                                            src={`${import.meta.env.VITE_API_URL}${profile.user.profileImage}`}
+                                            alt={profile.user?.fullName}
+                                            className="w-full h-full object-cover"
+                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                        />
+                                    ) : (
+                                        profile.user?.fullName?.[0] || 'U'
+                                    )}
                                 </div>
 
                                 <div className="flex-1 min-w-0">
@@ -173,7 +182,7 @@ const JobseekerProfileDashboard = () => {
                                         </p>
                                     ) : (
                                         <button
-                                            onClick={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary } })}
+                                            onClick={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary, profileImage: profile.user?.profileImage } })}
                                             className="text-emerald-600 text-sm font-medium mt-1 hover:underline flex items-center gap-1"
                                         >
                                             <Plus size={14} /> Add headline
@@ -241,7 +250,7 @@ const JobseekerProfileDashboard = () => {
                                     </div>
 
                                     <button
-                                        onClick={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary } })}
+                                        onClick={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary, profileImage: profile.user?.profileImage } })}
                                         className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-md shadow-emerald-200 transition-all flex items-center gap-2"
                                     >
                                         <Edit2 size={14} /> Edit Profile
@@ -259,7 +268,7 @@ const JobseekerProfileDashboard = () => {
                     <div className="lg:col-span-2 space-y-6">
 
                         {/* About */}
-                        <Section title="About" onEdit={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary } })}>
+                        <Section title="About" onEdit={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary, profileImage: profile.user?.profileImage } })}>
                             {profile.summary ? (
                                 <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{profile.summary}</p>
                             ) : (
@@ -516,21 +525,45 @@ const JobseekerProfileDashboard = () => {
                         </div>
 
                         {/* Activity */}
+
+                        {/* Activity */}
                         <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                             <h3 className="font-bold text-gray-900 mb-4">Recent Activity</h3>
                             <div className="relative border-l border-gray-100 ml-2 space-y-6">
-                                {activity.map((act, i) => (
-                                    <div key={i} className="pl-4 relative">
-                                        <div className="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full border-2 border-white box-content shadow-sm bg-emerald-500"></div>
-                                        <p className="text-sm text-gray-800 font-medium">
-                                            {act.type === 'APPLIED_JOB' && `Applied to ${act.meta?.jobTitle || 'a job'}`}
-                                            {act.type === 'RECRUITER_VIEW' && `Profile viewed by a recruiter`}
-                                            {act.type === 'MESSAGE' && `Received a new message`}
-                                        </p>
-                                        <p className="text-xs text-gray-400 mt-1">{new Date(act.createdAt).toLocaleDateString()}</p>
-                                    </div>
-                                ))}
-                                {activity.length === 0 && <p className="pl-4 text-xs text-gray-400">No recent activity.</p>}
+                                {activity.map((act, i) => {
+                                    // Time Formatter
+                                    const getTimeAgo = (date) => {
+                                        const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+                                        let interval = seconds / 31536000;
+                                        if (interval > 1) return Math.floor(interval) + " years ago";
+                                        interval = seconds / 2592000;
+                                        if (interval > 1) return Math.floor(interval) + " months ago";
+                                        interval = seconds / 86400;
+                                        if (interval > 1) return Math.floor(interval) + " days ago";
+                                        interval = seconds / 3600;
+                                        if (interval > 1) return Math.floor(interval) + " hours ago";
+                                        interval = seconds / 60;
+                                        if (interval > 1) return Math.floor(interval) + " minutes ago";
+                                        return "Just now";
+                                    };
+
+                                    let colorClass = 'bg-gray-400';
+                                    if (act.type === 'APPLIED_JOB') colorClass = 'bg-emerald-500';
+                                    if (act.type === 'RECRUITER_VIEW') colorClass = 'bg-blue-500';
+                                    if (act.type === 'MESSAGE') colorClass = 'bg-purple-500';
+                                    if (act.type === 'STATUS_CHANGE') colorClass = 'bg-orange-500';
+
+                                    return (
+                                        <div key={act._id || i} className="pl-4 relative">
+                                            <div className={`absolute -left-1.5 top-1.5 w-3 h-3 rounded-full border-2 border-white box-content shadow-sm ${colorClass}`}></div>
+                                            <p className="text-sm text-gray-800 font-medium">
+                                                {act.message}
+                                            </p>
+                                            <p className="text-xs text-gray-400 mt-1 font-bold">{getTimeAgo(act.createdAt)}</p>
+                                        </div>
+                                    );
+                                })}
+                                {activity.length === 0 && <p className="pl-4 text-xs text-gray-400 italic">No recent activity found. Apply to jobs to populate this feed!</p>}
                             </div>
                         </div>
 
@@ -612,7 +645,18 @@ const EmptyState = ({ text }) => (
 // --- FORM COMPONENT ---
 const ModalForm = ({ type, initialData, onClose, onSuccess }) => {
     // We use a single large form handler for simplicity in this artifact
+    const { refreshUser } = useAuth();
     const [formData, setFormData] = useState(initialData || {});
+    const [imageFile, setImageFile] = useState(null);
+    const [previewImage, setPreviewImage] = useState(initialData?.profileImage ? `${import.meta.env.VITE_API_URL}${initialData.profileImage}` : null);
+
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setImageFile(file);
+            setPreviewImage(URL.createObjectURL(file));
+        }
+    };
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -627,7 +671,13 @@ const ModalForm = ({ type, initialData, onClose, onSuccess }) => {
         const toastId = toast.loading("Saving...");
         try {
             if (type === 'basic') {
+                if (imageFile) {
+                    const imgData = new FormData();
+                    imgData.append('profileImage', imageFile);
+                    await profileService.uploadProfileImage(imgData);
+                }
                 await profileService.updateProfile(formData);
+                await refreshUser(); // Update global auth state (navbar avatar)
             } else if (type === 'skills') {
                 // formData expected to be array for skills, but here we might handle text input
                 // If type=skills, initialData was array.
@@ -700,6 +750,25 @@ const ModalForm = ({ type, initialData, onClose, onSuccess }) => {
 
             {type === 'basic' && (
                 <>
+                    <div className="flex flex-col items-center justify-center gap-4 mb-6">
+                        <div className="relative group cursor-pointer w-24 h-24">
+                            <div className="w-full h-full rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100">
+                                {previewImage ? (
+                                    <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
+                                        <User size={32} />
+                                    </div>
+                                )}
+                            </div>
+                            <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white opacity-0 group-hover:opacity-100 rounded-full transition-opacity cursor-pointer">
+                                <Plus size={24} />
+                                <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                            </label>
+                        </div>
+                        <p className="text-xs text-gray-500 font-medium">Click to change profile photo</p>
+                    </div>
+
                     <Input label="Professional Headline" name="headline" value={formData.headline} onChange={handleChange} placeholder="e.g. Senior Frontend Developer" />
                     <Input label="Location" name="location" value={formData.location} onChange={handleChange} placeholder="e.g. Kathmandu, Nepal" />
                     <div>

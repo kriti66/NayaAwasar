@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useJobSaver from '../../hooks/useJobSaver';
+import UpcomingInterviewWidget from '../../components/dashboard/UpcomingInterviewWidget';
 import RecentActivityWidget from '../../components/dashboard/RecentActivityWidget';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -26,17 +27,19 @@ const SeekerDashboard = () => {
     const [stats, setStats] = useState({ applied: 0, saved: 0, interviews: 0 });
     const [recommendedJobs, setRecommendedJobs] = useState([]);
     const [appliedJobIds, setAppliedJobIds] = useState([]);
+    const [upcomingInterviews, setUpcomingInterviews] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
-                // Fetch stats, recommended jobs, user profile (for saved jobs), and applications
-                const [statsRes, jobsRes, profileRes, appsRes] = await Promise.all([
+                // Fetch stats, recommended jobs, user profile (for saved jobs), applications, and interviews
+                const [statsRes, jobsRes, profileRes, appsRes, interviewsRes] = await Promise.all([
                     api.get('/dashboard/seeker/stats').catch(() => ({ data: { applied: 0, saved: 0, interviews: 0 } })),
                     api.get('/jobs/recommended').catch(() => ({ data: [] })),
                     api.get('/users/profile').catch(() => ({ data: { savedJobs: [] } })),
-                    api.get('/applications/my').catch(() => ({ data: [] }))
+                    api.get('/applications/my').catch(() => ({ data: [] })),
+                    api.get('/applications/my-interviews').catch(() => ({ data: [] }))
                 ]);
 
                 setStats(statsRes.data);
@@ -46,6 +49,7 @@ const SeekerDashboard = () => {
                     if (!app.job_id) return null;
                     return typeof app.job_id === 'object' ? app.job_id._id : app.job_id;
                 }).filter(id => id));
+                setUpcomingInterviews(interviewsRes.data);
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
             } finally {
@@ -204,7 +208,7 @@ const SeekerDashboard = () => {
                 </div>
 
                 {/* Action Banner */}
-                {stats.interviews > 0 && (
+                {upcomingInterviews.length > 0 && (
                     <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-6 mb-8 flex flex-col md:flex-row items-center justify-between gap-4">
                         <div className="flex items-start gap-4">
                             <div className="p-2 bg-[#2D9B82] rounded-full text-white shrink-0">
@@ -216,14 +220,17 @@ const SeekerDashboard = () => {
                                     <span className="px-2 py-0.5 bg-rose-100 text-rose-600 text-[10px] font-black uppercase rounded">Urgent</span>
                                 </div>
                                 <p className="text-sm text-gray-600">
-                                    TechFlow Inc. has invited you to a technical interview for the <span className="font-bold text-gray-800">Senior Product Designer</span> role. Slots are filling up fast!
+                                    <span className="font-bold">{upcomingInterviews[0].job_id?.company_name || 'A company'}</span> has scheduled an interview for the <span className="font-bold text-gray-800">{upcomingInterviews[0].job_id?.title || 'Job Role'}</span> position. Please review the details.
                                 </p>
                             </div>
                         </div>
                         <div className="flex items-center gap-3 w-full md:w-auto">
-                            <button className="flex-1 md:flex-none px-6 py-2.5 bg-[#2D9B82] text-white text-sm font-bold rounded-lg hover:bg-[#25836d] shadow-sm shadow-[#2D9B82]/20 transition-all">
-                                Respond Now &rarr;
-                            </button>
+                            <Link
+                                to="/seeker/interviews?focused=true"
+                                className="flex-1 md:flex-none px-6 py-2.5 bg-[#2D9B82] text-white text-sm font-bold rounded-lg hover:bg-[#25836d] shadow-sm shadow-[#2D9B82]/20 transition-all text-center flex items-center justify-center gap-2"
+                            >
+                                View Details &rarr;
+                            </Link>
                         </div>
                     </div>
                 )}
@@ -422,48 +429,7 @@ const SeekerDashboard = () => {
                         </div>
 
                         {/* Upcoming Interview */}
-                        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-sm font-bold text-gray-900">Upcoming Interview</h3>
-                                <button className="text-gray-400 hover:text-gray-600">
-                                    <span className="sr-only">Menu</span>
-                                    ...
-                                </button>
-                            </div>
-                            <div className="p-4 border border-gray-100 rounded-xl bg-gray-50">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <h4 className="text-sm font-bold text-gray-900">Product Designer</h4>
-                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">TechFlow Inc.</p>
-                                    </div>
-                                    <div className="h-8 w-8 rounded-full bg-white flex items-center justify-center text-xs font-bold text-[#2D9B82] border border-gray-200 shadow-sm">
-                                        T
-                                    </div>
-                                </div>
-                                <div className="space-y-2 mt-4">
-                                    <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-                                        <Clock size={14} className="text-[#2D9B82]" />
-                                        Tomorrow, Feb 6
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-                                        <span className="w-3.5 h-3.5 flex items-center justify-center text-[10px] font-bold text-gray-400">@</span>
-                                        10:00 - 11:00 AM
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-                                        <MapPin size={14} className="text-gray-400" />
-                                        Google Meet
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3 mt-4">
-                                    <button className="py-2 bg-[#2D9B82] text-white text-xs font-bold rounded-lg hover:bg-[#25836d] shadow-sm">
-                                        Join
-                                    </button>
-                                    <button className="py-2 bg-white border border-gray-200 text-gray-600 text-xs font-bold rounded-lg hover:bg-gray-50">
-                                        Reschedule
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <UpcomingInterviewWidget interviews={upcomingInterviews} />
 
                         {/* Recent Activity */}
                         <RecentActivityWidget />

@@ -82,7 +82,12 @@ export const submitKYC = async (req, res) => {
         });
 
         // Log KYC submission activity
-        await logActivity(userId, userRole, 'KYC_SUBMITTED', `KYC application submitted by '${submittedRole}'.`, 'User', userId);
+        await logActivity(
+            userId,
+            'KYC_SUBMITTED',
+            `KYC application submitted by '${submittedRole}'.`,
+            { role: submittedRole }
+        );
 
         return res.status(201).json({
             success: true,
@@ -181,9 +186,13 @@ export const approveKYCByUserId = async (req, res) => {
             kycVerifiedAt: new Date()
         });
 
-        // Log KYC approval activity
         const approvedUser = await User.findById(userId);
-        await logActivity(req.user.id, req.user.role, 'KYC_APPROVED', `KYC for '${approvedUser?.fullName || 'User'}' approved.`, 'User', userId);
+        await logActivity(
+            req.user.id,
+            'KYC_APPROVED',
+            `KYC for '${approvedUser?.fullName || 'User'}' approved.`,
+            { userId }
+        );
 
         // Notify User
         await createNotification({
@@ -240,7 +249,12 @@ export const rejectKYCByUserId = async (req, res) => {
 
         // Log KYC rejection activity
         const rejectedUser = await User.findById(userId);
-        await logActivity(req.user.id, req.user.role, 'KYC_REJECTED', `KYC for '${rejectedUser?.fullName || 'User'}' rejected.`, 'User', userId);
+        await logActivity(
+            req.user.id,
+            'KYC_REJECTED',
+            `KYC for '${rejectedUser?.fullName || 'User'}' rejected.`,
+            { userId }
+        );
 
         // Notify User
         await createNotification({

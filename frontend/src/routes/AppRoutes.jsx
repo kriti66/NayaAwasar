@@ -48,6 +48,7 @@ import AdminCompanies from '../pages/admin/AdminCompanies';
 import AdminLocationManager from '../pages/admin/AdminLocationManager';
 import AdminJobs from '../pages/admin/AdminJobs';
 import Notifications from '../pages/shared/Notifications';
+import InterviewCall from '../pages/shared/InterviewCall';
 
 const AppRoutes = () => {
     return (
@@ -93,6 +94,11 @@ const AppRoutes = () => {
                     <Route path="/kyc" element={<KYCStatus />} />
                     <Route path="/kyc/status" element={<KYCStatus />} />
                     {/* Note: Notifications is shared but might need specific layout depending on role in future */}
+                </Route>
+
+                {/* SHARED INTERVIEW ROUTE */}
+                <Route element={<RoleRoute allowedRoles={['jobseeker', 'recruiter', 'admin']} />}>
+                    <Route path="/interview/call/:id" element={<InterviewCall />} />
                 </Route>
 
                 {/* 

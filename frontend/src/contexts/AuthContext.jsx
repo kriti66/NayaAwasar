@@ -16,29 +16,33 @@ export const AuthProvider = ({ children }) => {
     const refreshUser = async () => {
         const token = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
-        if (!token || !storedUser) return;
+        if (!token) return;
 
         try {
-            const res = await api.get('/kyc/status');
-            const { kycStatus, rejectionReason, isKycSubmitted, isKycVerified } = res.data;
-            const parsed = JSON.parse(storedUser);
+            // We fetch the full user profile which includes KYC status and profileImage
+            const res = await api.get('/auth/me');
+            const data = res.data;
+
+            // Map response to match stored user structure (or just replace it if structure is consistent)
             const updated = {
-                ...parsed,
-                kycStatus: kycStatus ?? parsed.kycStatus,
-                rejectionReason: rejectionReason ?? parsed.rejectionReason,
-                isKycSubmitted: isKycSubmitted ?? parsed.isKycSubmitted,
-                isKycVerified: isKycVerified ?? parsed.isKycVerified
+                id: data.id,
+                fullName: data.fullName,
+                email: data.email,
+                role: data.role,
+                kycStatus: data.kycStatus,
+                isKycSubmitted: data.isKycSubmitted,
+                isKycVerified: data.isKycVerified,
+                rejectionReason: data.kycRejectionReason,
+                profileImage: data.profileImage
             };
+
+            // Preserve other fields if needed, but /auth/me should be the source of truth
             localStorage.setItem('user', JSON.stringify(updated));
             setUser(updated);
         } catch (err) {
-            // If 401/403, user may use SQLite auth; keep stored user and default kycStatus
-            const parsed = storedUser ? JSON.parse(storedUser) : null;
-            if (parsed && !parsed.kycStatus) {
-                const updated = { ...parsed, kycStatus: 'not_started', rejectionReason: null };
-                setUser(updated);
-                localStorage.setItem('user', JSON.stringify(updated));
-            }
+            console.error("Failed to refresh user:", err);
+            // Fallback: keep existing user but maybe mark session as risky if needed?
+            // For now, do nothing or handle 401 logout elsewhere
         }
     };
 

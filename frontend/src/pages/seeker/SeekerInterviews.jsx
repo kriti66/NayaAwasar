@@ -49,15 +49,24 @@ const SeekerInterviews = () => {
         }
     };
 
+    const from = searchParams.get('from');
+
+    const getBackLink = () => {
+        if (from === 'notifications') return { to: '/seeker/notifications', label: 'Back to Notifications' };
+        return { to: '/seeker/applications', label: 'Back to Applications' };
+    };
+
+    const backLink = getBackLink();
+
     const MainContent = () => (
         <div className={isFocused ? "max-w-4xl mx-auto w-full px-6 py-12 md:py-20 animate-in fade-in duration-700" : "flex-1 p-10 max-w-5xl mx-auto w-full"}>
             {isFocused && (
                 <Link
-                    to="/seeker/applications"
+                    to={backLink.to}
                     className="inline-flex items-center gap-2 text-xs font-black text-gray-400 hover:text-[#2D9B82] uppercase tracking-[0.2em] mb-12 group transition-colors"
                 >
                     <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
-                    Back to Applications
+                    {backLink.label}
                 </Link>
             )}
 
@@ -119,9 +128,15 @@ const SeekerInterviews = () => {
                                             {app.interview?.mode === 'Online' ? 'Meeting Link' : 'Location'}
                                         </p>
                                         {app.interview?.mode === 'Online' ? (
-                                            <a href={app.interview?.meetLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-[#2D9B82] hover:underline flex items-center gap-1.5">
-                                                Join Interview <LinkIcon className="w-3 h-3" />
-                                            </a>
+                                            app.interview?.interviewId ? (
+                                                <Link to={`/interview/call/${app.interview.interviewId}`} className="text-sm font-bold text-[#2D9B82] hover:underline flex items-center gap-1.5">
+                                                    Join Interview Call <Video className="w-3 h-3" />
+                                                </Link>
+                                            ) : (
+                                                <a href={app.interview?.meetLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-[#2D9B82] hover:underline flex items-center gap-1.5">
+                                                    Join Interview Link <LinkIcon className="w-3 h-3" />
+                                                </a>
+                                            )
                                         ) : (
                                             <p className="text-sm font-bold text-slate-800">{app.interview?.location || 'TBD'}</p>
                                         )}
