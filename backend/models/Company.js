@@ -6,6 +6,10 @@ const companySchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    company_name: { // Added per prompt
+        type: String,
+        trim: true
+    },
     logo: {
         type: String,
         default: ''
@@ -37,6 +41,15 @@ const companySchema = new mongoose.Schema({
         type: String,
         enum: ['draft', 'pending', 'approved', 'rejected'],
         default: 'draft'
+    },
+    verification_status: { // Added per prompt
+        type: String,
+        enum: ['Verified', 'Not Verified', 'Pending'],
+        default: 'Not Verified'
+    },
+    rating: { // Added per prompt
+        type: Number,
+        default: 0
     },
     adminFeedback: {
         type: String,

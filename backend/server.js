@@ -104,7 +104,11 @@ import notificationRoutes from './routes/notifications.js';
 import analyticsRoutes from './routes/analytics.js';
 import interviewRoutes from './routes/interviewRoutes.js';
 
+import aiRoutes from './routes/ai.js';
+
 app.use('/api', analyticsRoutes); // Mounts /jobs/:jobId/view and /recruiter/jobs/:jobId/analytics
+app.use('/api/ai', aiRoutes);
+
 
 
 app.use('/api/auth', authRoutes);
