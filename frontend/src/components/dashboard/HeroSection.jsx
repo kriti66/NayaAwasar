@@ -47,7 +47,7 @@ const HeroSection = ({ user, interviewCount, stats }) => {
 
                     {isRecruiter ? (
                         <div className="flex flex-wrap gap-4 mb-10">
-                            <Link to="/recruiter/post-job" className="bg-[#2D9B82] text-white px-8 py-4 rounded-xl font-bold hover:bg-[#25836d] transition-all transform active:scale-95 shadow-lg shadow-[#2D9B82]/20 flex items-center gap-2">
+                            <Link to="/recruiter/post-job" className="bg-[#29a08e] text-white px-8 py-4 rounded-xl font-bold hover:bg-[#228377] transition-all transform active:scale-95 shadow-lg shadow-[#29a08e]/20 flex items-center gap-2">
                                 Broadcast Job Post
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -82,7 +82,7 @@ const HeroSection = ({ user, interviewCount, stats }) => {
                                         className="w-full py-3 text-gray-900 focus:outline-none text-sm font-medium placeholder:text-gray-300"
                                     />
                                 </div>
-                                <button className="bg-[#2D9B82] text-white px-8 py-3 rounded-xl font-bold hover:bg-[#25836d] transition-all transform active:scale-95 shadow-lg shadow-[#2D9B82]/20">
+                                <button className="bg-[#29a08e] text-white px-8 py-3 rounded-xl font-bold hover:bg-[#228377] transition-all transform active:scale-95 shadow-lg shadow-[#29a08e]/20">
                                     Search
                                 </button>
                             </div>

@@ -93,12 +93,12 @@ const Register = () => {
                         {[1, 2, 3, 4].map((step) => (
                             <div key={step} className="flex items-center">
                                 <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 transition-colors
-                                    ${currentStep >= step ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-300'}
+                                    ${currentStep >= step ? 'bg-[#29a08e] border-[#29a08e] text-white' : 'bg-white border-gray-300 text-gray-300'}
                                     text-sm font-bold`}>
                                     {step}
                                 </div>
                                 {step < 4 && (
-                                    <div className={`w-8 sm:w-12 h-0.5 mx-2 ${currentStep > step ? 'bg-blue-600' : 'bg-gray-200'}`}></div>
+                                    <div className={`w-8 sm:w-12 h-0.5 mx-2 ${currentStep > step ? 'bg-[#29a08e]' : 'bg-gray-200'}`}></div>
                                 )}
                             </div>
                         ))}
@@ -119,9 +119,9 @@ const Register = () => {
                                 <button
                                     onClick={() => handleRoleSelect('jobseeker')}
                                     className={`p-8 border-2 rounded-2xl flex flex-col items-center transition-all space-y-4
-                                        ${formData.role === 'jobseeker' ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md' : 'border-gray-100 bg-gray-50 hover:bg-white hover:border-blue-200'}`}
+                                        ${formData.role === 'jobseeker' ? 'border-[#29a08e] bg-[#29a08e]/10 text-[#29a08e] shadow-md' : 'border-gray-100 bg-gray-50 hover:bg-white hover:border-[#29a08e]/30'}`}
                                 >
-                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center transition-colors ${formData.role === 'jobseeker' ? 'bg-blue-600 text-white' : 'bg-white text-gray-400'}`}>
+                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center transition-colors ${formData.role === 'jobseeker' ? 'bg-[#29a08e] text-white' : 'bg-white text-gray-400'}`}>
                                         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                         </svg>
@@ -132,9 +132,9 @@ const Register = () => {
                                 <button
                                     onClick={() => handleRoleSelect('recruiter')}
                                     className={`p-8 border-2 rounded-2xl flex flex-col items-center transition-all space-y-4
-                                        ${formData.role === 'recruiter' ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md' : 'border-gray-100 bg-gray-50 hover:bg-white hover:border-blue-200'}`}
+                                        ${formData.role === 'recruiter' ? 'border-[#29a08e] bg-[#29a08e]/10 text-[#29a08e] shadow-md' : 'border-gray-100 bg-gray-50 hover:bg-white hover:border-[#29a08e]/30'}`}
                                 >
-                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center transition-colors ${formData.role === 'recruiter' ? 'bg-blue-600 text-white' : 'bg-white text-gray-400'}`}>
+                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center transition-colors ${formData.role === 'recruiter' ? 'bg-[#29a08e] text-white' : 'bg-white text-gray-400'}`}>
                                         <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                         </svg>
@@ -159,22 +159,22 @@ const Register = () => {
                                 <div className="space-y-1">
                                     <label className="text-sm font-medium text-gray-700">Full Name</label>
                                     <input type="text" name="name" value={formData.name} onChange={handleChange}
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-blue-600 focus:ring-0 transition-all text-gray-900" placeholder="John Doe" required />
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-[#29a08e] focus:ring-0 transition-all text-gray-900" placeholder="John Doe" required />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-sm font-medium text-gray-700">Email Address</label>
                                     <input type="email" name="email" value={formData.email} onChange={handleChange}
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-blue-600 focus:ring-0 transition-all text-gray-900" placeholder="john@example.com" required />
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-[#29a08e] focus:ring-0 transition-all text-gray-900" placeholder="john@example.com" required />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-sm font-medium text-gray-700">Password</label>
                                     <input type="password" name="password" value={formData.password} onChange={handleChange}
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-blue-600 focus:ring-0 transition-all text-gray-900" placeholder="••••••••" required />
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-[#29a08e] focus:ring-0 transition-all text-gray-900" placeholder="••••••••" required />
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-sm font-medium text-gray-700">Confirm Password</label>
                                     <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange}
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-blue-600 focus:ring-0 transition-all text-gray-900" placeholder="••••••••" required />
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-lg py-2.5 px-4 focus:border-[#29a08e] focus:ring-0 transition-all text-gray-900" placeholder="••••••••" required />
                                 </div>
                             </div>
                         </div>
@@ -188,8 +188,8 @@ const Register = () => {
                                 <p className="text-sm text-gray-500 mt-1">Final steps to get started</p>
                             </div>
 
-                            <div className="bg-blue-50 p-8 rounded-2xl text-blue-700 border border-blue-100">
-                                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm text-blue-600">
+                            <div className="bg-[#29a08e]/5 p-8 rounded-2xl text-[#228377] border border-[#29a08e]/20">
+                                <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mx-auto mb-4 shadow-sm text-[#29a08e]">
                                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
@@ -238,7 +238,7 @@ const Register = () => {
                                 Previous
                             </button>
                         ) : (
-                            <Link to="/login" className="text-sm font-bold text-blue-600 hover:text-blue-700 transition-colors">
+                            <Link to="/login" className="text-sm font-bold text-[#29a08e] hover:text-[#228377] transition-colors">
                                 Sign In Instead
                             </Link>
                         )}
@@ -246,7 +246,7 @@ const Register = () => {
                         {currentStep < 4 ? (
                             <button
                                 onClick={handleNext}
-                                className="px-8 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm"
+                                className="px-8 py-2.5 bg-[#29a08e] text-white rounded-lg text-sm font-bold hover:bg-[#228377] transition-colors shadow-sm"
                             >
                                 Continue
                             </button>
@@ -254,7 +254,7 @@ const Register = () => {
                             <button
                                 onClick={handleSubmit}
                                 disabled={loading}
-                                className="px-8 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                                className="px-8 py-2.5 bg-[#29a08e] text-white rounded-lg text-sm font-bold hover:bg-[#228377] transition-colors shadow-sm disabled:opacity-50"
                             >
                                 {loading ? 'Joining...' : 'Confirm Join'}
                             </button>

@@ -79,7 +79,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                     <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg leading-6 font-medium text-gray-900 flex items-center gap-2">
-                                <Lock size={20} className="text-[#2D9B82]" />
+                                <Lock size={20} className="text-[#29a08e]" />
                                 Change Password
                             </h3>
                             <button onClick={onClose} className="text-gray-400 hover:text-gray-500 focus:outline-none">
@@ -111,7 +111,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                                         value={formData.currentPassword}
                                         onChange={handleChange}
                                         required
-                                        className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D9B82]"
+                                        className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#29a08e]"
                                         placeholder="••••••••"
                                     />
                                     <button type="button" onClick={() => toggleShow('current')} className="absolute right-3 top-2.5 text-gray-400">
@@ -129,7 +129,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                                         value={formData.newPassword}
                                         onChange={handleChange}
                                         required
-                                        className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D9B82]"
+                                        className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#29a08e]"
                                         placeholder="••••••••"
                                     />
                                     <button type="button" onClick={() => toggleShow('new')} className="absolute right-3 top-2.5 text-gray-400">
@@ -147,7 +147,7 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                                         value={formData.confirmPassword}
                                         onChange={handleChange}
                                         required
-                                        className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D9B82]"
+                                        className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#29a08e]"
                                         placeholder="••••••••"
                                     />
                                     <button type="button" onClick={() => toggleShow('confirm')} className="absolute right-3 top-2.5 text-gray-400">
@@ -160,14 +160,14 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
                                 <button
                                     type="button"
                                     onClick={onClose}
-                                    className="w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D9B82] sm:text-sm"
+                                    className="w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] sm:text-sm"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={loading}
-                                    className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-[#2D9B82] text-base font-medium text-white hover:bg-[#25836d] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D9B82] sm:text-sm disabled:opacity-70"
+                                    className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-[#29a08e] text-base font-medium text-white hover:bg-[#228377] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] sm:text-sm disabled:opacity-70"
                                 >
                                     {loading ? 'Updating...' : 'Update Password'}
                                 </button>

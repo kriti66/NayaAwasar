@@ -197,7 +197,7 @@ export const applyForJob = async (req, res) => {
                     type: 'application_update',
                     title: 'Application Re-activated',
                     message: `${user.fullName} has re-applied for ${job.title}`,
-                    link: `/recruiter/jobs/${job_id}/applications`,
+                    link: `/recruiter/applications?jobId=${job_id}`,
                     sender: seekerId
                 });
 
@@ -251,7 +251,7 @@ export const applyForJob = async (req, res) => {
             type: 'application_update',
             title: 'New Application',
             message: `New application received for ${job.title} from ${user.fullName}`,
-            link: `/recruiter/jobs/${job_id}/applications`,
+            link: `/recruiter/applications?jobId=${job_id}`,
             sender: seekerId
         });
 
@@ -335,9 +335,19 @@ export const advanceApplication = async (req, res) => {
         const nextStatus = pipeline[currentIndex + 1];
 
         if (nextStatus === 'interview') {
-            const { date, time, mode, location, meetLink, notes } = req.body;
+            const { date, time, mode, location, notes, timezone } = req.body;
             if (!date || !time || !mode) {
                 return res.status(400).json({ message: 'Date, time, and mode are required for interview.' });
+            }
+
+            if (mode === 'Onsite' && !location) {
+                return res.status(400).json({ message: 'Location is required for Onsite interviews.' });
+            }
+
+            // Generate roomId if Online
+            let roomId = null;
+            if (mode === 'Online') {
+                roomId = `interview_${application._id}_${Date.now()}`;
             }
 
             const newInterview = await Interview.create({
@@ -348,12 +358,19 @@ export const advanceApplication = async (req, res) => {
                 date,
                 time,
                 mode,
-                meetingLink: meetLink,
+                location: mode === 'Onsite' ? location : undefined,
+                roomId,
                 notes,
+                timezone,
                 status: 'Scheduled'
             });
 
-            application.interview = { date, time, mode, location, meetLink, notes, scheduledAt: new Date(), interviewId: newInterview._id };
+            application.interview = {
+                date, time, mode, location, roomId, notes, timezone,
+                scheduledAt: new Date(),
+                interviewId: newInterview._id
+            };
+
             application.interviewHistory.push({
                 action: 'Scheduled',
                 details: application.interview,
@@ -369,7 +386,7 @@ export const advanceApplication = async (req, res) => {
                 recipient: application.seeker_id,
                 type: 'application_update',
                 title: 'Interview Scheduled',
-                message: `Your interview for ${application.job_id?.title} has been scheduled`,
+                message: `Your interview for ${application.job_id?.title} has been scheduled (${application.interview.mode}).`,
                 link: '/seeker/interviews?focused=true&from=notifications',
                 sender: recruiterId
             });
@@ -422,11 +439,12 @@ export const rejectApplication = async (req, res) => {
 // Update Status (Generic)
 export const updateApplicationStatus = async (req, res) => {
     const { id } = req.params;
-    const { status, interviewDetails, notes } = req.body;
+    const { status, interviewDetails, offerDetails, rejectionReason } = req.body;
     const recruiterId = req.user.id;
 
     const validStatuses = ['applied', 'in-review', 'interview', 'offered', 'hired', 'rejected', 'withdrawn'];
 
+    // Normalize status
     let normalizedStatus = status;
     if (status === 'in_review') normalizedStatus = 'in-review';
 
@@ -444,25 +462,46 @@ export const updateApplicationStatus = async (req, res) => {
 
         const previousStatus = application.status;
 
+        // --- Status Specific Logic ---
+
+        // 1. Interview
         if (normalizedStatus === 'interview' && interviewDetails) {
+            const { date, time, mode, location, notes, timezone } = interviewDetails;
+
+            if (mode === 'Onsite' && !location) {
+                return res.status(400).json({ message: 'Location is required for Onsite interviews.' });
+            }
+
+            let roomId = null;
+            if (mode === 'Online') {
+                roomId = `interview_${application._id}_${Date.now()}`;
+            }
+
             const newInterview = await Interview.create({
                 applicationId: application._id,
                 jobId: application.job_id._id,
                 recruiterId: recruiterId,
                 seekerId: application.seeker_id,
-                date: interviewDetails.date,
-                time: interviewDetails.time,
-                mode: interviewDetails.mode,
-                meetingLink: interviewDetails.meetLink,
-                notes: interviewDetails.notes,
+                date: date,
+                time: time,
+                mode: mode,
+                location: mode === 'Onsite' ? location : undefined,
+                roomId: roomId,
+                notes: notes,
+                timezone: timezone,
                 status: 'Scheduled'
             });
 
             application.interview = {
                 ...interviewDetails,
+                location: mode === 'Onsite' ? location : undefined,
+                roomId: roomId,
                 scheduledAt: new Date(),
                 interviewId: newInterview._id
             };
+            // Clean up legacy
+            if (application.interview.meetLink) delete application.interview.meetLink;
+
             application.interviewHistory.push({
                 action: 'Scheduled',
                 details: application.interview,
@@ -470,13 +509,27 @@ export const updateApplicationStatus = async (req, res) => {
             });
         }
 
-        application.status = normalizedStatus;
-        if (normalizedStatus === 'rejected' && notes) application.cancelReason = notes;
+        // 2. Offered
+        if (normalizedStatus === 'offered') {
+            application.offer = {
+                salary: offerDetails?.salary || '',
+                notes: offerDetails?.notes || '',
+                offeredAt: new Date()
+            };
+        }
 
+        // 3. Rejected
+        if (normalizedStatus === 'rejected') {
+            application.cancelReason = rejectionReason || 'Application rejected by recruiter';
+        }
+
+        // Update Status
+        application.status = normalizedStatus;
         await application.save();
 
+        // --- Notifications & Logging ---
         if (normalizedStatus !== previousStatus) {
-            let notifMessage = `Your application status for ${application.job_id.title} has been updated to ${normalizedStatus}.`;
+            let notifMessage = `Your application status for ${application.job_id.title} has been updated to ${normalizedStatus.replace('-', ' ')}.`;
             let notifTitle = 'Application Status Update';
             let notifLink = '/seeker/applications';
 
@@ -484,7 +537,14 @@ export const updateApplicationStatus = async (req, res) => {
                 notifMessage = `You have an interview scheduled for ${application.job_id.title}.`;
                 notifLink = '/seeker/interviews?focused=true&from=notifications';
             } else if (normalizedStatus === 'offered') {
-                notifMessage = `You have received an offer for ${application.job_id.title}.`;
+                notifTitle = 'Offer Received';
+                notifMessage = `Congratulations! You have received an offer for ${application.job_id.title}.`;
+            } else if (normalizedStatus === 'hired') {
+                notifTitle = 'You are Hired!';
+                notifMessage = `You have been officially hired for ${application.job_id.title}.`;
+            } else if (normalizedStatus === 'rejected') {
+                notifTitle = 'Application Update';
+                notifMessage = `Your application for ${application.job_id.title} was not successful.`;
             }
 
             await createNotification({
@@ -495,9 +555,16 @@ export const updateApplicationStatus = async (req, res) => {
                 link: notifLink,
                 sender: recruiterId
             });
+
+            await logActivity(
+                recruiterId,
+                'STATUS_CHANGE',
+                `Changed application status to ${normalizedStatus} for ${application.job_id.title}`,
+                { applicationId: application._id, status: normalizedStatus }
+            );
         }
 
-        res.json({ success: true, message: `Status updated to ${normalizedStatus}`, application });
+        res.json({ success: true, message: `Status updated to ${normalizedStatus.replace('-', ' ')}`, application });
     } catch (error) {
         console.error("Status update error:", error);
         res.status(500).json({ message: 'Error updating status' });
@@ -540,7 +607,7 @@ export const acceptOffer = async (req, res) => {
             type: 'offer',
             title: 'Offer Accepted',
             message: `${req.user.fullName} accepted the offer for ${application.job_id.title}`,
-            link: `/recruiter/jobs/${application.job_id._id}/applications`,
+            link: `/recruiter/applications?jobId=${application.job_id._id}`,
             sender: seekerId
         });
 
@@ -602,7 +669,7 @@ export const requestReschedule = async (req, res) => {
             type: 'application_update',
             title: 'Reschedule Requested',
             message: `Reschedule requested for ${application.job_id.title}`,
-            link: `/recruiter/jobs/${application.job_id._id}/applications`,
+            link: `/recruiter/applications?jobId=${application.job_id._id}`,
             sender: seekerId
         });
 
@@ -616,7 +683,7 @@ export const requestReschedule = async (req, res) => {
 // Approve Reschedule
 export const approveReschedule = async (req, res) => {
     const { id } = req.params;
-    const { date, time, mode, location, meetLink, duration, interviewer, notes } = req.body;
+    const { date, time, mode, location, duration, interviewer, notes, timezone } = req.body;
     const recruiterId = req.user.id;
 
     try {
@@ -629,6 +696,12 @@ export const approveReschedule = async (req, res) => {
 
         // Update or create interview doc
         let interviewDoc;
+        let roomId = null;
+
+        if (mode === 'Online') {
+            roomId = `interview_${application._id}_${Date.now()}`;
+        }
+
         if (application.interview && application.interview.interviewId) {
             interviewDoc = await Interview.findById(application.interview.interviewId);
         }
@@ -637,8 +710,10 @@ export const approveReschedule = async (req, res) => {
             interviewDoc.date = date;
             interviewDoc.time = time;
             interviewDoc.mode = mode;
-            interviewDoc.meetingLink = meetLink;
+            interviewDoc.location = mode === 'Onsite' ? location : undefined;
+            if (mode === 'Online') interviewDoc.roomId = roomId;
             interviewDoc.notes = notes;
+            interviewDoc.timezone = timezone;
             interviewDoc.status = 'Scheduled';
             await interviewDoc.save();
         } else {
@@ -647,13 +722,17 @@ export const approveReschedule = async (req, res) => {
                 jobId: application.job_id._id,
                 recruiterId: recruiterId,
                 seekerId: application.seeker_id,
-                date, time, mode, meetingLink: meetLink, notes,
+                date, time, mode,
+                location: mode === 'Onsite' ? location : undefined,
+                roomId,
+                notes,
+                timezone,
                 status: 'Scheduled'
             });
         }
 
         application.interview = {
-            date, time, mode, location, meetLink, duration, interviewer, notes,
+            date, time, mode, location, roomId, duration, interviewer, notes, timezone,
             scheduledAt: new Date(),
             interviewId: interviewDoc._id
         };

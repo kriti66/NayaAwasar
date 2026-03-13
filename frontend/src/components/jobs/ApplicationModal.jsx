@@ -121,7 +121,7 @@ const ApplicationModal = ({ job, onClose, onSuccess }) => {
                                 <div className="space-y-3">
 
                                     {/* Option 1: Generated CV */}
-                                    <div className={`relative flex items-start p-4 border rounded-lg cursor-pointer ${resumeType === 'Generated' ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'}`}
+                                    <div className={`relative flex items-start p-4 border rounded-lg cursor-pointer ${resumeType === 'Generated' ? 'border-[#29a08e] ring-2 ring-[#29a08e]/30 bg-[#29a08e]/10' : 'border-gray-300 hover:bg-gray-50'}`}
                                         onClick={() => setResumeType('Generated')}>
                                         <div className="flex items-center h-5">
                                             <input
@@ -129,7 +129,7 @@ const ApplicationModal = ({ job, onClose, onSuccess }) => {
                                                 name="resumeType"
                                                 checked={resumeType === 'Generated'}
                                                 onChange={() => setResumeType('Generated')}
-                                                className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                                                className="focus:ring-[#29a08e] h-4 w-4 text-[#29a08e] border-gray-300"
                                             />
                                         </div>
                                         <div className="ml-3 text-sm">
@@ -145,7 +145,7 @@ const ApplicationModal = ({ job, onClose, onSuccess }) => {
                                     </div>
 
                                     {/* Option 2: Upload New */}
-                                    <div className={`relative flex items-start p-4 border rounded-lg cursor-pointer ${resumeType === 'Uploaded' ? 'border-blue-500 ring-2 ring-blue-200 bg-blue-50' : 'border-gray-300 hover:bg-gray-50'}`}
+                                    <div className={`relative flex items-start p-4 border rounded-lg cursor-pointer ${resumeType === 'Uploaded' ? 'border-[#29a08e] ring-2 ring-[#29a08e]/30 bg-[#29a08e]/10' : 'border-gray-300 hover:bg-gray-50'}`}
                                         onClick={() => setResumeType('Uploaded')}>
                                         <div className="flex items-center h-5">
                                             <input
@@ -153,7 +153,7 @@ const ApplicationModal = ({ job, onClose, onSuccess }) => {
                                                 name="resumeType"
                                                 checked={resumeType === 'Uploaded'}
                                                 onChange={() => setResumeType('Uploaded')}
-                                                className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300"
+                                                className="focus:ring-[#29a08e] h-4 w-4 text-[#29a08e] border-gray-300"
                                             />
                                         </div>
                                         <div className="ml-3 text-sm w-full">
@@ -172,8 +172,8 @@ const ApplicationModal = ({ job, onClose, onSuccess }) => {
                                                             file:mr-4 file:py-2 file:px-4
                                                             file:rounded-full file:border-0
                                                             file:text-sm file:font-semibold
-                                                            file:bg-blue-50 file:text-blue-700
-                                                            hover:file:bg-blue-100"
+                                                            file:bg-[#29a08e]/10 file:text-[#29a08e]
+                                                            hover:file:bg-[#29a08e]/20"
                                                     />
                                                 </div>
                                             )}
@@ -190,7 +190,7 @@ const ApplicationModal = ({ job, onClose, onSuccess }) => {
                                 <textarea
                                     id="coverLetter"
                                     rows={5}
-                                    className="shadow-sm block w-full focus:ring-blue-500 focus:border-blue-500 sm:text-sm border-gray-300 rounded-md p-3"
+                                    className="shadow-sm block w-full focus:ring-[#29a08e] focus:border-[#29a08e] sm:text-sm border-gray-300 rounded-md p-3"
                                     value={coverLetter}
                                     onChange={(e) => setCoverLetter(e.target.value)}
                                     placeholder="Explain why you are the best fit for this role..."
@@ -204,7 +204,7 @@ const ApplicationModal = ({ job, onClose, onSuccess }) => {
                             <button
                                 type="submit"
                                 disabled={submitting}
-                                className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm ${submitting ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                className={`w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#29a08e] text-base font-medium text-white hover:bg-[#228377] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] sm:ml-3 sm:w-auto sm:text-sm ${submitting ? 'opacity-70 cursor-not-allowed' : ''}`}
                             >
                                 {submitting ? 'Submitting...' : 'Submit Application'}
                             </button>
@@ -212,7 +212,7 @@ const ApplicationModal = ({ job, onClose, onSuccess }) => {
                                 type="button"
                                 onClick={onClose}
                                 disabled={submitting}
-                                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
                             >
                                 Cancel
                             </button>

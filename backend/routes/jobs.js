@@ -175,7 +175,7 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
             type: 'job_post',
             title: 'New Job Posted',
             message: `${job.company_name} posted a new job: ${job.title}`,
-            link: `/jobs/${job._id}`,
+            link: `/jobseeker/jobs/${job._id}`,
             sender: recruiter_id
         });
 

@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 
 const ProfileStrengthWidget = ({ profileStrength }) => {
     const metrics = [
-        { label: 'Profile Completeness', value: profileStrength?.completeness || 0, color: 'bg-[#2D9B82]' },
+        { label: 'Profile Completeness', value: profileStrength?.completeness || 0, color: 'bg-[#29a08e]' },
         { label: 'Resume Quality', value: profileStrength?.resumeQuality || 0, color: 'bg-[#4ADE80]' },
-        { label: 'Skills Match', value: profileStrength?.skillsMatch || 0, color: 'bg-[#2D9B82]/60' }
+        { label: 'Skills Match', value: profileStrength?.skillsMatch || 0, color: 'bg-[#29a08e]/60' }
     ];
 
     const overall = profileStrength?.completeness || 0;
@@ -37,7 +37,7 @@ const ProfileStrengthWidget = ({ profileStrength }) => {
                             strokeDasharray={125.6}
                             strokeDashoffset={125.6 - (125.6 * overall) / 100}
                             fill="transparent"
-                            className="text-[#2D9B82] transition-all duration-1000"
+                            className="text-[#29a08e] transition-all duration-1000"
                             strokeLinecap="round"
                         />
                     </svg>

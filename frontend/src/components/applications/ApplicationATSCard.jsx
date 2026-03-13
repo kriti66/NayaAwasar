@@ -16,7 +16,9 @@ const ApplicationATSCard = ({ application: initialApp }) => {
         setApplication(initialApp);
     }, [initialApp]);
 
-    const { job_id, status, createdAt, interview } = application;
+    const { job_id, createdAt, interview } = application;
+    // Normalize status to handle both legacy 'in_review' and newer 'in-review' format
+    const status = application.status === 'in-review' ? 'in_review' : application.status;
 
     const statusSteps = [
         { key: 'applied', label: 'Applied' },
@@ -31,10 +33,10 @@ const ApplicationATSCard = ({ application: initialApp }) => {
     const getStatusStyles = (s) => {
         switch (s) {
             case 'applied': return 'bg-slate-50 text-slate-600 border-slate-100';
-            case 'in_review': return 'bg-blue-50 text-blue-600 border-blue-100';
+            case 'in_review': return 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20';
             case 'interview': return 'bg-purple-50 text-purple-600 border-purple-100';
             case 'offered': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-            case 'hired': return 'bg-[#2D9B82]/10 text-[#2D9B82] border-[#2D9B82]/20';
+            case 'hired': return 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20';
             case 'rejected': return 'bg-rose-50 text-rose-600 border-rose-100';
             case 'withdrawn': return 'bg-gray-50 text-gray-500 border-gray-100';
             default: return 'bg-slate-50 text-slate-600 border-slate-100';
@@ -81,7 +83,7 @@ const ApplicationATSCard = ({ application: initialApp }) => {
     };
 
     return (
-        <div className={`bg-white border rounded-[32px] overflow-hidden transition-all duration-500 hover:border-[#2D9B82]/20 ${isExpanded ? 'shadow-2xl border-[#2D9B82]/10 ring-8 ring-[#2D9B82]/5' : 'shadow-sm border-gray-100 hover:shadow-xl hover:shadow-gray-200/50'}`}>
+        <div className={`bg-white border rounded-[32px] overflow-hidden transition-all duration-500 hover:border-[#29a08e]/20 ${isExpanded ? 'shadow-2xl border-[#29a08e]/10 ring-8 ring-[#29a08e]/5' : 'shadow-sm border-gray-100 hover:shadow-xl hover:shadow-gray-200/50'}`}>
             {/* Collapsed View */}
             <div className="p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex items-center gap-6 w-full md:w-auto">
@@ -93,10 +95,10 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                         )}
                     </div>
                     <div className="flex-1">
-                        <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-xl font-bold text-gray-900 mb-1.5 hover:text-[#2D9B82] transition-colors">{job_id?.title || 'Job Position'}</Link>
+                        <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-xl font-bold text-gray-900 mb-1.5 hover:text-[#29a08e] transition-colors">{job_id?.title || 'Job Position'}</Link>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-gray-500 text-sm font-semibold">
                             <span className="flex items-center gap-1.5">{job_id?.company_name || 'Company'}</span>
-                            <span className="flex items-center gap-1.5 shadow-sm px-2 py-0.5 bg-gray-50 rounded-lg"><MapPin size={14} className="text-[#2D9B82]" /> {job_id?.location || 'Remote'}</span>
+                            <span className="flex items-center gap-1.5 shadow-sm px-2 py-0.5 bg-gray-50 rounded-lg"><MapPin size={14} className="text-[#29a08e]" /> {job_id?.location || 'Remote'}</span>
                             <span className="flex items-center gap-1.5"><Calendar size={14} className="text-gray-300" /> Applied {new Date(createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                         </div>
                     </div>
@@ -111,17 +113,17 @@ const ApplicationATSCard = ({ application: initialApp }) => {
 
                     <div className="flex items-center gap-4">
                         {status === 'interview' ? (
-                            <Link to="/seeker/interviews?focused=true&from=applications" className="text-xs font-black text-[#2D9B82] hover:underline uppercase tracking-tight flex items-center gap-1.5">
+                            <Link to="/seeker/interviews?focused=true&from=applications" className="text-xs font-black text-[#29a08e] hover:underline uppercase tracking-tight flex items-center gap-1.5">
                                 View Interview <ArrowRight size={14} />
                             </Link>
                         ) : (
-                            <button onClick={() => setIsExpanded(!isExpanded)} className="text-xs font-black text-gray-400 hover:text-[#2D9B82] uppercase tracking-tight flex items-center gap-1.5 transition-colors">
+                            <button onClick={() => setIsExpanded(!isExpanded)} className="text-xs font-black text-gray-400 hover:text-[#29a08e] uppercase tracking-tight flex items-center gap-1.5 transition-colors">
                                 {isExpanded ? 'Hide Details' : 'View Details'} <ChevronDown size={14} className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
                             </button>
                         )}
                         <button
                             onClick={() => setIsExpanded(!isExpanded)}
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isExpanded ? 'bg-[#2D9B82] text-white shadow-lg shadow-[#2D9B82]/20' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isExpanded ? 'bg-[#29a08e] text-white shadow-lg shadow-[#29a08e]/20' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
                         >
                             {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                         </button>
@@ -142,7 +144,7 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                                 <div className="relative flex justify-between px-2">
                                     <div className="absolute top-4 left-0 right-0 h-1 bg-gray-100 -translate-y-1/2 rounded-full"></div>
                                     <div
-                                        className="absolute top-4 left-0 h-1 bg-[#2D9B82] -translate-y-1/2 rounded-full transition-all duration-1000 shadow-sm"
+                                        className="absolute top-4 left-0 h-1 bg-[#29a08e] -translate-y-1/2 rounded-full transition-all duration-1000 shadow-sm"
                                         style={{ width: activeIndex >= 0 ? `${(activeIndex / (statusSteps.length - 1)) * 100}%` : '0%' }}
                                     ></div>
 
@@ -151,8 +153,8 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                                         const isCurrent = !['rejected', 'withdrawn'].includes(status) && idx === activeIndex;
                                         return (
                                             <div key={idx} className="relative flex flex-col items-center">
-                                                <div className={`w-8 h-8 rounded-full border-4 border-white flex items-center justify-center z-10 transition-all duration-700 shadow-sm ${isCurrent ? 'bg-[#2D9B82] text-white ring-4 ring-[#2D9B82]/10 scale-125' :
-                                                    isDone ? 'bg-[#2D9B82] text-white' : 'bg-gray-100 text-gray-300'
+                                                <div className={`w-8 h-8 rounded-full border-4 border-white flex items-center justify-center z-10 transition-all duration-700 shadow-sm ${isCurrent ? 'bg-[#29a08e] text-white ring-4 ring-[#29a08e]/10 scale-125' :
+                                                    isDone ? 'bg-[#29a08e] text-white' : 'bg-gray-100 text-gray-300'
                                                     }`}>
                                                     {isDone ? <CheckCircle2 size={14} strokeWidth={3} /> : <Circle size={10} fill="currentColor" />}
                                                 </div>
@@ -168,7 +170,7 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                                 <p className="text-sm text-gray-600 font-medium leading-relaxed line-clamp-3">
                                     {job_id?.description || "No description available for this role. Click on 'View Original Listing' to see the full job details on the main page."}
                                 </p>
-                                <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-[#2D9B82] text-xs font-bold hover:underline mt-4 inline-flex items-center gap-1.5">
+                                <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-[#29a08e] text-xs font-bold hover:underline mt-4 inline-flex items-center gap-1.5">
                                     Read Full Description <ExternalLink size={12} />
                                 </Link>
                             </div>
@@ -183,10 +185,10 @@ const ApplicationATSCard = ({ application: initialApp }) => {
 
                             <div className="flex gap-5">
                                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-lg ${status === 'interview' ? 'bg-purple-600 text-white shadow-purple-500/20' :
-                                    status === 'offered' ? 'bg-[#2D9B82] text-white shadow-[#2D9B82]/20' :
+                                    status === 'offered' ? 'bg-[#29a08e] text-white shadow-[#29a08e]/20' :
                                         status === 'hired' ? 'bg-emerald-600 text-white shadow-emerald-500/20' :
                                             ['rejected', 'withdrawn'].includes(status) ? 'bg-rose-600 text-white shadow-rose-500/20' :
-                                                'bg-blue-600 text-white shadow-blue-500/20'
+                                                'bg-[#29a08e] text-white shadow-[#29a08e]/20'
                                     }`}>
                                     {status === 'interview' ? <MessageSquare size={22} /> :
                                         status === 'offered' ? <CheckCircle2 size={22} /> :
@@ -205,16 +207,16 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                                         <div className="space-y-4 mb-8">
                                             <div className="flex items-center gap-4 text-sm text-gray-600 font-medium">
                                                 <div className="flex items-center gap-2 px-3 py-1 bg-white border border-gray-100 rounded-lg shadow-sm">
-                                                    <Calendar size={14} className="text-[#2D9B82]" />
+                                                    <Calendar size={14} className="text-[#29a08e]" />
                                                     <span>{interview?.date ? new Date(interview.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'TBD'}</span>
                                                 </div>
                                                 <div className="flex items-center gap-2 px-3 py-1 bg-white border border-gray-100 rounded-lg shadow-sm">
-                                                    <Clock size={14} className="text-[#2D9B82]" />
+                                                    <Clock size={14} className="text-[#29a08e]" />
                                                     <span>{interview?.time || 'TBD'}</span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 text-xs font-bold text-gray-400">
-                                                <Info size={14} className="text-[#2D9B82]" />
+                                                <Info size={14} className="text-[#29a08e]" />
                                                 <span>{interview?.mode === 'Online' ? 'Google Meet / Zoom' : (interview?.location || 'Office Address')}</span>
                                             </div>
                                         </div>
@@ -240,14 +242,14 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                                         {status === 'interview' ? (
                                             <>
                                                 {interview?.meetLink && (
-                                                    <a href={interview.meetLink} target="_blank" rel="noreferrer" className="w-full py-3.5 bg-[#2D9B82] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#25836d] transition-all flex items-center justify-center shadow-lg shadow-[#2D9B82]/10 transform active:scale-95">Join Meeting</a>
+                                                    <a href={interview.meetLink} target="_blank" rel="noreferrer" className="w-full py-3.5 bg-[#29a08e] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#228377] transition-all flex items-center justify-center shadow-lg shadow-[#29a08e]/10 transform active:scale-95">Join Meeting</a>
                                                 )}
                                                 <Link to="/seeker/interviews?focused=true&from=applications" className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center justify-center transform active:scale-95">View Interview Details</Link>
                                             </>
                                         ) : status === 'offered' ? (
                                             <button
                                                 onClick={handleAcceptOffer}
-                                                className="w-full py-3.5 bg-[#2D9B82] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#25836d] transition-all shadow-lg shadow-[#2D9B82]/10 transform active:scale-95"
+                                                className="w-full py-3.5 bg-[#29a08e] text-white rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/10 transform active:scale-95"
                                             >
                                                 Accept Offer
                                             </button>
@@ -255,7 +257,7 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                                             <Link to="/seeker/jobs" className="w-full py-3.5 bg-white border border-gray-200 text-gray-600 rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all flex items-center justify-center transform active:scale-95">Find Similar Jobs</Link>
                                         ) : (
                                             <>
-                                                <button className="w-full py-3.5 bg-white border border-gray-200 text-[#2D9B82] rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all transform active:scale-95">Check Detailed Status</button>
+                                                <button className="w-full py-3.5 bg-white border border-gray-200 text-[#29a08e] rounded-xl font-black text-[11px] uppercase tracking-wider hover:bg-gray-50 transition-all transform active:scale-95">Check Detailed Status</button>
                                                 <button
                                                     onClick={handleWithdraw}
                                                     className="w-full py-3.5 bg-transparent text-gray-400 font-black text-[10px] uppercase tracking-widest hover:text-rose-500 transition-all"
@@ -269,7 +271,7 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                             </div>
 
                             <div className="mt-8 pt-4 border-t border-gray-200/50 flex justify-between items-center opacity-0 group-hover/next:opacity-100 transition-opacity">
-                                <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#2D9B82] flex items-center gap-1">
+                                <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-[#29a08e] flex items-center gap-1">
                                     View Original Listing <ExternalLink size={10} />
                                 </Link>
                                 <Info size={14} className="text-gray-200" />

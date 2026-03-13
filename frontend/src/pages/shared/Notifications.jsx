@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, Trash2, Clock, CheckCircle } from 'lucide-react';
+import {
+    Bell,
+    Check,
+    Trash2,
+    Clock,
+    CheckCircle,
+    Briefcase,
+    FileText,
+    Info,
+    AlertCircle
+} from 'lucide-react';
 import notificationService from '../../services/notificationService';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -64,7 +74,13 @@ const Notifications = () => {
 
     const cardClick = (notif) => {
         if (!notif.isRead) handleMarkRead(notif._id);
-        if (notif.link) navigate(notif.link);
+        if (notif.link) {
+            let targetLink = notif.link;
+            if (targetLink.startsWith('/jobs/')) {
+                targetLink = `/jobseeker${targetLink}`;
+            }
+            navigate(targetLink);
+        }
     };
 
     const categories = [
@@ -75,39 +91,56 @@ const Notifications = () => {
         { id: 'system', label: 'System' }
     ];
 
+    const getNotificationConfig = (type) => {
+        switch (type) {
+            case 'job_post':
+                return { icon: Briefcase, color: 'text-[#29a08e]', bg: 'bg-[#29a08e]/10' };
+            case 'application_update':
+                return { icon: FileText, color: 'text-orange-500', bg: 'bg-orange-50' };
+            case 'offer':
+                return { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50' };
+            case 'kyc_update':
+                return { icon: Info, color: 'text-teal-500', bg: 'bg-teal-50' };
+            case 'system':
+                return { icon: AlertCircle, color: 'text-gray-500', bg: 'bg-gray-50' };
+            default:
+                return { icon: Bell, color: 'text-[#29a08e]', bg: 'bg-[#29a08e]/10' };
+        }
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
             <div className="max-w-4xl mx-auto">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
                     {/* Header */}
-                    <div className="p-6 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-50 p-2.5 rounded-xl">
-                                <Bell className="w-6 h-6 text-blue-600" />
+                    <div className="p-8 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-[#29a08e]/10 p-3 rounded-2xl">
+                                <Bell className="w-6 h-6 text-[#29a08e]" />
                             </div>
                             <div>
                                 <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-                                <p className="text-sm text-gray-500">Stay updated with your activities</p>
+                                <p className="text-sm text-gray-500 font-medium">Manage your alerts and updates</p>
                             </div>
                         </div>
                         <button
                             onClick={handleMarkAllRead}
-                            className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition-colors border border-gray-200"
+                            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-sm font-bold transition-all border border-gray-200"
                         >
                             <CheckCircle className="w-4 h-4" />
-                            Mark all as read
+                            Mark all read
                         </button>
                     </div>
 
                     {/* Filter Tabs */}
-                    <div className="px-6 pt-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    <div className="px-8 pt-6 flex gap-2 overflow-x-auto pb-4 scrollbar-hide">
                         {categories.map(cat => (
                             <button
                                 key={cat.id}
                                 onClick={() => { setFilter(cat.id); setPage(1); }}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${filter === cat.id
-                                        ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
-                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                className={`px-5 py-2 rounded-full text-xs font-bold uppercase tracking-wide whitespace-nowrap transition-all ${filter === cat.id
+                                    ? 'bg-[#29a08e] text-white shadow-lg shadow-[#29a08e]/20'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                                     }`}
                             >
                                 {cat.label}
@@ -120,7 +153,7 @@ const Notifications = () => {
                         {loading ? (
                             <div className="space-y-4">
                                 {[1, 2, 3].map(i => (
-                                    <div key={i} className="animate-pulse flex gap-4 p-4 border rounded-xl">
+                                    <div key={i} className="animate-pulse flex gap-4 p-4 border border-gray-100 rounded-2xl">
                                         <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
                                         <div className="flex-1 space-y-2">
                                             <div className="h-4 bg-gray-200 rounded w-1/4"></div>
@@ -130,67 +163,84 @@ const Notifications = () => {
                                 ))}
                             </div>
                         ) : notifications.length === 0 ? (
-                            <div className="text-center py-20">
-                                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <div className="text-center py-24">
+                                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
                                     <Bell className="w-8 h-8 text-gray-300" />
                                 </div>
-                                <h3 className="text-lg font-medium text-gray-900">No notifications found</h3>
-                                <p className="text-gray-500 max-w-sm mx-auto mt-1">We'll notify you when something important happens.</p>
+                                <h3 className="text-lg font-bold text-gray-900">All caught up!</h3>
+                                <p className="text-gray-500 max-w-sm mx-auto mt-2 text-sm">No new notifications at the moment.</p>
                             </div>
                         ) : (
-                            <div className="space-y-3">
-                                {notifications.map(notif => (
-                                    <div
-                                        key={notif._id}
-                                        onClick={() => cardClick(notif)}
-                                        className={`group relative p-4 rounded-xl border transition-all hover:shadow-md cursor-pointer ${notif.isRead ? 'bg-white border-gray-100' : 'bg-blue-50/30 border-blue-100'
-                                            }`}
-                                    >
-                                        <div className="flex gap-4">
-                                            <div className={`mt-1 flex-shrink-0 w-2 h-2 rounded-full ${notif.isRead ? 'bg-transparent' : 'bg-blue-600'}`}></div>
-                                            <div className="flex-1">
-                                                <div className="flex justify-between items-start">
-                                                    <h4 className={`text-base ${notif.isRead ? 'font-medium text-gray-800' : 'font-bold text-gray-900'}`}>
+                            <div className="space-y-2">
+                                {notifications.map(notif => {
+                                    const config = getNotificationConfig(notif.type);
+                                    const Icon = config.icon;
+
+                                    return (
+                                        <div
+                                            key={notif._id}
+                                            onClick={() => cardClick(notif)}
+                                            className={`group relative p-5 rounded-2xl border transition-all hover:shadow-md cursor-pointer flex gap-4 items-start ${notif.isRead
+                                                    ? 'bg-white border-transparent hover:border-gray-100'
+                                                    : 'bg-[#29a08e]/10/40 border-[#29a08e]/20'
+                                                }`}
+                                        >
+                                            {/* Icon */}
+                                            <div className={`mt-1 w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${config.bg} ${config.color}`}>
+                                                <Icon size={18} strokeWidth={2.5} />
+                                            </div>
+
+                                            {/* Content */}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <h4 className={`text-sm ${notif.isRead ? 'font-bold text-gray-800' : 'font-black text-gray-900'}`}>
                                                         {notif.title}
                                                     </h4>
-                                                    <span className="text-xs text-gray-400 flex items-center gap-1">
-                                                        <Clock className="w-3 h-3" />
+                                                    <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap pl-2">
                                                         {new Date(notif.createdAt).toLocaleDateString()}
                                                     </span>
                                                 </div>
-                                                <p className="text-sm text-gray-600 mt-1 line-clamp-2 leading-relaxed">
+                                                <p className={`text-sm leading-relaxed line-clamp-2 ${notif.isRead ? 'text-gray-500' : 'text-gray-700 font-medium'}`}>
                                                     {notif.message}
                                                 </p>
                                             </div>
 
-                                            <button
-                                                onClick={(e) => handleDelete(notif._id, e)}
-                                                className="opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
+                                            {/* Actions */}
+                                            <div className="flex flex-col items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={(e) => handleDelete(notif._id, e)}
+                                                    className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                                {!notif.isRead && (
+                                                    <div className="w-2 h-2 rounded-full bg-[#29a08e]/100"></div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
 
                         {/* Pagination */}
                         {totalPages > 1 && (
-                            <div className="mt-8 flex justify-center gap-2">
+                            <div className="mt-10 flex justify-center gap-3">
                                 <button
                                     onClick={() => setPage(p => Math.max(1, p - 1))}
                                     disabled={page === 1}
-                                    className="px-3 py-1 bg-white border rounded hover:bg-gray-50 disabled:opacity-50"
+                                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-bold text-gray-600 transition-colors"
                                 >
                                     Previous
                                 </button>
-                                <span className="px-3 py-1 text-gray-600">Page {page} of {totalPages}</span>
+                                <span className="px-4 py-2 text-sm font-medium text-gray-500 flex items-center">
+                                    Page {page} of {totalPages}
+                                </span>
                                 <button
                                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                                     disabled={page === totalPages}
-                                    className="px-3 py-1 bg-white border rounded hover:bg-gray-50 disabled:opacity-50"
+                                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm font-bold text-gray-600 transition-colors"
                                 >
                                     Next
                                 </button>

@@ -41,10 +41,11 @@ const applicationSchema = new mongoose.Schema({
         time: String,
         mode: { type: String, enum: ['Online', 'Onsite'] },
         location: String,
-        meetLink: String,
+        roomId: String, // Replaced meetLink with roomId
         duration: String,
         interviewer: String,
         notes: String,
+        timezone: String,
         scheduledAt: Date,
         interviewId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -57,6 +58,12 @@ const applicationSchema = new mongoose.Schema({
         preferredDate: Date,
         preferredTime: String,
         reviewed: { type: Boolean, default: false }
+    },
+    // Offer details
+    offer: {
+        salary: String,
+        notes: String,
+        offeredAt: Date
     },
     // Audit fields for ATS logic
     rescheduledAt: Date,

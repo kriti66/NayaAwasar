@@ -46,12 +46,13 @@ const RecruiterProfile = () => {
     // Helper for image URL
     const getImageUrl = (path) => {
         if (!path) return null;
+        if (path.startsWith('http')) return path;
         return `${import.meta.env.VITE_API_URL}${path}`;
     };
 
     if (loading) return (
         <div className="flex-1 flex items-center justify-center h-screen">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#2D9B82]"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#29a08e]"></div>
         </div>
     );
 
@@ -64,7 +65,7 @@ const RecruiterProfile = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
                     <div className="flex flex-col md:flex-row gap-8 items-start">
                         {/* Avatar */}
-                        <div className="w-32 h-32 bg-[#2D9B82] rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-[#2D9B82]/20 text-white overflow-hidden">
+                        <div className="w-32 h-32 bg-[#29a08e] rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-[#29a08e]/20 text-white overflow-hidden">
                             {user?.profileImage ? (
                                 <img
                                     src={getImageUrl(user.profileImage)}
@@ -109,7 +110,7 @@ const RecruiterProfile = () => {
                             <div className="flex gap-4 mb-8">
                                 <button
                                     onClick={() => setIsEditModalOpen(true)}
-                                    className="px-6 py-2.5 bg-[#2D9B82] text-white text-sm font-bold rounded-lg hover:bg-[#25836d] transition-colors shadow-sm shadow-[#2D9B82]/20"
+                                    className="px-6 py-2.5 bg-[#29a08e] text-white text-sm font-bold rounded-lg hover:bg-[#228377] transition-colors shadow-sm shadow-[#29a08e]/20"
                                 >
                                     Edit Profile
                                 </button>
@@ -124,7 +125,7 @@ const RecruiterProfile = () => {
                             {/* Details Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12">
                                 <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#2D9B82] flex items-center justify-center shrink-0">
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#29a08e] flex items-center justify-center shrink-0">
                                         <Mail size={20} />
                                     </div>
                                     <div>
@@ -134,7 +135,7 @@ const RecruiterProfile = () => {
                                 </div>
 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#2D9B82] flex items-center justify-center shrink-0">
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#29a08e] flex items-center justify-center shrink-0">
                                         <Phone size={20} />
                                     </div>
                                     <div>
@@ -144,7 +145,7 @@ const RecruiterProfile = () => {
                                 </div>
 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#2D9B82] flex items-center justify-center shrink-0">
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#29a08e] flex items-center justify-center shrink-0">
                                         <MapPin size={20} />
                                     </div>
                                     <div>
@@ -154,7 +155,7 @@ const RecruiterProfile = () => {
                                 </div>
 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#2D9B82] flex items-center justify-center shrink-0">
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#29a08e] flex items-center justify-center shrink-0">
                                         <Building size={20} />
                                     </div>
                                     <div>
@@ -164,7 +165,7 @@ const RecruiterProfile = () => {
                                 </div>
 
                                 <div className="flex items-start gap-4">
-                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#2D9B82] flex items-center justify-center shrink-0">
+                                    <div className="w-10 h-10 rounded-lg bg-emerald-50 text-[#29a08e] flex items-center justify-center shrink-0">
                                         <Calendar size={20} />
                                     </div>
                                     <div>

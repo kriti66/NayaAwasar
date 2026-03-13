@@ -117,16 +117,16 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                         {[1, 2, 3, 4].map((s) => (
                             <div key={s} className="flex flex-col items-center flex-1 relative">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-xs transition-all z-10 
-                                    ${step >= s ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-slate-100 text-slate-400'}`}>
+                                    ${step >= s ? 'bg-[#29a08e] text-white shadow-lg shadow-[#29a08e]/20' : 'bg-slate-100 text-slate-400'}`}>
                                     {step > s ? <CheckCircle className="w-5 h-5" /> : s}
                                 </div>
                                 <span className={`text-[10px] font-black uppercase tracking-tighter mt-2 
-                                    ${step === s ? 'text-blue-600' : 'text-slate-400'}`}>
+                                    ${step === s ? 'text-[#29a08e]' : 'text-slate-400'}`}>
                                     {s === 1 ? 'Personal' : s === 2 ? 'Cover Letter' : s === 3 ? 'Resume' : 'Review'}
                                 </span>
                                 {s < 4 && (
                                     <div className={`absolute left-[50%] top-5 w-full h-[2px] -z-0 
-                                        ${step > s ? 'bg-blue-600' : 'bg-slate-100'}`}></div>
+                                        ${step > s ? 'bg-[#29a08e]' : 'bg-slate-100'}`}></div>
                                 )}
                             </div>
                         ))}
@@ -138,7 +138,7 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
 
                     {step === 1 && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                            <div className="bg-blue-50 border border-blue-100 p-4 rounded-2xl flex gap-3 text-blue-700">
+                            <div className="bg-[#29a08e]/10 border border-[#29a08e]/20 p-4 rounded-2xl flex gap-3 text-blue-700">
                                 <Info className="w-5 h-5 shrink-0" />
                                 <p className="text-xs font-medium leading-relaxed">We've pre-filled your details from your profile. Feel free to update them for this specific application.</p>
                             </div>
@@ -149,7 +149,7 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                         type="text"
                                         value={applicationData.personalInfo.fullName}
                                         onChange={(e) => setApplicationData(p => ({ ...p, personalInfo: { ...p.personalInfo, fullName: e.target.value } }))}
-                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-800"
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-[#29a08e] font-bold text-slate-800"
                                         placeholder="Enter your full name"
                                     />
                                 </div>
@@ -159,7 +159,7 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                         type="email"
                                         value={applicationData.personalInfo.email}
                                         onChange={(e) => setApplicationData(p => ({ ...p, personalInfo: { ...p.personalInfo, email: e.target.value } }))}
-                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-800"
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-[#29a08e] font-bold text-slate-800"
                                         placeholder="email@example.com"
                                     />
                                 </div>
@@ -169,7 +169,7 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                         type="tel"
                                         value={applicationData.personalInfo.phone}
                                         onChange={(e) => setApplicationData(p => ({ ...p, personalInfo: { ...p.personalInfo, phone: e.target.value } }))}
-                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500 font-bold text-slate-800"
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-[#29a08e] font-bold text-slate-800"
                                         placeholder="+977-XXXXXXXXXX"
                                     />
                                 </div>
@@ -185,7 +185,7 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                     rows="10"
                                     value={applicationData.coverLetter}
                                     onChange={(e) => setApplicationData(p => ({ ...p, coverLetter: e.target.value }))}
-                                    className="w-full p-5 bg-slate-50 border border-slate-200 rounded-[28px] outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-700 leading-relaxed text-sm"
+                                    className="w-full p-5 bg-slate-50 border border-slate-200 rounded-[28px] outline-none focus:ring-2 focus:ring-[#29a08e] font-medium text-slate-700 leading-relaxed text-sm"
                                     placeholder="Explain why you are the best fit for this role..."
                                 ></textarea>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-right">{applicationData.coverLetter.length} characters</p>
@@ -199,10 +199,10 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                 <button
                                     onClick={() => setApplicationData(p => ({ ...p, resumeType: 'Generated' }))}
                                     className={`p-6 rounded-[28px] border-2 text-left transition-all flex items-center gap-5
-                                        ${applicationData.resumeType === 'Generated' ? 'border-blue-600 bg-blue-50/50 shadow-xl shadow-blue-500/5' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                                        ${applicationData.resumeType === 'Generated' ? 'border-[#29a08e] bg-[#29a08e]/10 shadow-xl shadow-[#29a08e]/5' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                                 >
                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center 
-                                        ${applicationData.resumeType === 'Generated' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                        ${applicationData.resumeType === 'Generated' ? 'bg-[#29a08e] text-white' : 'bg-slate-100 text-slate-400'}`}>
                                         <FileText className="w-6 h-6" />
                                     </div>
                                     <div className="flex-1">
@@ -211,17 +211,17 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                     </div>
                                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center
                                         ${applicationData.resumeType === 'Generated' ? 'border-blue-600' : 'border-slate-100'}`}>
-                                        {applicationData.resumeType === 'Generated' && <div className="w-3 h-3 bg-blue-600 rounded-full" />}
+                                        {applicationData.resumeType === 'Generated' && <div className="w-3 h-3 bg-[#29a08e] rounded-full" />}
                                     </div>
                                 </button>
 
                                 <button
                                     onClick={() => setApplicationData(p => ({ ...p, resumeType: 'External' }))}
                                     className={`p-6 rounded-[28px] border-2 text-left transition-all flex items-center gap-5
-                                        ${applicationData.resumeType === 'External' ? 'border-blue-600 bg-blue-50/50 shadow-xl shadow-blue-500/5' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                                        ${applicationData.resumeType === 'External' ? 'border-[#29a08e] bg-[#29a08e]/10 shadow-xl shadow-[#29a08e]/5' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                                 >
                                     <div className={`w-12 h-12 rounded-2xl flex items-center justify-center 
-                                        ${applicationData.resumeType === 'External' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                                        ${applicationData.resumeType === 'External' ? 'bg-[#29a08e] text-white' : 'bg-slate-100 text-slate-400'}`}>
                                         <Upload className="w-6 h-6" />
                                     </div>
                                     <div className="flex-1">
@@ -232,13 +232,13 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                     </div>
                                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center
                                         ${applicationData.resumeType === 'External' ? 'border-blue-600' : 'border-slate-100'}`}>
-                                        {applicationData.resumeType === 'External' && <div className="w-3 h-3 bg-blue-600 rounded-full" />}
+                                        {applicationData.resumeType === 'External' && <div className="w-3 h-3 bg-[#29a08e] rounded-full" />}
                                     </div>
                                 </button>
                             </div>
 
                             <div className="p-6 bg-slate-900 rounded-[28px] text-white">
-                                <h5 className="text-[10px] font-black uppercase text-blue-400 tracking-widest mb-4">Quick Preview</h5>
+                                <h5 className="text-[10px] font-black uppercase text-[#29a08e]/80 tracking-widest mb-4">Quick Preview</h5>
                                 {applicationData.resumeType === 'Generated' ? (
                                     <div className="space-y-4 opacity-80">
                                         <div className="h-4 w-1/2 bg-white/10 rounded"></div>
@@ -266,7 +266,7 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                 <div>
                                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Target Opportunity</h4>
                                     <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{job.title}</p>
-                                    <p className="text-xs font-bold text-blue-600 mt-1 uppercase tracking-widest">{job.company_name}</p>
+                                    <p className="text-xs font-bold text-[#29a08e] mt-1 uppercase tracking-widest">{job.company_name}</p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-8 pt-4 border-t border-slate-200">
                                     <div>
@@ -281,7 +281,7 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                 <div className="pt-4 border-t border-slate-200">
                                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Selected Credential</h4>
                                     <div className="flex items-center gap-2">
-                                        <div className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                                        <div className="p-1.5 bg-[#29a08e]/20 text-[#29a08e] rounded-lg">
                                             <FileText className="w-4 h-4" />
                                         </div>
                                         <p className="text-[13px] font-bold text-slate-800 uppercase tracking-tight">
@@ -314,7 +314,7 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                     {step < 4 ? (
                         <button
                             onClick={handleNext}
-                            className="px-10 py-3.5 bg-blue-600 text-white font-black text-[11px] uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2"
+                            className="px-10 py-3.5 bg-[#29a08e] text-white font-black text-[11px] uppercase tracking-widest rounded-2xl shadow-xl shadow-[#29a08e]/20 hover:bg-[#228377] active:scale-95 transition-all flex items-center gap-2"
                         >
                             Next Step
                             <ChevronRight className="w-4 h-4" />
@@ -323,7 +323,7 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                         <button
                             onClick={handleSubmit}
                             disabled={loading}
-                            className="px-10 py-3.5 bg-blue-600 text-white font-black text-[11px] uppercase tracking-widest rounded-2xl shadow-xl shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all text-center min-w-[160px] flex items-center justify-center"
+                            className="px-10 py-3.5 bg-[#29a08e] text-white font-black text-[11px] uppercase tracking-widest rounded-2xl shadow-xl shadow-[#29a08e]/20 hover:bg-[#228377] active:scale-95 transition-all text-center min-w-[160px] flex items-center justify-center"
                         >
                             {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Confirm & Submit'}
                         </button>

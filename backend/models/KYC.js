@@ -45,10 +45,16 @@ const kycSchema = new mongoose.Schema(
         idBack: { type: String },
         status: {
             type: String,
-            enum: ['pending', 'approved', 'rejected'],
+            enum: ['pending', 'approved', 'rejected', 'resubmission_locked'],
             default: 'pending'
         },
-        rejectionReason: { type: String, default: null }
+        rejectionReason: { type: String, default: null },
+        resubmissionCount: { type: Number, default: 0 },
+        rejectionHistory: [{
+            reason: { type: String, required: true },
+            rejectedAt: { type: Date, default: Date.now },
+            rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+        }]
     },
     { timestamps: true }
 );

@@ -7,12 +7,12 @@ const Footer = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-12 pb-12 border-b border-gray-800">
                     <div className="space-y-6">
                         <Link to="/" className="flex items-center gap-2">
-                            <div className="bg-blue-600 text-white p-1.5 rounded-lg">
+                            <div className="bg-[#29a08e] text-white p-1.5 rounded-lg">
                                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                 </svg>
                             </div>
-                            <span className="text-xl font-bold text-white tracking-tight">Naya <span className="text-blue-500">Awasar</span></span>
+                            <span className="text-xl font-bold text-white tracking-tight">Naya <span className="text-[#29a08e]">Awasar</span></span>
                         </Link>
                         <p className="text-gray-400 text-sm leading-relaxed">
                             Connecting talent with opportunities across Nepal. Your partner in professional growth and career success.

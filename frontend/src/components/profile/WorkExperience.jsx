@@ -23,7 +23,7 @@ const WorkExperience = ({ isEditing, profile, formData, onItemsChange }) => {
             <div className="space-y-6">
                 <button
                     onClick={handleAdd}
-                    className="w-full py-4 border-2 border-dashed border-gray-100 rounded-[24px] text-gray-400 hover:border-[#2D9B82]/30 hover:text-[#2D9B82] hover:bg-[#F0FDF4]/50 transition-all font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                    className="w-full py-4 border-2 border-dashed border-gray-100 rounded-[24px] text-gray-400 hover:border-[#29a08e]/30 hover:text-[#29a08e] hover:bg-[#F0FDF4]/50 transition-all font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"
                 >
                     <Plus size={16} />
                     Add Work Experience
@@ -46,7 +46,7 @@ const WorkExperience = ({ isEditing, profile, formData, onItemsChange }) => {
                                     placeholder="e.g. Senior Product Designer"
                                     value={exp.title}
                                     onChange={(e) => updateItem(idx, 'title', e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] text-sm font-bold text-gray-800 transition-all"
+                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] text-sm font-bold text-gray-800 transition-all"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -56,7 +56,7 @@ const WorkExperience = ({ isEditing, profile, formData, onItemsChange }) => {
                                     placeholder="e.g. Google India"
                                     value={exp.company}
                                     onChange={(e) => updateItem(idx, 'company', e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] text-sm font-bold text-gray-800 transition-all"
+                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] text-sm font-bold text-gray-800 transition-all"
                                 />
                             </div>
                             <div className="md:col-span-2 space-y-2">
@@ -66,7 +66,7 @@ const WorkExperience = ({ isEditing, profile, formData, onItemsChange }) => {
                                     placeholder="e.g. Jan 2022 - Present"
                                     value={exp.duration}
                                     onChange={(e) => updateItem(idx, 'duration', e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] text-sm font-bold text-gray-800 transition-all"
+                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] text-sm font-bold text-gray-800 transition-all"
                                 />
                             </div>
                             <div className="md:col-span-2 space-y-2">
@@ -75,7 +75,7 @@ const WorkExperience = ({ isEditing, profile, formData, onItemsChange }) => {
                                     placeholder="Highlight your key achievements and responsibilities..."
                                     value={exp.description}
                                     onChange={(e) => updateItem(idx, 'description', e.target.value)}
-                                    className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] text-sm font-medium text-gray-700 resize-none leading-relaxed transition-all"
+                                    className="w-full px-5 py-4 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] text-sm font-medium text-gray-700 resize-none leading-relaxed transition-all"
                                     rows="4"
                                 ></textarea>
                             </div>
@@ -91,14 +91,14 @@ const WorkExperience = ({ isEditing, profile, formData, onItemsChange }) => {
             {profile.workExperience?.length > 0 ? profile.workExperience.map((exp, idx) => (
                 <div key={idx} className="relative pl-14 group">
                     {/* Timeline Dot */}
-                    <div className="absolute left-0 top-1.5 w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 group-hover:text-[#2D9B82] group-hover:border-[#2D9B82]/20 transition-all shadow-sm z-10">
+                    <div className="absolute left-0 top-1.5 w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 group-hover:text-[#29a08e] group-hover:border-[#29a08e]/20 transition-all shadow-sm z-10">
                         <Briefcase size={18} />
                     </div>
 
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
                         <div>
-                            <h4 className="text-lg font-bold text-gray-900 group-hover:text-[#2D9B82] transition-colors">{exp.title}</h4>
-                            <p className="text-sm font-semibold text-[#2D9B82] tracking-tight">{exp.company}</p>
+                            <h4 className="text-lg font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors">{exp.title}</h4>
+                            <p className="text-sm font-semibold text-[#29a08e] tracking-tight">{exp.company}</p>
                         </div>
                         <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-lg text-gray-400 border border-gray-100">
                             <Calendar size={12} />

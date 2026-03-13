@@ -63,7 +63,7 @@ const SeekerInterviews = () => {
             {isFocused && (
                 <Link
                     to={backLink.to}
-                    className="inline-flex items-center gap-2 text-xs font-black text-gray-400 hover:text-[#2D9B82] uppercase tracking-[0.2em] mb-12 group transition-colors"
+                    className="inline-flex items-center gap-2 text-xs font-black text-gray-400 hover:text-[#29a08e] uppercase tracking-[0.2em] mb-12 group transition-colors"
                 >
                     <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
                     {backLink.label}
@@ -84,7 +84,10 @@ const SeekerInterviews = () => {
             ) : interviews.length > 0 ? (
                 <div className="space-y-10">
                     {interviews.map((app) => {
-                        const isFuture = app.interview?.date ? new Date(app.interview.date) > new Date() : false;
+                        // Check if the interview date is today or in the future
+                        const isFuture = app.interview?.date 
+                            ? new Date(new Date(app.interview.date).setHours(23, 59, 59, 999)) >= new Date() 
+                            : false;
                         const hasPendingRequest = app.rescheduleRequest?.status === 'pending' && app.rescheduleRequest?.reason;
 
                         return (
@@ -96,7 +99,7 @@ const SeekerInterviews = () => {
                                             {app.job_id?.company_name} · {app.job_id?.location}
                                         </p>
                                     </div>
-                                    <span className="px-4 py-1.5 bg-[#2D9B82] text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#2D9B82]/20">
+                                    <span className="px-4 py-1.5 bg-[#29a08e] text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[#29a08e]/20">
                                         Interview Scheduled
                                     </span>
                                 </div>
@@ -104,7 +107,7 @@ const SeekerInterviews = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8 mb-10">
                                     <div className="space-y-1">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <CalendarIcon className="w-3 h-3 text-[#2D9B82]" /> Date
+                                            <CalendarIcon className="w-3 h-3 text-[#29a08e]" /> Date
                                         </p>
                                         <p className="text-sm font-bold text-slate-800">
                                             {new Date(app.interview?.date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -112,30 +115,28 @@ const SeekerInterviews = () => {
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <Clock className="w-3 h-3 text-[#2D9B82]" /> Time (Local)
+                                            <Clock className="w-3 h-3 text-[#29a08e]" /> Time (Local)
                                         </p>
                                         <p className="text-sm font-bold text-slate-800">{app.interview?.time} (GMT +5:45)</p>
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <Video className="w-3 h-3 text-[#2D9B82]" /> Mode
+                                            <Video className="w-3 h-3 text-[#29a08e]" /> Mode
                                         </p>
                                         <p className="text-sm font-bold text-slate-800">{app.interview?.mode}</p>
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <LinkIcon className="w-3 h-3 text-[#2D9B82]" />
-                                            {app.interview?.mode === 'Online' ? 'Meeting Link' : 'Location'}
+                                            <LinkIcon className="w-3 h-3 text-[#29a08e]" />
+                                            {app.interview?.mode === 'Online' ? 'Interview' : 'Location'}
                                         </p>
                                         {app.interview?.mode === 'Online' ? (
-                                            app.interview?.interviewId ? (
-                                                <Link to={`/interview/call/${app.interview.interviewId}`} className="text-sm font-bold text-[#2D9B82] hover:underline flex items-center gap-1.5">
+                                            app.interview?.roomId ? (
+                                                <Link to={`/interview/call/${app.interview.roomId}`} className="text-sm font-bold text-[#29a08e] hover:underline flex items-center gap-1.5">
                                                     Join Interview Call <Video className="w-3 h-3" />
                                                 </Link>
                                             ) : (
-                                                <a href={app.interview?.meetLink} target="_blank" rel="noreferrer" className="text-sm font-bold text-[#2D9B82] hover:underline flex items-center gap-1.5">
-                                                    Join Interview Link <LinkIcon className="w-3 h-3" />
-                                                </a>
+                                                <span className="text-sm font-bold text-slate-400 italic">Room ID generating...</span>
                                             )
                                         ) : (
                                             <p className="text-sm font-bold text-slate-800">{app.interview?.location || 'TBD'}</p>
@@ -143,13 +144,13 @@ const SeekerInterviews = () => {
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <User className="w-3 h-3 text-[#2D9B82]" /> Interviewer
+                                            <User className="w-3 h-3 text-[#29a08e]" /> Interviewer
                                         </p>
                                         <p className="text-sm font-bold text-slate-800">{app.interview?.interviewer || 'Hiring Manager'}</p>
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                            <Clock className="w-3 h-3 text-[#2D9B82]" /> Duration
+                                            <Clock className="w-3 h-3 text-[#29a08e]" /> Duration
                                         </p>
                                         <p className="text-sm font-bold text-slate-800">{app.interview?.duration || '30 minutes'}</p>
                                     </div>
@@ -181,7 +182,7 @@ const SeekerInterviews = () => {
                                         {isFuture && !hasPendingRequest && (
                                             <button
                                                 onClick={() => setRescheduleModal({ show: true, application: app })}
-                                                className="px-8 py-3 bg-[#2D9B82] text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-[#2D9B82]/20 hover:bg-[#25836d] hover:-translate-y-0.5 transition-all active:scale-[0.98]"
+                                                className="px-8 py-3 bg-[#29a08e] text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-xl shadow-[#29a08e]/20 hover:bg-[#228377] hover:-translate-y-0.5 transition-all active:scale-[0.98]"
                                             >
                                                 Request Reschedule
                                             </button>
@@ -227,7 +228,7 @@ const SeekerInterviews = () => {
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reason for Reschedule *</label>
                                 <textarea
-                                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-medium focus:ring-2 focus:ring-[#2D9B82]/20 focus:border-[#2D9B82] transition-all outline-none min-h-[120px]"
+                                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-medium focus:ring-2 focus:ring-[#29a08e]/20 focus:border-[#29a08e] transition-all outline-none min-h-[120px]"
                                     placeholder="Explain why you need to reschedule..."
                                     value={rescheduleForm.reason}
                                     onChange={(e) => setRescheduleForm({ ...rescheduleForm, reason: e.target.value })}
@@ -239,7 +240,7 @@ const SeekerInterviews = () => {
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preferred Date (Optional)</label>
                                     <input
                                         type="date"
-                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-[#2D9B82]/20 focus:border-[#2D9B82] transition-all outline-none"
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-[#29a08e]/20 focus:border-[#29a08e] transition-all outline-none"
                                         value={rescheduleForm.preferredDate}
                                         onChange={(e) => setRescheduleForm({ ...rescheduleForm, preferredDate: e.target.value })}
                                     />
@@ -248,7 +249,7 @@ const SeekerInterviews = () => {
                                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preferred Time (Optional)</label>
                                     <input
                                         type="time"
-                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-[#2D9B82]/20 focus:border-[#2D9B82] transition-all outline-none"
+                                        className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-[#29a08e]/20 focus:border-[#29a08e] transition-all outline-none"
                                         value={rescheduleForm.preferredTime}
                                         onChange={(e) => setRescheduleForm({ ...rescheduleForm, preferredTime: e.target.value })}
                                     />
@@ -266,7 +267,7 @@ const SeekerInterviews = () => {
                             <button
                                 onClick={handleRescheduleSubmit}
                                 disabled={actionLoading}
-                                className="flex-1 py-3 bg-[#2D9B82] text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#2D9B82]/20 hover:bg-[#25836d] hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                className="flex-1 py-3 bg-[#29a08e] text-white rounded-xl text-[11px] font-black uppercase tracking-widest shadow-lg shadow-[#29a08e]/20 hover:bg-[#228377] hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
                             >
                                 {actionLoading ? (
                                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

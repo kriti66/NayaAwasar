@@ -85,7 +85,7 @@ const JobListing = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Explore <span className="text-blue-600">Jobs</span></h1>
+                        <h1 className="text-2xl font-bold text-gray-900">Explore <span className="text-[#29a08e]">Jobs</span></h1>
                         <p className="text-gray-500 mt-1">{filteredJobs.length} opportunities available</p>
                     </div>
                 </div>
@@ -104,7 +104,7 @@ const JobListing = () => {
                                 placeholder="Job title, company..."
                                 value={keyword}
                                 onChange={(e) => setKeyword(e.target.value)}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#29a08e] focus:border-[#29a08e] text-sm"
                             />
                         </div>
 
@@ -116,7 +116,7 @@ const JobListing = () => {
                                 placeholder="City, region..."
                                 value={location}
                                 onChange={(e) => setLocation(e.target.value)}
-                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-[#29a08e] focus:border-[#29a08e] text-sm"
                             />
                         </div>
 
@@ -130,7 +130,7 @@ const JobListing = () => {
                                             type="checkbox"
                                             checked={jobTypes[type]}
                                             onChange={() => handleCheckboxChange('type', type)}
-                                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            className="h-4 w-4 text-[#29a08e] border-gray-300 rounded focus:ring-[#29a08e]"
                                         />
                                         <span className="ml-2 text-sm text-gray-600">{type}</span>
                                     </label>
@@ -148,7 +148,7 @@ const JobListing = () => {
                                             type="checkbox"
                                             checked={experienceLevels[level]}
                                             onChange={() => handleCheckboxChange('level', level)}
-                                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                            className="h-4 w-4 text-[#29a08e] border-gray-300 rounded focus:ring-[#29a08e]"
                                         />
                                         <span className="ml-2 text-sm text-gray-600">{level}</span>
                                     </label>
@@ -158,7 +158,7 @@ const JobListing = () => {
 
                         <button
                             onClick={clearFilters}
-                            className="w-full py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors border border-blue-100 rounded-lg hover:bg-blue-50"
+                            className="w-full py-2 text-sm font-semibold text-[#29a08e] hover:text-[#228377] transition-colors border border-[#29a08e]/20 rounded-lg hover:bg-[#29a08e]/5"
                         >
                             Clear All
                         </button>
@@ -168,7 +168,7 @@ const JobListing = () => {
                     <div className="flex-1 space-y-4">
                         {loading ? (
                             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-gray-100">
-                                <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent mb-4"></div>
+                                <div className="animate-spin rounded-full h-10 w-10 border-4 border-[#29a08e] border-t-transparent mb-4"></div>
                                 <p className="text-gray-500 font-medium">Loading jobs...</p>
                             </div>
                         ) : filteredJobs.length > 0 ? (
@@ -177,11 +177,11 @@ const JobListing = () => {
                                     <div key={job._id} className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
                                         <div className="flex items-start justify-between">
                                             <div className="flex items-start">
-                                                <div className="h-12 w-12 bg-blue-50 rounded-lg flex-shrink-0 flex items-center justify-center text-blue-600 font-bold text-lg border border-blue-100">
+                                                <div className="h-12 w-12 bg-[#29a08e]/10 rounded-lg flex-shrink-0 flex items-center justify-center text-[#29a08e] font-bold text-lg border border-[#29a08e]/20">
                                                     {job.company_name.charAt(0)}
                                                 </div>
                                                 <div className="ml-4">
-                                                    <h3 className="font-bold text-gray-900 text-lg hover:text-blue-600 transition-colors">
+                                                    <h3 className="font-bold text-gray-900 text-lg hover:text-[#29a08e] transition-colors">
                                                         <Link to={`/jobs/${job._id}`}>{job.title}</Link>
                                                     </h3>
                                                     <div className="flex flex-wrap gap-2 mt-1">
@@ -191,7 +191,7 @@ const JobListing = () => {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <button className="text-gray-300 hover:text-blue-600 transition-colors">
+                                            <button className="text-gray-300 hover:text-[#29a08e] transition-colors">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                                                 </svg>
@@ -200,7 +200,7 @@ const JobListing = () => {
 
                                         <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
                                             <div className="flex flex-wrap gap-2">
-                                                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-bold">
+                                                <span className="px-3 py-1 bg-[#29a08e]/10 text-[#29a08e] rounded-full text-xs font-bold">
                                                     {job.type}
                                                 </span>
                                                 <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold">
@@ -216,7 +216,7 @@ const JobListing = () => {
                                                 </Link>
                                                 <Link
                                                     to={`/apply/${job._id}`}
-                                                    className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm text-center"
+                                                    className="px-6 py-2 bg-[#29a08e] text-white rounded-lg text-sm font-bold hover:bg-[#228377] transition-colors shadow-sm text-center"
                                                 >
                                                     Apply
                                                 </Link>
@@ -236,15 +236,15 @@ const JobListing = () => {
                         {filteredJobs.length > 0 && (
                             <div className="mt-8 flex justify-center">
                                 <nav className="flex items-center space-x-2">
-                                    <button className="p-2 rounded-lg text-gray-400 hover:bg-white hover:text-blue-600 border border-transparent hover:border-gray-200 transition-all">
+                                    <button className="p-2 rounded-lg text-gray-400 hover:bg-white hover:text-[#29a08e] border border-transparent hover:border-gray-200 transition-all">
                                         &larr;
                                     </button>
                                     {[1, 2, 3].map(p => (
-                                        <button key={p} className={`w-10 h-10 rounded-lg text-sm font-bold transition-all ${p === 1 ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-white hover:text-blue-600 border border-transparent hover:border-gray-200'}`}>
+                                        <button key={p} className={`w-10 h-10 rounded-lg text-sm font-bold transition-all ${p === 1 ? 'bg-[#29a08e] text-white shadow-md' : 'text-gray-500 hover:bg-white hover:text-[#29a08e] border border-transparent hover:border-gray-200'}`}>
                                             {p}
                                         </button>
                                     ))}
-                                    <button className="p-2 rounded-lg text-gray-400 hover:bg-white hover:text-blue-600 border border-transparent hover:border-gray-200 transition-all">
+                                    <button className="p-2 rounded-lg text-gray-400 hover:bg-white hover:text-[#29a08e] border border-transparent hover:border-gray-200 transition-all">
                                         &rarr;
                                     </button>
                                 </nav>

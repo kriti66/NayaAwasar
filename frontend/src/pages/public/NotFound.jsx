@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 const NotFound = () => {
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 text-center">
-            <h1 className="text-9xl font-extrabold text-blue-600 tracking-widest">404</h1>
-            <div className="bg-blue-600 text-white px-2 text-sm rounded rotate-12 absolute">
+            <h1 className="text-9xl font-extrabold text-[#29a08e] tracking-widest">404</h1>
+            <div className="bg-[#29a08e] text-white px-2 text-sm rounded rotate-12 absolute">
                 Page Not Found
             </div>
             <div className="mt-8">
@@ -16,7 +16,7 @@ const NotFound = () => {
                 </p>
                 <Link
                     to="/"
-                    className="inline-block px-8 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm"
+                    className="inline-block px-8 py-3 bg-[#29a08e] text-white rounded-lg font-bold hover:bg-[#228377] transition-colors shadow-sm"
                 >
                     Back to Home
                 </Link>

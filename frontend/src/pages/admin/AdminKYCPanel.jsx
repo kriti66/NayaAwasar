@@ -144,7 +144,7 @@ const AdminKYCPanel = () => {
                                     placeholder="Search..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#29a08e] outline-none"
                                 />
                             </div>
                         </div>
@@ -154,7 +154,7 @@ const AdminKYCPanel = () => {
                                     <div
                                         key={kyc._id || getUserId(kyc)}
                                         onClick={() => setSelectedKYC(kyc)}
-                                        className={`p-4 cursor-pointer transition-all hover:bg-gray-50 border-l-4 ${selectedKYC?._id === kyc._id ? 'border-blue-600 bg-blue-50/30' : 'border-transparent'}`}
+                                        className={`p-4 cursor-pointer transition-all hover:bg-gray-50 border-l-4 ${selectedKYC?._id === kyc._id ? 'border-[#29a08e] bg-[#29a08e]/5' : 'border-transparent'}`}
                                     >
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="min-w-0">
@@ -191,7 +191,7 @@ const AdminKYCPanel = () => {
                             <div className="bg-white rounded-xl border border-gray-200 shadow-sm h-full flex flex-col overflow-hidden">
                                 <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-bold text-xl">
+                                        <div className="w-12 h-12 bg-[#29a08e]/20 rounded-lg flex items-center justify-center text-[#29a08e] font-bold text-xl">
                                             {selectedKYC.fullName.charAt(0)}
                                         </div>
                                         <div>
@@ -202,7 +202,7 @@ const AdminKYCPanel = () => {
                                     <button
                                         disabled={processing}
                                         onClick={() => handleApprove(selectedKYC)}
-                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                                        className="px-6 py-2 bg-[#29a08e] text-white rounded-lg text-sm font-bold hover:bg-[#228377] transition-colors disabled:opacity-50 flex items-center gap-2"
                                     >
                                         <Check className="w-4 h-4" />
                                         Approve
@@ -255,9 +255,12 @@ const AdminKYCPanel = () => {
                                         <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verification Proofs</h3>
                                         <div className="grid grid-cols-3 gap-4">
                                             {[
-                                                { label: 'ID Front', path: selectedKYC.documentFront || selectedKYC.idFront },
-                                                { label: 'ID Back', path: selectedKYC.documentBack || selectedKYC.idBack },
-                                                { label: 'Selfie', path: selectedKYC.selfieWithId }
+                                                { label: 'ID Front', path: selectedKYC.documentFront || selectedKYC.idFrontUrl },
+                                                { label: 'ID Back', path: selectedKYC.documentBack || selectedKYC.idBackUrl },
+                                                { label: 'Selfie', path: selectedKYC.selfieWithId },
+                                                { label: 'Company Reg', path: selectedKYC.registrationDocument || selectedKYC.registrationDocUrl },
+                                                { label: 'Tax Doc', path: selectedKYC.taxDocument || selectedKYC.taxDocUrl },
+                                                { label: 'Company Logo', path: selectedKYC.companyLogo }
                                             ].filter(p => p.path).map((img, i) => (
                                                 <div key={i} className="space-y-2">
                                                     <div className="relative aspect-video rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group">
@@ -276,8 +279,30 @@ const AdminKYCPanel = () => {
                                         </div>
                                     </div>
 
+                                    {selectedKYC.rejectionHistory && selectedKYC.rejectionHistory.length > 0 && (
+                                        <div className="space-y-4">
+                                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rejection History ({selectedKYC.resubmissionCount || 0}/3 used)</h3>
+                                            <div className="space-y-3">
+                                                {selectedKYC.rejectionHistory.map((hist, i) => (
+                                                    <div key={i} className="p-4 bg-orange-50 border border-orange-100 rounded-xl">
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="text-[10px] font-bold uppercase text-orange-600">Attempt {i + 1} Rejected</span>
+                                                            <span className="text-[10px] text-gray-400">{new Date(hist.rejectedAt).toLocaleString()}</span>
+                                                        </div>
+                                                        <p className="text-sm text-gray-700 italic">"{hist.reason}"</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="p-6 bg-red-50 rounded-xl border border-red-100">
-                                        <h3 className="text-sm font-bold text-red-900 mb-4">Reject Verification</h3>
+                                        <h3 className="text-sm font-bold text-red-900 mb-2">Reject Verification</h3>
+                                        <p className="text-xs text-red-700 mb-4 opacity-80">
+                                            {selectedKYC.resubmissionCount >= 3 
+                                                ? "Note: User has reached max attempts and will be locked upon this rejection." 
+                                                : `User has used ${selectedKYC.resubmissionCount || 0}/3 allowed re-submissions.`}
+                                        </p>
                                         <div className="space-y-4">
                                             <textarea
                                                 value={rejectionReason}

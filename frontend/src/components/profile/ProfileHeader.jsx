@@ -7,7 +7,7 @@ const ProfileHeader = ({ profile, onEdit }) => {
     return (
         <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden mb-8">
             {/* Cover Photo Placeholder */}
-            <div className="h-32 bg-gradient-to-r from-[#2D9B82] to-[#A5C9CA] opacity-20"></div>
+            <div className="h-32 bg-gradient-to-r from-[#29a08e] to-[#A5C9CA] opacity-20"></div>
 
             <div className="px-8 pb-8">
                 <div className="relative flex flex-col md:flex-row md:items-end gap-6 -mt-12 mb-6">
@@ -26,7 +26,7 @@ const ProfileHeader = ({ profile, onEdit }) => {
                                 </div>
                             )}
                         </div>
-                        <div className="absolute bottom-2 right-2 w-6 h-6 bg-[#2D9B82] border-4 border-white rounded-full"></div>
+                        <div className="absolute bottom-2 right-2 w-6 h-6 bg-[#29a08e] border-4 border-white rounded-full"></div>
                     </div>
 
                     {/* Basic Info */}
@@ -34,7 +34,7 @@ const ProfileHeader = ({ profile, onEdit }) => {
                         <div className="flex flex-wrap items-center gap-3 mb-1">
                             <h1 className="text-2xl font-bold text-gray-900">{profile?.fullName}</h1>
                             {profile?.isPublic && (
-                                <span className="px-2.5 py-1 bg-green-50 text-[#2D9B82] text-[10px] font-black uppercase tracking-wider rounded-lg border border-green-100">
+                                <span className="px-2.5 py-1 bg-green-50 text-[#29a08e] text-[10px] font-black uppercase tracking-wider rounded-lg border border-green-100">
                                     Public Profile
                                 </span>
                             )}
@@ -45,11 +45,11 @@ const ProfileHeader = ({ profile, onEdit }) => {
 
                         <div className="flex flex-wrap items-center gap-6 text-sm">
                             <div className="flex items-center gap-2 text-gray-400 font-bold">
-                                <MapPin size={16} className="text-[#2D9B82]" />
+                                <MapPin size={16} className="text-[#29a08e]" />
                                 <span>{profile?.location || 'Add location'}</span>
                             </div>
                             <div className="flex items-center gap-2 text-gray-400 font-bold">
-                                <Globe size={16} className="text-[#2D9B82]" />
+                                <Globe size={16} className="text-[#29a08e]" />
                                 <span>{profile?.isPublic ? 'Visible to recruiters' : 'Hidden profile'}</span>
                             </div>
                         </div>
@@ -59,7 +59,7 @@ const ProfileHeader = ({ profile, onEdit }) => {
                     <div className="mt-4 md:mt-0 flex items-center gap-4">
                         <button
                             onClick={onEdit}
-                            className="flex items-center gap-2 px-6 py-3 bg-[#2D9B82] text-white rounded-xl font-bold hover:bg-[#25836d] transition-all transform active:scale-95 shadow-lg shadow-[#2D9B82]/20"
+                            className="flex items-center gap-2 px-6 py-3 bg-[#29a08e] text-white rounded-xl font-bold hover:bg-[#228377] transition-all transform active:scale-95 shadow-lg shadow-[#29a08e]/20"
                         >
                             <Edit2 size={16} />
                             <span>Edit Profile</span>
@@ -71,11 +71,11 @@ const ProfileHeader = ({ profile, onEdit }) => {
                 <div className="pt-6 border-t border-gray-50">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Profile Strength</span>
-                        <span className="text-xs font-black text-[#2D9B82]">{completion}%</span>
+                        <span className="text-xs font-black text-[#29a08e]">{completion}%</span>
                     </div>
                     <div className="h-2 w-full bg-gray-50 rounded-full overflow-hidden">
                         <div
-                            className="h-full bg-[#2D9B82] rounded-full transition-all duration-1000"
+                            className="h-full bg-[#29a08e] rounded-full transition-all duration-1000"
                             style={{ width: `${completion}%` }}
                         ></div>
                     </div>

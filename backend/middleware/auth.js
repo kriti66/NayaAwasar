@@ -93,6 +93,8 @@ export const requireCompanyApproved = async (req, res, next) => {
         const messages = {
             draft: 'Your company profile is still a draft. Please submit it for approval.',
             submitted: 'Your company profile is under review by admin.',
+            pending: 'Your company profile is under review by admin.',
+            waiting_for_recruiter_approval: 'Your company will be reviewed once your recruiter identity is approved.',
             rejected: `Your company profile was rejected. Feedback: ${company.adminFeedback || 'No feedback provided.'}`,
             suspended: 'Your company profile has been suspended. Please contact support.'
         };
@@ -158,7 +160,7 @@ export const requireRecruiterKycApproved = async (req, res, next) => {
         const user = await User.findById(req.user.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        if (user.role === 'recruiter' && user.recruiterKycStatus === 'approved') {
+        if (user.role === 'recruiter' && (user.recruiterKycStatus === 'approved' || user.kycStatus === 'approved')) {
             return next();
         }
 

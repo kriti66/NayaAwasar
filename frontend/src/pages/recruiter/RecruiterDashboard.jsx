@@ -45,7 +45,7 @@ const RecruiterDashboard = () => {
                     <h1 className="text-4xl md:text-5xl font-bold mb-2">
                         Welcome back, {user?.name?.split(' ')[0] || 'Recruiter'}
                     </h1>
-                    <p className="text-[#2D9B82] text-xl font-medium mb-6">
+                    <p className="text-[#29a08e] text-xl font-medium mb-6">
                         You're in demand!
                     </p>
                     <p className="text-gray-400 mb-8 max-w-2xl">
@@ -75,7 +75,7 @@ const RecruiterDashboard = () => {
                                 className="w-full py-3 bg-transparent focus:outline-none text-gray-700 placeholder-gray-400"
                             />
                         </div>
-                        <button className="bg-[#2D9B82] text-white px-8 py-3 rounded-md font-medium hover:bg-[#25836d] transition-colors">
+                        <button className="bg-[#29a08e] text-white px-8 py-3 rounded-md font-medium hover:bg-[#228377] transition-colors">
                             Search
                         </button>
                     </div>
@@ -106,7 +106,7 @@ const RecruiterDashboard = () => {
                                 <p className="text-sm font-medium text-gray-500 mb-1">Recruiter Strength</p>
                                 <h3 className="text-4xl font-bold text-gray-900">{stats.recruiter_strength || 0}</h3>
                             </div>
-                            <div className="p-2 bg-emerald-50 rounded-lg text-[#2D9B82]">
+                            <div className="p-2 bg-emerald-50 rounded-lg text-[#29a08e]">
                                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                                 </svg>
@@ -141,7 +141,7 @@ const RecruiterDashboard = () => {
                                 <p className="text-sm font-medium text-gray-500 mb-1">Inbound Talent</p>
                                 <h3 className="text-4xl font-bold text-gray-900">{stats.applicants}</h3>
                             </div>
-                            <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                            <div className="p-2 bg-[#29a08e]/10 rounded-lg text-[#29a08e]">
                                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                                 </svg>
@@ -167,7 +167,7 @@ const RecruiterDashboard = () => {
                             </div>
                         </div>
                         <div>
-                            <p className="text-[#2D9B82] text-sm font-medium">+18% <span className="text-gray-400 font-normal">from last month</span></p>
+                            <p className="text-[#29a08e] text-sm font-medium">+18% <span className="text-gray-400 font-normal">from last month</span></p>
                         </div>
                     </div>
                 </div>
@@ -177,11 +177,11 @@ const RecruiterDashboard = () => {
                     <div className="absolute top-0 right-0 w-32 h-32 bg-gray-50 rounded-full transform translate-x-12 -translate-y-12 opacity-50"></div>
                     <div className="relative z-10 flex items-center justify-between">
                         <div>
-                            <p className="text-[#2D9B82] text-xs font-bold uppercase tracking-wider mb-2">Inbound Talent</p>
+                            <p className="text-[#29a08e] text-xs font-bold uppercase tracking-wider mb-2">Inbound Talent</p>
                             <h3 className="text-2xl font-bold text-gray-900">Active Applications</h3>
-                            <p className="text-5xl font-black text-gray-900 mt-3 group-hover:text-[#2D9B82] transition-colors">{stats.applicants}</p>
+                            <p className="text-5xl font-black text-gray-900 mt-3 group-hover:text-[#29a08e] transition-colors">{stats.applicants}</p>
                         </div>
-                        <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-[#2D9B82] group-hover:text-white transition-colors shadow-sm">
+                        <div className="h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center group-hover:bg-[#29a08e] group-hover:text-white transition-colors shadow-sm">
                             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
                             </svg>
@@ -193,7 +193,7 @@ const RecruiterDashboard = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-lg font-bold text-gray-900">Recent Postings</h3>
-                        <Link to="/recruiter/jobs" className="text-sm font-medium text-[#2D9B82] hover:text-[#25836d]">View All</Link>
+                        <Link to="/recruiter/jobs" className="text-sm font-medium text-[#29a08e] hover:text-[#228377]">View All</Link>
                     </div>
 
                     {loading ? (
@@ -225,7 +225,7 @@ const RecruiterDashboard = () => {
                                         </div>
 
                                         <div>
-                                            <h4 className="text-base font-bold text-gray-900 uppercase tracking-tight group-hover:text-[#2D9B82] transition-colors">
+                                            <h4 className="text-base font-bold text-gray-900 uppercase tracking-tight group-hover:text-[#29a08e] transition-colors">
                                                 {job.title}
                                             </h4>
 
@@ -269,7 +269,7 @@ const RecruiterDashboard = () => {
                     ) : (
                         <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-200">
                             <p className="text-gray-500 text-sm mb-4">No active job postings found.</p>
-                            <Link to="/recruiter/post-job" className="text-[#2D9B82] font-medium text-sm hover:underline">Create your first job post</Link>
+                            <Link to="/recruiter/post-job" className="text-[#29a08e] font-medium text-sm hover:underline">Create your first job post</Link>
                         </div>
                     )}
 
@@ -277,7 +277,7 @@ const RecruiterDashboard = () => {
                         <KycGuard>
                             <Link
                                 to="/recruiter/post-job"
-                                className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-bold rounded-lg text-white bg-[#2D9B82] hover:bg-[#25836d] shadow-sm hover:shadow-lg hover:shadow-[#2D9B82]/20 transition-all transform active:scale-95"
+                                className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-bold rounded-lg text-white bg-[#29a08e] hover:bg-[#228377] shadow-sm hover:shadow-lg hover:shadow-[#29a08e]/20 transition-all transform active:scale-95"
                             >
                                 Broadcast Job Post +
                             </Link>

@@ -48,7 +48,7 @@ const SeekerApplications = () => {
             const normalizedStatus = (app.status || '').toLowerCase();
             const filterMap = {
                 'Applied': ['applied'],
-                'In Review': ['in_review'],
+                'In Review': ['in_review', 'in-review'],
                 'Interview': ['interview'],
                 'Offer': ['offered'],
                 'Hired': ['hired'],
@@ -59,8 +59,8 @@ const SeekerApplications = () => {
 
             return matchesSearch && matchesStatus;
         }).sort((a, b) => {
-            const dateA = new Date(a.applied_at || a.createdAt);
-            const dateB = new Date(b.applied_at || b.createdAt);
+            const dateA = new Date(a.appliedAt || a.createdAt || a.updatedAt);
+            const dateB = new Date(b.appliedAt || b.createdAt || b.updatedAt);
             return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
         });
     }, [applications, searchQuery, statusFilter, sortOrder]);
@@ -81,7 +81,7 @@ const SeekerApplications = () => {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 border-4 border-[#2D9B82] border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-12 h-12 border-4 border-[#29a08e] border-t-transparent rounded-full animate-spin"></div>
                     <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Loading Applications...</p>
                 </div>
             </div>
@@ -97,7 +97,7 @@ const SeekerApplications = () => {
                         <h1 className="text-3xl font-black text-gray-900 tracking-tight mb-2">Your Job Applications</h1>
                         <p className="text-gray-500 font-medium">Track and manage all your job applications in one place</p>
                     </div>
-                    <Link to="/seeker/jobs" className="inline-flex items-center gap-2 px-6 py-3 bg-[#2D9B82] text-white rounded-xl font-bold text-sm hover:bg-[#25836d] transition-all shadow-lg shadow-[#2D9B82]/20 transform active:scale-95">
+                    <Link to="/seeker/jobs" className="inline-flex items-center gap-2 px-6 py-3 bg-[#29a08e] text-white rounded-xl font-bold text-sm hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/20 transform active:scale-95">
                         <Search size={16} strokeWidth={2.5} /> Find More Jobs
                     </Link>
                 </div>
@@ -108,7 +108,7 @@ const SeekerApplications = () => {
                         title="Total Applications"
                         count={stats.total}
                         icon={FileText}
-                        colorClass="bg-blue-50 text-blue-600"
+                        colorClass="bg-[#29a08e]/10 text-[#29a08e]"
                     />
                     <StatCard
                         title="Active Applications"
@@ -134,7 +134,7 @@ const SeekerApplications = () => {
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-8">
                     <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
                         <div className="relative w-full md:w-96 group">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#2D9B82] transition-colors" size={18} />
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#29a08e] transition-colors" size={18} />
                             <input
                                 type="text"
                                 placeholder="Search job title, company..."
@@ -150,7 +150,7 @@ const SeekerApplications = () => {
                                     <button
                                         key={tab}
                                         onClick={() => setStatusFilter(tab)}
-                                        className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${statusFilter === tab ? 'bg-white text-[#2D9B82] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                        className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${statusFilter === tab ? 'bg-white text-[#29a08e] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                     >
                                         {tab}
                                     </button>
@@ -185,7 +185,7 @@ const SeekerApplications = () => {
                             </div>
                             <h3 className="text-xl font-black text-gray-900 mb-2">No Applications Found</h3>
                             <p className="text-gray-500 font-medium max-w-sm mx-auto mb-8 text-sm">We couldn't find any applications matching your criteria. Try adjusting your filters or search terms.</p>
-                            <button onClick={() => { setStatusFilter('All'); setSearchQuery(''); }} className="text-[#2D9B82] font-black text-xs uppercase tracking-widest hover:underline">Clear Filters</button>
+                            <button onClick={() => { setStatusFilter('All'); setSearchQuery(''); }} className="text-[#29a08e] font-black text-xs uppercase tracking-widest hover:underline">Clear Filters</button>
                         </div>
                     )}
                 </div>

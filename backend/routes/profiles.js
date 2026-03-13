@@ -16,7 +16,6 @@ import {
     uploadResume,
     getResume,
     deleteResume,
-    downloadResume,
     getPublicProfile
 
 } from '../controllers/profileController.js';
@@ -82,11 +81,10 @@ router.delete('/me/education/:id', deleteEducation);
 router.post('/me/resume', upload.single('resume'), uploadResume);
 router.get('/me/resume', getResume);
 router.delete('/me/resume', deleteResume);
-router.get('/me/resume/download', downloadResume);
 
 // CV Generation
 // CV Generation
-router.post('/generate-cv', requireAuth, generateCV);
+router.post('/generate-cv', generateCV);
 
 
 

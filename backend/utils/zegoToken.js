@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 
 function makeNonce() {
-    return Math.floor(Math.random() * 0x100000000); // 32-bit integer
+    return Math.ceil((-2147483648 + (2147483647 - -2147483648)) * Math.random());
 }
 
 function makeRandomIv() {
@@ -48,8 +48,8 @@ export function generateToken04(appId, userId, secret, effectiveTimeInSeconds, p
         app_id: appId,
         user_id: userId,
         nonce: makeNonce(),
-        create_time: createTime,
-        expire_time: createTime + effectiveTimeInSeconds,
+        ctime: createTime,
+        expire: createTime + effectiveTimeInSeconds,
         payload: payload || ''
     };
 
@@ -86,15 +86,19 @@ export function generateToken04(appId, userId, secret, effectiveTimeInSeconds, p
     const b1 = Buffer.alloc(8);
     // JS max safe integer 2^53. Time fits.
     // Write BigInt64BE
-    b1.writeBigInt64BE(BigInt(tokenInfo.expire_time), 0);
+    b1.writeBigInt64BE(BigInt(tokenInfo.expire), 0);
 
     const b2 = Buffer.alloc(2);
-    b2.writeUInt16BE(encryptedContent.length, 0);
+    b2.writeUInt16BE(iv.length, 0);
+
+    const b3 = Buffer.alloc(2);
+    b3.writeUInt16BE(encryptedContent.length, 0);
 
     const buf = Buffer.concat([
         b1,
-        iv,
         b2,
+        iv,
+        b3,
         Buffer.from(encryptedContent)
     ]);
 

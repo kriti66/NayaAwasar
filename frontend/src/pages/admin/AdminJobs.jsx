@@ -85,7 +85,7 @@ const AdminJobs = () => {
         switch (status) {
             case 'Approved': return 'bg-emerald-50 text-emerald-700 border-emerald-100';
             case 'Flagged': return 'bg-amber-50 text-amber-700 border-amber-100';
-            case 'Under Review': return 'bg-blue-50 text-blue-700 border-blue-100';
+            case 'Under Review': return 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20';
             case 'Hidden': return 'bg-rose-50 text-rose-700 border-rose-100';
             default: return 'bg-slate-50 text-slate-700 border-slate-100';
         }
@@ -105,7 +105,7 @@ const AdminJobs = () => {
                         placeholder="Search jobs..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm md:w-80"
+                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#29a08e] focus:border-[#29a08e] outline-none text-sm md:w-80"
                     />
                 </div>
             </header>
@@ -134,7 +134,7 @@ const AdminJobs = () => {
                                 <tr key={job._id} className="hover:bg-gray-50 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 shrink-0 border border-blue-100">
+                                            <div className="w-10 h-10 rounded-lg bg-[#29a08e]/10 flex items-center justify-center text-[#29a08e] shrink-0 border border-[#29a08e]/20">
                                                 <Briefcase className="w-5 h-5" />
                                             </div>
                                             <div className="min-w-0">
@@ -164,7 +164,7 @@ const AdminJobs = () => {
                                         <div className="flex items-center justify-end gap-2">
                                             <button
                                                 onClick={() => handleModerateClick(job)}
-                                                className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-blue-600 transition-colors"
+                                                className="px-3 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-semibold hover:bg-[#29a08e] transition-colors"
                                             >
                                                 Moderate
                                             </button>
@@ -204,7 +204,7 @@ const AdminJobs = () => {
                                 <div className="space-y-1">
                                     <label className="text-xs font-semibold text-gray-700">Status</label>
                                     <select
-                                        className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#29a08e] outline-none"
                                         value={moderationData.moderationStatus}
                                         onChange={(e) => setModerationData({ ...moderationData, moderationStatus: e.target.value })}
                                     >
@@ -218,7 +218,7 @@ const AdminJobs = () => {
                                     <label className="text-xs font-semibold text-gray-700">Deadline</label>
                                     <input
                                         type="date"
-                                        className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#29a08e] outline-none"
                                         value={moderationData.reviewDeadline}
                                         onChange={(e) => setModerationData({ ...moderationData, reviewDeadline: e.target.value })}
                                     />
@@ -228,7 +228,7 @@ const AdminJobs = () => {
                             <div className="space-y-1">
                                 <label className="text-xs font-semibold text-gray-700">Reason</label>
                                 <textarea
-                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none"
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#29a08e] outline-none h-24 resize-none"
                                     placeholder="Why is this being flagged?"
                                     value={moderationData.flagReason}
                                     onChange={(e) => setModerationData({ ...moderationData, flagReason: e.target.value })}
@@ -238,7 +238,7 @@ const AdminJobs = () => {
                             <div className="space-y-1">
                                 <label className="text-xs font-semibold text-gray-700">Admin Notes</label>
                                 <textarea
-                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none h-24 resize-none"
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#29a08e] outline-none h-24 resize-none"
                                     placeholder="Internal notes..."
                                     value={moderationData.adminComments}
                                     onChange={(e) => setModerationData({ ...moderationData, adminComments: e.target.value })}
@@ -246,7 +246,7 @@ const AdminJobs = () => {
                             </div>
 
                             <div className="pt-2">
-                                <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors">
+                                <button type="submit" className="w-full py-3 bg-[#29a08e] text-white rounded-lg text-sm font-bold hover:bg-[#228377] transition-colors">
                                     Update Job Status
                                 </button>
                             </div>

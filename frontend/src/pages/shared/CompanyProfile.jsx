@@ -202,7 +202,7 @@ const CompanyProfile = () => {
     if (loading) {
         return (
             <div className="flex-1 flex items-center justify-center min-h-[400px]">
-                <div className="w-12 h-12 border-4 border-[#2D9B82]/30 border-t-[#2D9B82] rounded-full animate-spin"></div>
+                <div className="w-12 h-12 border-4 border-[#29a08e]/30 border-t-[#29a08e] rounded-full animate-spin"></div>
             </div>
         );
     }
@@ -211,26 +211,59 @@ const CompanyProfile = () => {
 
     if (isRecruiter && !id && authUser.kycStatus !== 'approved') {
         return (
-            <main className="flex-1 py-10 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto w-full">
-                <div className="bg-red-50 border-l-4 border-red-400 p-6 rounded-r-lg shadow-sm">
-                    <div className="flex">
-                        <div className="flex-shrink-0">
-                            <ShieldAlert className="h-6 w-6 text-red-500" />
+            <main className="flex-1 py-12 px-4 sm:px-6 lg:px-8 flex items-center justify-center min-h-[60vh] bg-gray-50">
+                <div className="max-w-xl w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 transform transition-all">
+                    {/* Header Banner */}
+                    <div className="bg-gradient-to-r from-red-500 to-rose-600 px-6 py-8 text-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 -tr-10 opacity-10 flex">
+                           <ShieldAlert className="w-48 h-48 rotate-12 transform translate-x-12 -translate-y-12" />
                         </div>
-                        <div className="ml-4">
-                            <h3 className="text-xl font-bold text-red-800">Identity Verification Required</h3>
-                            <div className="mt-2 text-sm text-red-700">
-                                <p className="mb-4">
-                                    You must complete and get your <strong>Personal KYC</strong> approved before you can create or manage a company profile.
-                                    Your current KYC status is: <strong>{authUser.kycStatus?.toUpperCase() || 'NOT SUBMITTED'}</strong>.
-                                </p>
-                                <button
-                                    onClick={() => navigate('/kyc/recruiter')}
-                                    className="font-bold underline text-red-800 hover:text-red-900"
-                                >
-                                    Go to KYC Verification &rarr;
-                                </button>
+                        <div className="relative z-10 flex flex-col items-center">
+                            <div className="bg-white/20 p-4 rounded-full backdrop-blur-sm mb-4 inline-block shadow-inner ring-4 ring-white/10">
+                                <ShieldAlert className="h-10 w-10 text-white" />
                             </div>
+                            <h2 className="text-2xl font-extrabold text-white tracking-wide">
+                                Identity Verification Required
+                            </h2>
+                        </div>
+                    </div>
+
+                    {/* Content Section */}
+                    <div className="px-8 py-10 text-center">
+                        <h3 className="text-lg font-bold text-gray-900 mb-3">Action Needed to access Company Profiles</h3>
+                        <p className="text-gray-600 mb-8 leading-relaxed">
+                            To maintain trust and safety within Naya Awasar, all recruiters must have their <strong className="text-gray-900 tracking-wide">Personal KYC</strong> verified by an admin before they can generate or manage their business profiles.
+                        </p>
+
+                        {/* Status Box */}
+                        <div className="bg-gray-50 rounded-xl p-4 mb-8 inline-flex items-center gap-3 border border-gray-200 shadow-sm">
+                            <span className="text-xs tracking-widest uppercase font-bold text-gray-500">Current Status:</span>
+                            <span className={`px-3 py-1 text-xs font-bold uppercase rounded-full ${
+                                authUser.kycStatus === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                authUser.kycStatus === 'rejected' ? 'bg-red-100 text-red-700' :
+                                'bg-gray-200 text-gray-700'
+                            }`}>
+                                {authUser.kycStatus?.replace('_', ' ') || 'NOT SUBMITTED'}
+                            </span>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                            <button
+                                onClick={() => navigate('/kyc/recruiter')}
+                                className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 border border-transparent rounded-xl shadow-md text-sm font-bold text-white bg-[#29a08e] hover:bg-[#228377] hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] transition-all duration-300"
+                            >
+                                Go to KYC Verification
+                                <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                </svg>
+                            </button>
+                            <button
+                                onClick={() => navigate('/recruiter/dashboard')}
+                                className="w-full sm:w-auto inline-flex items-center justify-center px-8 py-3.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 bg-white hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 transition-colors"
+                            >
+                                Return to Dashboard
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -296,7 +329,7 @@ const CompanyProfile = () => {
                                 <div className="flex items-center gap-3">
                                     <h1 className="text-3xl font-bold text-gray-900">{company.name}</h1>
                                     {company.status === 'approved' ? (
-                                        <span className="px-2.5 py-0.5 bg-emerald-100 text-[#2D9B82] rounded-full text-xs font-bold flex items-center gap-1">
+                                        <span className="px-2.5 py-0.5 bg-emerald-100 text-[#29a08e] rounded-full text-xs font-bold flex items-center gap-1">
                                             <ShieldCheck className="w-3.5 h-3.5" /> APPROVED
                                         </span>
                                     ) : company.status === 'pending' ? (
@@ -316,7 +349,7 @@ const CompanyProfile = () => {
                                 {canEdit && (
                                     <button
                                         onClick={() => setShowEditModal(true)}
-                                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#2D9B82] hover:bg-[#25836d] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D9B82] transition-colors uppercase tracking-wide"
+                                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#29a08e] hover:bg-[#228377] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] transition-colors uppercase tracking-wide"
                                     >
                                         <Edit3 className="w-4 h-4 mr-2" />
                                         Edit Company Profile
@@ -373,7 +406,7 @@ const CompanyProfile = () => {
                                         <Globe className="w-3 h-3" /> Official Website
                                     </p>
                                     {company.website ? (
-                                        <a href={company.website} target="_blank" rel="noreferrer" className="text-sm font-bold text-[#2D9B82] hover:underline truncate block">
+                                        <a href={company.website} target="_blank" rel="noreferrer" className="text-sm font-bold text-[#29a08e] hover:underline truncate block">
                                             {company.website}
                                         </a>
                                     ) : <p className="text-sm font-bold text-gray-900">Not listed</p>}
@@ -407,19 +440,19 @@ const CompanyProfile = () => {
                     <div className="space-y-8">
                         {/* Company Stats */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#2D9B82] pl-3">
+                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#29a08e] pl-3">
                                 Company Statistics
                             </h3>
                             <div className="space-y-4">
-                                <StatItem label="Total Jobs Posted" value={stats.totalJobs} color="text-[#2D9B82]" />
-                                <StatItem label="Active Openings" value={stats.activeOpenings} color="text-[#2D9B82]" />
-                                <StatItem label="Successful Hires" value={stats.successfulHires} color="text-[#2D9B82]" />
+                                <StatItem label="Total Jobs Posted" value={stats.totalJobs} color="text-[#29a08e]" />
+                                <StatItem label="Active Openings" value={stats.activeOpenings} color="text-[#29a08e]" />
+                                <StatItem label="Successful Hires" value={stats.successfulHires} color="text-[#29a08e]" />
                             </div>
                         </div>
 
                         {/* Recent Postings */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#2D9B82] pl-3">
+                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#29a08e] pl-3">
                                 Recent Postings
                             </h3>
                             <div className="space-y-4">
@@ -452,7 +485,7 @@ const CompanyProfile = () => {
                             {recentJobs.length > 0 && (
                                 <button
                                     onClick={() => navigate(isSeekerView ? '/seeker/jobs' : '/jobs')}
-                                    className="w-full mt-6 py-3 text-xs font-bold text-[#2D9B82] uppercase tracking-widest hover:bg-emerald-50 rounded transition-colors"
+                                    className="w-full mt-6 py-3 text-xs font-bold text-[#29a08e] uppercase tracking-widest hover:bg-emerald-50 rounded transition-colors"
                                 >
                                     View All Opportunities
                                 </button>
@@ -461,13 +494,13 @@ const CompanyProfile = () => {
 
                         {/* Contact Info */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#2D9B82] pl-3">
+                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#29a08e] pl-3">
                                 Contact Information
                             </h3>
                             <div className="space-y-6">
                                 <div>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Official Email</p>
-                                    <a href={`mailto:${company.contact?.email}`} className="text-sm font-bold text-[#2D9B82] hover:underline break-all">{company.contact?.email || 'Not listed'}</a>
+                                    <a href={`mailto:${company.contact?.email}`} className="text-sm font-bold text-[#29a08e] hover:underline break-all">{company.contact?.email || 'Not listed'}</a>
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Business Address</p>
@@ -478,7 +511,7 @@ const CompanyProfile = () => {
 
                         {/* Social Links */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#2D9B82] pl-3">
+                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#29a08e] pl-3">
                                 Social Links
                             </h3>
                             <div className="space-y-4">
@@ -492,7 +525,7 @@ const CompanyProfile = () => {
                         {(isAdmin || canEdit) && company._id && (
                             <div className="bg-[#111827] rounded-xl p-6 text-white shadow-lg">
                                 <header className="flex items-center gap-3 mb-4">
-                                    <ShieldCheck className="w-5 h-5 text-[#2D9B82]" />
+                                    <ShieldCheck className="w-5 h-5 text-[#29a08e]" />
                                     <div>
                                         <h3 className="text-sm font-bold uppercase tracking-wide">Admin Access Restricted</h3>
                                     </div>
@@ -533,7 +566,7 @@ const CompanyProfile = () => {
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Company Size</label>
                                             <select
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm transition-all text-gray-900"
                                                 value={editData.size || ''}
                                                 onChange={(e) => handleChange(e, 'size')}
                                             >
@@ -547,7 +580,7 @@ const CompanyProfile = () => {
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Founded Year</label>
                                             <input
                                                 type="number"
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm transition-all text-gray-900"
                                                 value={editData.yearFounded || ''}
                                                 onChange={(e) => handleChange(e, 'yearFounded')}
                                             />
@@ -556,7 +589,7 @@ const CompanyProfile = () => {
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Website URL</label>
                                             <input
                                                 type="url"
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm transition-all text-gray-900"
                                                 value={editData.website || ''}
                                                 onChange={(e) => handleChange(e, 'website')}
                                                 placeholder="https://example.com"
@@ -567,7 +600,7 @@ const CompanyProfile = () => {
                                             <input
                                                 type="file"
                                                 accept="image/*"
-                                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
+                                                className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm transition-all text-gray-900"
                                                 onChange={(e) => setLogoFile(e.target.files[0])}
                                             />
                                         </div>
@@ -582,7 +615,7 @@ const CompanyProfile = () => {
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Headquarters</label>
                                             <input
                                                 type="text"
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm transition-all text-gray-900"
                                                 value={editData.headquarters || ''}
                                                 onChange={(e) => handleChange(e, 'headquarters')}
                                             />
@@ -591,7 +624,7 @@ const CompanyProfile = () => {
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Contact Email</label>
                                             <input
                                                 type="email"
-                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900"
+                                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm transition-all text-gray-900"
                                                 value={editData.contact?.email || ''}
                                                 onChange={(e) => handleChange(e, 'contact.email')}
                                             />
@@ -618,15 +651,15 @@ const CompanyProfile = () => {
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">LinkedIn</label>
-                                            <input type="url" value={editData.socialLinks?.linkedin || ''} onChange={(e) => handleChange(e, 'socialLinks.linkedin')} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900" placeholder="URL" />
+                                            <input type="url" value={editData.socialLinks?.linkedin || ''} onChange={(e) => handleChange(e, 'socialLinks.linkedin')} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm transition-all text-gray-900" placeholder="URL" />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Portfolio</label>
-                                            <input type="url" value={editData.socialLinks?.portfolio || ''} onChange={(e) => handleChange(e, 'socialLinks.portfolio')} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900" placeholder="URL" />
+                                            <input type="url" value={editData.socialLinks?.portfolio || ''} onChange={(e) => handleChange(e, 'socialLinks.portfolio')} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm transition-all text-gray-900" placeholder="URL" />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">GitHub</label>
-                                            <input type="url" value={editData.socialLinks?.github || ''} onChange={(e) => handleChange(e, 'socialLinks.github')} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm transition-all text-gray-900" placeholder="URL" />
+                                            <input type="url" value={editData.socialLinks?.github || ''} onChange={(e) => handleChange(e, 'socialLinks.github')} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm transition-all text-gray-900" placeholder="URL" />
                                         </div>
                                     </div>
                                 </div>
@@ -635,13 +668,13 @@ const CompanyProfile = () => {
                                     <button
                                         type="button"
                                         onClick={() => setShowEditModal(false)}
-                                        className="px-6 py-2 border border-gray-300 shadow-sm text-sm font-bold rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D9B82]"
+                                        className="px-6 py-2 border border-gray-300 shadow-sm text-sm font-bold rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e]"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         type="submit"
-                                        className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-bold rounded-lg shadow-sm text-white bg-[#2D9B82] hover:bg-[#25836d] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D9B82]"
+                                        className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-bold rounded-lg shadow-sm text-white bg-[#29a08e] hover:bg-[#228377] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e]"
                                     >
                                         Save Changes
                                     </button>
@@ -658,7 +691,7 @@ const CompanyProfile = () => {
 // HELPER COMPONENTS
 const SectionCard = ({ title, children }) => (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 h-fit">
-        <h2 className="text-sm font-bold text-gray-900 mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#2D9B82] pl-3 uppercase tracking-wider">
+        <h2 className="text-sm font-bold text-gray-900 mb-6 pb-2 border-b border-gray-100 border-l-4 border-l-[#29a08e] pl-3 uppercase tracking-wider">
             {title}
         </h2>
         {children}
@@ -672,7 +705,7 @@ const AboutItem = ({ label, value, isEditing, onChange }) => (
             <textarea
                 value={value || ''}
                 onChange={onChange}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg text-sm p-4 min-h-[100px] focus:bg-white focus:border-[#2D9B82] focus:ring-0 transition-all outline-none resize-none text-gray-900"
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg text-sm p-4 min-h-[100px] focus:bg-white focus:border-[#29a08e] focus:ring-0 transition-all outline-none resize-none text-gray-900"
                 placeholder={`Enter details...`}
             />
         ) : (
@@ -697,7 +730,7 @@ const HiringTagGroup = ({ label, value, isEditing, onChange, icon }) => (
             <input
                 value={value?.join(', ') || ''}
                 onChange={onChange}
-                className="w-full bg-gray-50 border border-gray-200 rounded-lg text-sm px-4 py-2 focus:bg-white focus:border-[#2D9B82] focus:ring-0 transition-all outline-none"
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg text-sm px-4 py-2 focus:bg-white focus:border-[#29a08e] focus:ring-0 transition-all outline-none"
                 placeholder="Separate with commas..."
             />
         ) : (
@@ -721,7 +754,7 @@ const StatItem = ({ label, value, color = "text-gray-900" }) => (
 
 const SocialLinkItem = ({ icon, label, value }) => (
     <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-all border border-transparent hover:border-gray-100 group">
-        <div className="text-gray-400 group-hover:text-[#2D9B82] transition-colors">{React.cloneElement(icon, { className: 'w-5 h-5' })}</div>
+        <div className="text-gray-400 group-hover:text-[#29a08e] transition-colors">{React.cloneElement(icon, { className: 'w-5 h-5' })}</div>
         <div className="flex-1 min-w-0">
             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">{label}</p>
             {value ? (

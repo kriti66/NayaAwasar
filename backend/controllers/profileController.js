@@ -3,14 +3,7 @@ import User from '../models/User.js'; // To sync some fields/check existence
 import Activity from '../models/Activity.js'; // For public view logging
 import { calculateProfileStrength } from '../utils/profileStrength.js';
 import { logUserActivity } from '../utils/userActivityLogger.js';
-import { logActivity } from '../utils/activityLogger.js';
 import { autoRegenerateCV } from './cvController.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 
 // Helper to ensure profile exists
@@ -32,9 +25,9 @@ export const getMyProfile = async (req, res) => {
         // Also fetch user basic info (name, email, etc.)
         const user = await User.findById(userId).select('fullName email role isKycVerified professionalHeadline bio location skills workExperience education resume jobPreferences projects profileImage');
 
-        if (!user) {
-            return res.status(404).json({ message: 'User account not found' });
-        }
+        // OPTIONAL: One-time migration or sync if profile is empty but user has data
+        // For now, we assume we return the Profile model data. 
+        // We can merge user.fullName into the response for display.
 
         const { score, label, tips } = calculateProfileStrength(profile);
 
@@ -86,19 +79,6 @@ export const updateProfile = async (req, res) => {
 
         // Auto-regenerate CV if needed
         autoRegenerateCV(userId).catch(err => console.error("BG CV update failed", err));
-
-        // Log Profile Update
-        await logActivity(req.user.id, req.user.role, 'PROFILE_UPDATED', 'User profile updated.', 'Profile', profile._id);
-
-        const { createNotification } = await import('./notificationController.js');
-        await createNotification({
-            recipient: req.user.id,
-            type: 'system', // or 'profile_update' if added to enum, but 'system' works
-            title: 'Profile Updated',
-            message: 'You successfully updated your profile.',
-            link: '/profile',
-            sender: req.user.id
-        });
 
         res.json(profile);
 
@@ -295,38 +275,11 @@ export const deleteResume = async (req, res) => {
     }
 };
 
-// DOWNLOAD RESUME FILE
-// GET /api/profile/me/resume/download
-export const downloadResume = async (req, res) => {
-    try {
-        const profile = await getOrCreateProfile(req.user.id);
-        if (!profile || !profile.resume || !profile.resume.fileUrl) {
-            return res.status(404).json({ message: 'No resume found' });
-        }
-
-        const relPath = profile.resume.fileUrl.startsWith('/')
-            ? profile.resume.fileUrl.slice(1)
-            : profile.resume.fileUrl;
-
-        const filePath = path.join(__dirname, '..', relPath);
-
-        if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ message: 'Resume file not found on server' });
-        }
-
-        const fileName = profile.resume.fileName || 'resume.pdf';
-        return res.download(filePath, fileName);
-    } catch (error) {
-        console.error('Download resume error:', error);
-        res.status(500).json({ message: 'Error downloading resume' });
-    }
-};
-
 // PUBLIC PROFILE (Recruiter View)
 export const getPublicProfile = async (req, res) => {
     try {
         const { userId } = req.params;
-        const profile = await Profile.findOne({ userId }).populate('userId', 'fullName role isKycVerified professionalHeadline bio location');
+        const profile = await Profile.findOne({ userId }).populate('userId', 'fullName role isKycVerified professionalHeadline bio location profileImage');
 
         if (!profile) return res.status(404).json({ message: 'Profile not found' });
         if (!profile.visibleToRecruiters) return res.status(404).json({ message: 'Profile is private' });
@@ -334,12 +287,7 @@ export const getPublicProfile = async (req, res) => {
         // Log functionality for recruiter view
         // req.user is the recruiter
         if (req.user && req.user.role === 'recruiter') {
-            await logActivity(
-                userId,
-                'RECRUITER_VIEW',
-                'A recruiter viewed your profile',
-                { recruiterId: req.user.id }
-            );
+            await logUserActivity(userId, 'RECRUITER_VIEW', { recruiterId: req.user.id });
         }
 
         // Return sanitized

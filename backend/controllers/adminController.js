@@ -57,7 +57,7 @@ export const getActivityLogs = async (req, res) => {
 export const getAllCompanies = async (req, res) => {
     try {
         const companies = await Company.find({})
-            .populate('recruiters', 'fullName email')
+            .populate('recruiters', 'fullName email kycStatus')
             .sort({ createdAt: -1 });
 
         // Add job counts manually or via aggregation
@@ -83,7 +83,7 @@ export const getAllCompanies = async (req, res) => {
 export const getCompanyDetails = async (req, res) => {
     try {
         const company = await Company.findById(req.params.id)
-            .populate('recruiters', 'fullName email')
+            .populate('recruiters', 'fullName email kycStatus')
             .populate('adminFields.reviewHistory.adminId', 'fullName role');
 
         if (!company) {
@@ -114,11 +114,26 @@ export const updateCompanyStatus = async (req, res) => {
             return res.status(404).json({ message: 'Company not found' });
         }
 
-        const validStatuses = ['draft', 'submitted', 'approved', 'rejected', 'suspended'];
+        const validStatuses = ['draft', 'submitted', 'pending', 'waiting_for_recruiter_approval', 'approved', 'rejected', 'suspended'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ message: 'Invalid status' });
         }
 
+        // Backend validation: company cannot be approved before recruiter approval
+        if (status === 'approved') {
+             // Check if at least one recruiter associated with the company is approved
+             const hasApprovedRecruiter = await User.exists({ 
+                 _id: { $in: company.recruiters }, 
+                 kycStatus: 'approved' 
+             });
+             
+             if (!hasApprovedRecruiter) {
+                 return res.status(400).json({ 
+                     message: 'Company cannot be approved because the associated recruiter identity is not approved yet.' 
+                 });
+             }
+        }
+        
         company.status = status;
 
         if (status === 'rejected') {

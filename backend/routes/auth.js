@@ -7,6 +7,7 @@ import KYC from '../models/KYC.js';
 import sendEmail from '../utils/sendEmail.js';
 import { requireAuth, getJwtSecret } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { sendOtp, verifyOtp, resetPassword } from '../controllers/authController.js';
 
 const router = express.Router();
 
@@ -167,110 +168,13 @@ router.get('/me', requireAuth, async (req, res) => {
     }
 });
 
-// Forgot Password
-router.post('/forgot-password', async (req, res) => {
-    const { email } = req.body;
+// Forgot Password (OTP)
+router.post('/forgot-password', sendOtp);
 
-    if (!email) {
-        return res.status(400).json({ message: 'Email is required' });
-    }
+// Verify OTP
+router.post('/verify-otp', verifyOtp);
 
-    try {
-        console.log(`🔍 Received password reset link request (MongoDB) for: ${email}`);
-
-        const user = await User.findOne({ email });
-        if (!user) {
-            console.warn(`⚠️ Reset link request failed: User not found for ${email}`);
-            // Security: Don't reveal if email exists or not
-            return res.json({ message: 'If that email exists, a reset link has been sent.' });
-        }
-
-        // Generate Token
-        const token = crypto.randomBytes(20).toString('hex');
-        const expires = Date.now() + 3600000; // 1 hour
-
-        user.reset_password_token = token;
-        user.reset_password_expires = expires;
-        await user.save();
-
-        console.log(`✅ Reset token generated for ${email}`);
-
-        // Send Email using Utility
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-        const resetUrl = `${frontendUrl}/reset-password/${token}`;
-
-        const message = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-                <h2 style="color: #333; text-align: center;">Password Reset Request</h2>
-                <p>Hello,</p>
-                <p>You have requested a password reset. Please click the link below to verify your email and set a new password. This link is valid for <strong>1 hour</strong>.</p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <a href="${resetUrl}" style="background-color: #4A90E2; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Reset Password</a>
-                </div>
-                <p>Or copy and paste this link into your browser:</p>
-                <p style="word-break: break-all; color: #4A90E2;">${resetUrl}</p>
-                <p>If you didn't request this, please ignore this email.</p>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-                <p style="font-size: 12px; color: #777; text-align: center;">Naya Awasar - Find Your Opportunity</p>
-            </div>
-        `;
-
-        try {
-            await sendEmail({
-                to: user.email,
-                subject: 'Password Reset - Naya Awasar',
-                text: message
-            });
-            console.log(`✅ Reset link email sent to ${email}`);
-            res.json({ message: 'Password reset link has been sent to your email.' });
-        } catch (mailError) {
-            console.error("❌ Email send error:", mailError);
-            // clear token if email fails
-            user.reset_password_token = null;
-            user.reset_password_expires = null;
-            await user.save();
-
-            return res.status(500).json({
-                message: 'Failed to send reset email. Please try again later.',
-                error: mailError.message
-            });
-        }
-
-    } catch (error) {
-        console.error("❌ Server error in forgot-password:", error);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-});
-
-// Reset Password
-router.post('/reset-password/:token', async (req, res) => {
-    const { token } = req.params;
-    const { password } = req.body;
-
-    try {
-        const user = await User.findOne({
-            reset_password_token: token,
-            reset_password_expires: { $gt: Date.now() }
-        });
-
-        if (!user) {
-            return res.status(400).json({ message: 'Password reset token is invalid or has expired.' });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-        user.password = hashedPassword;
-        user.reset_password_token = null;
-        user.reset_password_expires = null;
-        await user.save();
-
-        res.json({ message: 'Password has been updated.' });
-
-    } catch (error) {
-        console.error("Reset password error:", error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-
+// Reset Password (OTP)
+router.post('/reset-password-otp', resetPassword);
 
 export default router;

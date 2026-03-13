@@ -46,10 +46,10 @@ const ProjectsSection = ({ isEditing, profile, formData, onItemsChange }) => {
                 <div key={idx} className="group border-b border-gray-50 last:border-0 pb-8 last:pb-0">
                     <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-500 flex items-center justify-center">
+                            <div className="w-10 h-10 rounded-xl bg-[#29a08e]/10 text-[#29a08e] flex items-center justify-center">
                                 <Box size={20} />
                             </div>
-                            <h4 className="text-lg font-bold text-gray-900 group-hover:text-[#2D9B82] transition-colors">
+                            <h4 className="text-lg font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors">
                                 {project.title}
                             </h4>
                         </div>
@@ -58,7 +58,7 @@ const ProjectsSection = ({ isEditing, profile, formData, onItemsChange }) => {
                                 <Github size={14} />
                                 GitHub
                             </a>
-                            <a href={project.demo} className="text-[#2D9B82] hover:text-[#25836d] transition-colors flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest">
+                            <a href={project.demo} className="text-[#29a08e] hover:text-[#228377] transition-colors flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest">
                                 <ExternalLink size={14} />
                                 Live Demo
                             </a>

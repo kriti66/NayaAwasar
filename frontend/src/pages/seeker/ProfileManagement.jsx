@@ -157,7 +157,7 @@ const ProfileManagement = () => {
             <SeekerLayout>
                 <div className="flex-1 flex items-center justify-center min-h-[60vh]">
                     <div className="flex flex-col items-center gap-4">
-                        <div className="w-12 h-12 border-4 border-[#2D9B82] border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-12 h-12 border-4 border-[#29a08e] border-t-transparent rounded-full animate-spin"></div>
                         <p className="text-gray-500 font-bold animate-pulse uppercase tracking-widest text-[10px]">Synchronizing Profile Data...</p>
                     </div>
                 </div>
@@ -195,7 +195,7 @@ const ProfileManagement = () => {
                                             name="fullName"
                                             value={formData.fullName || ''}
                                             onChange={handleInputChange}
-                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] outline-none transition-all font-bold text-gray-800"
+                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] outline-none transition-all font-bold text-gray-800"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -205,7 +205,7 @@ const ProfileManagement = () => {
                                             name="professionalHeadline"
                                             value={formData.professionalHeadline || ''}
                                             onChange={handleInputChange}
-                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] outline-none transition-all font-bold text-gray-800"
+                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] outline-none transition-all font-bold text-gray-800"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -215,7 +215,7 @@ const ProfileManagement = () => {
                                             name="phoneNumber"
                                             value={formData.phoneNumber || ''}
                                             onChange={handleInputChange}
-                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] outline-none transition-all font-bold text-gray-800"
+                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] outline-none transition-all font-bold text-gray-800"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -225,7 +225,7 @@ const ProfileManagement = () => {
                                             name="location"
                                             value={formData.location || ''}
                                             onChange={handleInputChange}
-                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] outline-none transition-all font-bold text-gray-800"
+                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] outline-none transition-all font-bold text-gray-800"
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -235,7 +235,7 @@ const ProfileManagement = () => {
                                             name="portfolioUrl"
                                             value={formData.portfolioUrl || ''}
                                             onChange={handleInputChange}
-                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] outline-none transition-all font-bold text-gray-800"
+                                            className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] outline-none transition-all font-bold text-gray-800"
                                         />
                                     </div>
                                     <div className="space-y-2 text-gray-400">

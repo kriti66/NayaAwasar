@@ -22,7 +22,7 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
                 location: user.location || '',
                 professionalHeadline: user.professionalHeadline || ''
             });
-            setPreviewImage(user.profileImage ? `${import.meta.env.VITE_API_URL}${user.profileImage}` : null);
+            setPreviewImage(user.profileImage ? (user.profileImage.startsWith('http') ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : null);
         }
     }, [user]);
 
@@ -50,7 +50,7 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
             if (imageFile) {
                 const formDataImg = new FormData();
                 formDataImg.append('profileImage', imageFile);
-                await api.put('/users/profile-image', formDataImg, {
+                await api.patch('/users/upload-profile-image', formDataImg, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
             }
@@ -106,7 +106,7 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
                                 name="fullName"
                                 value={formData.fullName}
                                 onChange={handleChange}
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm font-semibold transition-all"
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm font-semibold transition-all"
                                 placeholder="Enter your full name"
                                 required
                             />
@@ -118,7 +118,7 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
                                 name="professionalHeadline"
                                 value={formData.professionalHeadline}
                                 onChange={handleChange}
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm font-semibold transition-all"
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm font-semibold transition-all"
                                 placeholder="e.g. Senior Recruiter at TechCorp"
                             />
                         </div>
@@ -130,7 +130,7 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
                                     name="phoneNumber"
                                     value={formData.phoneNumber}
                                     onChange={handleChange}
-                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm font-semibold transition-all"
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm font-semibold transition-all"
                                     placeholder="+1 234 567 8900"
                                 />
                             </div>
@@ -140,7 +140,7 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
                                     name="location"
                                     value={formData.location}
                                     onChange={handleChange}
-                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#2D9B82] focus:ring-0 outline-none text-sm font-semibold transition-all"
+                                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:border-[#29a08e] focus:ring-0 outline-none text-sm font-semibold transition-all"
                                     placeholder="City, Country"
                                 />
                             </div>
@@ -158,7 +158,7 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="flex-1 py-3 bg-[#2D9B82] text-white rounded-xl text-sm font-bold hover:bg-[#25836d] shadow-lg shadow-[#2D9B82]/20 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                            className="flex-1 py-3 bg-[#29a08e] text-white rounded-xl text-sm font-bold hover:bg-[#228377] shadow-lg shadow-[#29a08e]/20 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {loading ? <Loader className="animate-spin w-4 h-4" /> : <><Save size={16} /> Save Changes</>}
                         </button>

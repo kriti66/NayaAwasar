@@ -30,17 +30,17 @@ const SeekerSidebar = () => {
                                 key={item.path}
                                 to={item.path}
                                 className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 group ${isActive
-                                    ? 'bg-[#2D9B82]/10 text-[#2D9B82]'
+                                    ? 'bg-[#29a08e]/10 text-[#29a08e]'
                                     : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">
-                                    <span className={`${isActive ? 'text-[#2D9B82]' : 'text-gray-400 group-hover:text-gray-600'}`}>
+                                    <span className={`${isActive ? 'text-[#29a08e]' : 'text-gray-400 group-hover:text-gray-600'}`}>
                                         {item.icon}
                                     </span>
                                     <span className="text-sm font-bold tracking-tight">{item.label}</span>
                                 </div>
-                                {isActive && <ChevronRight size={14} className="text-[#2D9B82]" />}
+                                {isActive && <ChevronRight size={14} className="text-[#29a08e]" />}
                             </Link>
                         );
                     })}
@@ -49,7 +49,7 @@ const SeekerSidebar = () => {
 
             <div className="p-4 border-t border-gray-100">
                 <div className="bg-emerald-50 rounded-2xl p-4">
-                    <p className="text-[10px] font-black text-[#2D9B82] uppercase tracking-widest mb-1">Pro Tip</p>
+                    <p className="text-[10px] font-black text-[#29a08e] uppercase tracking-widest mb-1">Pro Tip</p>
                     <p className="text-xs text-emerald-800 font-medium leading-relaxed">
                         Complete your profile to get 3x more recruiters!
                     </p>

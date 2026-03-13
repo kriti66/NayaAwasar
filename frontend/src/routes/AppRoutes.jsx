@@ -1,6 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import PublicRoute from './PublicRoute';
-import PrivateRoute from './PrivateRoute';
+import ProtectedRoute from './ProtectedRoute';
+import GuestOnlyRoute from './GuestOnlyRoute';
 import RoleRoute from './RoleRoute';
 
 // Layouts
@@ -14,6 +14,9 @@ import KycLayout from '../components/layouts/KycLayout';
 import Home from '../pages/public/Home';
 import Login from '../pages/public/Login';
 import Register from '../pages/public/Register';
+import ForgotPassword from '../pages/public/ForgotPassword';
+import VerifyOtp from '../pages/public/VerifyOtp';
+import ResetPassword from '../pages/public/ResetPassword';
 import Unauthorized from '../pages/public/Unauthorized';
 import NotFound from '../pages/public/NotFound';
 import JobListing from '../pages/public/JobListing';
@@ -55,42 +58,48 @@ const AppRoutes = () => {
         <Routes>
             {/* 
               =========================================
-              PUBLIC ROUTES (Restricted for Logged-In)
+              GUEST ONLY ROUTES (Auth Pages & Landing)
               =========================================
               Logged-in users are redirected to their dashboard.
             */}
-            <Route element={<PublicRoute />}>
+            <Route element={<GuestOnlyRoute />}>
                 <Route element={<PublicLayout />}>
-                    <Route path="/" element={<Home />} />
+                    {/* Auth */}
                     <Route path="/login" element={<Login />} />
                     <Route path="/register" element={<Register />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/verify-otp" element={<VerifyOtp />} />
+
+                    {/* Marketing / Public Landing Pages (Only for Guests) */}
+                    <Route path="/" element={<Home />} />
+                    <Route path="/about" element={<About />} />
+                    <Route path="/contact" element={<Contact />} />
+                    <Route path="/company/:id" element={<CompanyProfile />} />
+                    <Route path="/jobs" element={<JobListing />} />
+                    <Route path="/jobs/:id" element={<JobDetails />} />
                 </Route>
             </Route>
 
             {/* 
               =========================================
-              PUBLIC ACCESSIBLE ROUTES (Everyone)
+              SHARED ROUTES (Everyone + Authenticated)
               =========================================
-              Accessible by both guests and logged-in users.
             */}
             <Route element={<PublicLayout />}>
-                <Route path="/about" element={<About />} />
-                <Route path="/contact" element={<Contact />} />
-                <Route path="/company/:id" element={<CompanyProfile />} />
-                <Route path="/jobs" element={<JobListing />} />
-                <Route path="/jobs/:id" element={<JobDetails />} />
                 <Route path="/unauthorized" element={<Unauthorized />} />
             </Route>
+
+
 
             {/* 
               =========================================
               PRIVATE ROUTES (Authenticated Only)
               =========================================
             */}
-            <Route element={<PrivateRoute />}>
+            <Route element={<ProtectedRoute />}>
 
                 {/* SHARED / STATUS ROUTES */}
-                <Route element={<PublicLayout />}>
+                <Route element={<KycLayout />}>
                     <Route path="/kyc" element={<KYCStatus />} />
                     <Route path="/kyc/status" element={<KYCStatus />} />
                     {/* Note: Notifications is shared but might need specific layout depending on role in future */}

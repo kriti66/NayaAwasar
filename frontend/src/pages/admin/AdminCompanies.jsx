@@ -20,6 +20,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+
 const AdminCompanies = () => {
     const [companies, setCompanies] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -71,7 +74,7 @@ const AdminCompanies = () => {
         const configs = {
             approved: { color: 'bg-green-100 text-green-700', icon: CheckCircle2, text: 'Approved' },
             rejected: { color: 'bg-red-100 text-red-700', icon: XCircle, text: 'Rejected' },
-            submitted: { color: 'bg-blue-100 text-blue-700', icon: Clock, text: 'Under Review' },
+            submitted: { color: 'bg-[#29a08e]/20 text-[#29a08e]', icon: Clock, text: 'Under Review' },
             draft: { color: 'bg-gray-100 text-gray-600', icon: Calendar, text: 'Draft' },
             suspended: { color: 'bg-yellow-100 text-yellow-700', icon: AlertCircle, text: 'Suspended' }
         };
@@ -107,7 +110,7 @@ const AdminCompanies = () => {
                                 placeholder="Search companies..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#29a08e] outline-none"
                             />
                         </div>
                         <div className="flex items-center gap-3">
@@ -143,9 +146,13 @@ const AdminCompanies = () => {
                                         <tr key={company._id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-200">
+                                                    <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 border border-gray-200 overflow-hidden">
                                                         {company.logo ? (
-                                                            <img src={company.logo} className="w-6 h-6 object-contain" alt="" />
+                                                            <img 
+                                                                src={company.logo.startsWith('http') ? company.logo : `${API_BASE}${company.logo}`} 
+                                                                className="w-full h-full object-cover" 
+                                                                alt="" 
+                                                            />
                                                         ) : <Building2 className="w-5 h-5" />}
                                                     </div>
                                                     <div className="min-w-0">
@@ -177,7 +184,7 @@ const AdminCompanies = () => {
                                                 <div className="flex items-center justify-end gap-1">
                                                     <Link
                                                         to={`/admin/companies/${company._id}`}
-                                                        className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+                                                        className="p-1.5 text-gray-400 hover:text-[#29a08e] rounded-lg hover:bg-[#29a08e]/10 transition-colors"
                                                         title="View"
                                                     >
                                                         <Eye className="w-4 h-4" />

@@ -7,7 +7,6 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initi
         time: '',
         mode: 'Online',
         location: '',
-        meetLink: '',
         notes: ''
     });
 
@@ -18,7 +17,6 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initi
                 time: initialData?.time || '',
                 mode: initialData?.mode || 'Online',
                 location: initialData?.location || '',
-                meetLink: initialData?.meetLink || '',
                 notes: initialData?.notes || ''
             });
         }
@@ -56,7 +54,7 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initi
                                 min={new Date().toISOString().split('T')[0]}
                                 value={formData.date}
                                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#29a08e]/20 focus:border-[#29a08e] transition-all"
                             />
                         </div>
                         <div className="space-y-2">
@@ -68,7 +66,7 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initi
                                 required
                                 value={formData.time}
                                 onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-[#29a08e]/20 focus:border-[#29a08e] transition-all"
                             />
                         </div>
                     </div>
@@ -86,7 +84,7 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initi
                                         onChange={(e) => setFormData({ ...formData, mode: e.target.value })}
                                         className="sr-only peer"
                                     />
-                                    <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-gray-100 text-gray-500 font-bold text-sm transition-all peer-checked:border-blue-500 peer-checked:bg-blue-50 peer-checked:text-blue-600 hover:bg-gray-50">
+                                    <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-gray-100 text-gray-500 font-bold text-sm transition-all peer-checked:border-[#29a08e] peer-checked:bg-[#29a08e]/10 peer-checked:text-[#29a08e] hover:bg-gray-50">
                                         {mode === 'Online' ? <LinkIcon size={16} /> : <MapPin size={16} />}
                                         {mode}
                                     </div>
@@ -96,18 +94,16 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initi
                     </div>
 
                     {formData.mode === 'Online' ? (
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                                <LinkIcon size={12} /> Meeting Link (Google Meet / Zoom)
-                            </label>
-                            <input
-                                type="url"
-                                required
-                                placeholder="https://meet.google.com/..."
-                                value={formData.meetLink}
-                                onChange={(e) => setFormData({ ...formData, meetLink: e.target.value })}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-300"
-                            />
+                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl flex items-start gap-3">
+                            <div className="p-2 bg-[#29a08e]/20 rounded-full text-[#29a08e]">
+                                <LinkIcon size={16} />
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-bold text-[#228377]">In-App Video Call</h4>
+                                <p className="text-xs text-[#228377] mt-1 leading-relaxed">
+                                    A secure video call room ID will be automatically generated. You and the candidate can join directly from the dashboard at the scheduled time.
+                                </p>
+                            </div>
                         </div>
                     ) : (
                         <div className="space-y-2">
@@ -120,7 +116,7 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initi
                                 placeholder="e.g. Building 4, Conference Room A"
                                 value={formData.location}
                                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-300"
+                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#29a08e]/20 focus:border-[#29a08e] transition-all placeholder:text-gray-300"
                             />
                         </div>
                     )}
@@ -134,7 +130,7 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initi
                             placeholder="e.g. Please bring your portfolio..."
                             value={formData.notes}
                             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all placeholder:text-gray-300"
+                            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#29a08e]/20 focus:border-[#29a08e] transition-all placeholder:text-gray-300"
                         />
                     </div>
 
@@ -149,7 +145,7 @@ const ScheduleInterviewModal = ({ isOpen, onClose, onSubmit, isSubmitting, initi
                         <button
                             type="submit"
                             disabled={isSubmitting}
-                            className="px-6 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
+                            className="px-6 py-3 bg-[#29a08e] text-white rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-[#228377] transition-colors shadow-lg shadow-[#29a08e]/20 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
                         >
                             {isSubmitting ? (
                                 <>

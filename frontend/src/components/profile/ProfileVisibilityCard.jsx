@@ -13,7 +13,7 @@ const ProfileVisibilityCard = ({ isPublic, onToggle }) => {
                             checked={isPublic}
                             onChange={(e) => onToggle(e.target.checked)}
                         />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2D9B82]"></div>
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#29a08e]"></div>
                     </label>
                 </div>
 
@@ -28,12 +28,12 @@ const ProfileVisibilityCard = ({ isPublic, onToggle }) => {
 
                 <div className="mt-4 p-3 bg-green-50 rounded-xl border border-green-100/50">
                     <div className="flex items-start gap-2">
-                        <div className="w-4 h-4 bg-[#2D9B82] rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                        <div className="w-4 h-4 bg-[#29a08e] rounded-full flex items-center justify-center shrink-0 mt-0.5">
                             <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                             </svg>
                         </div>
-                        <p className="text-[10px] font-bold text-[#2D9B82] leading-tight">
+                        <p className="text-[10px] font-bold text-[#29a08e] leading-tight">
                             {isPublic ? 'Your profile is discoverable by recruiters searching for candidates.' : 'Recruiters can only see your profile if you apply to their jobs.'}
                         </p>
                     </div>

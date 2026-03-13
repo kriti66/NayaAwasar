@@ -11,7 +11,13 @@ export const getZegoToken = async (req, res) => {
     console.log(`[GET /api/interviews/${id}/zego-token] Request by ${userId}`);
 
     try {
-        const interview = await Interview.findById(id);
+        let interview;
+        if (id.startsWith('interview_')) {
+            interview = await Interview.findOne({ roomId: id });
+        } else {
+            interview = await Interview.findById(id);
+        }
+
         if (!interview) {
             return res.status(404).json({ message: 'Interview not found' });
         }
@@ -32,11 +38,23 @@ export const getZegoToken = async (req, res) => {
         // Generate Token
         const appId = Number(process.env.ZEGO_APP_ID);
         const serverSecret = process.env.ZEGO_SERVER_SECRET;
+        const userIdString = String(userId);
+        const roomIdString = String(interview.roomId);
+
+        // Debug logging
+        console.log(`[Zego Token Gen] AppID: ${appId} (Type: ${typeof appId})`);
+        console.log(`[Zego Token Gen] UserID: ${userIdString}`);
+        console.log(`[Zego Token Gen] RoomID: ${roomIdString}`);
+        console.log(`[Zego Token Gen] Secret Length: ${serverSecret ? serverSecret.length : 'MISSING'}`);
 
         // Validation for missing config
-        if (!process.env.ZEGO_APP_ID || !process.env.ZEGO_SERVER_SECRET) {
+        if (!appId || !serverSecret) {
             console.error("ZEGO_APP_ID or ZEGO_SERVER_SECRET missing in .env");
             return res.status(500).json({ message: 'Server configuration error' });
+        }
+
+        if (serverSecret.length !== 32) {
+            console.warn(`[WARNING] Zego Server Secret length is ${serverSecret.length}, expected 32. Authentication might fail.`);
         }
 
         // --- Time Window Access Control ---
@@ -45,7 +63,6 @@ export const getZegoToken = async (req, res) => {
         const [hours, minutes] = interview.time.split(':').map(Number);
 
         // Adjust the scheduled time based on the stored time string
-        // Assuming date/time are stored and processed in local/server time consistency
         scheduledTime.setHours(hours);
         scheduledTime.setMinutes(minutes);
         scheduledTime.setSeconds(0);
@@ -78,16 +95,26 @@ export const getZegoToken = async (req, res) => {
         // ----------------------------------
 
         const effectiveTimeInSeconds = 3600;
-        const payload = '';
+        const payloadObject = {
+            room_id: roomIdString,
+            privilege: {
+                1: 1, // login room
+                2: 1  // publish stream
+            },
+            stream_id_list: null
+        };
+        const payload = JSON.stringify(payloadObject);
 
-        const token = generateToken04(appId, userId, serverSecret, effectiveTimeInSeconds, payload);
+        const token = generateToken04(appId, userIdString, serverSecret, effectiveTimeInSeconds, payload);
+
+        console.log(`[Zego Token Gen] Token generated successfully.`);
 
         res.json({
             appId,
             token,
-            roomId: interview.roomId,
-            userId,
-            userName: req.user.fullName
+            roomId: roomIdString,
+            userId: userIdString,
+            userName: req.user.fullName || "User"
         });
     } catch (error) {
         console.error("Token generation error:", error);

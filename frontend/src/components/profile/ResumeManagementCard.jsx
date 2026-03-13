@@ -22,7 +22,7 @@ const ResumeManagementCard = ({ profile, onDownloadPDF, onUploadClick, onAutoGen
                 <button
                     onClick={onAutoGenerate}
                     disabled={isGenerating}
-                    className="w-full py-4 bg-[#F0FDF4] border border-[#2D9B82]/20 text-[#2D9B82] rounded-2xl flex items-center justify-center gap-3 hover:bg-[#2D9B82] hover:text-white transition-all group shadow-sm disabled:opacity-70 disabled:cursor-not-allowed mb-4"
+                    className="w-full py-4 bg-[#F0FDF4] border border-[#29a08e]/20 text-[#29a08e] rounded-2xl flex items-center justify-center gap-3 hover:bg-[#29a08e] hover:text-white transition-all group shadow-sm disabled:opacity-70 disabled:cursor-not-allowed mb-4"
                 >
                     {isGenerating ? (
                         <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
@@ -40,11 +40,11 @@ const ResumeManagementCard = ({ profile, onDownloadPDF, onUploadClick, onAutoGen
                 </div>
 
                 {/* Upload Section */}
-                <label className="w-full py-8 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-[#2D9B82]/50 hover:bg-gray-50 transition-all group mb-6">
-                    <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:text-[#2D9B82] group-hover:scale-110 transition-all mb-3">
+                <label className="w-full py-8 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:border-[#29a08e]/50 hover:bg-gray-50 transition-all group mb-6">
+                    <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:text-[#29a08e] group-hover:scale-110 transition-all mb-3">
                         <Upload size={24} />
                     </div>
-                    <span className="text-sm font-bold text-gray-700 group-hover:text-[#2D9B82] transition-colors">Upload Custom Resume</span>
+                    <span className="text-sm font-bold text-gray-700 group-hover:text-[#29a08e] transition-colors">Upload Custom Resume</span>
                     <span className="text-[10px] font-semibold text-gray-400 mt-1">PDF, DOC, DOCX up to 5MB</span>
                     <input type="file" className="hidden" accept=".pdf,.doc,.docx" onChange={onUploadClick} />
                 </label>
@@ -53,7 +53,7 @@ const ResumeManagementCard = ({ profile, onDownloadPDF, onUploadClick, onAutoGen
                 {hasResume && (
                     <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
                         <div className="flex items-center gap-3 mb-3">
-                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-[#2D9B82] shadow-sm">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-[#29a08e] shadow-sm">
                                 <FileText size={20} />
                             </div>
                             <div className="flex-1 min-w-0">
@@ -63,7 +63,7 @@ const ResumeManagementCard = ({ profile, onDownloadPDF, onUploadClick, onAutoGen
                         </div>
                         <button
                             onClick={onDownloadPDF}
-                            className="w-full py-2.5 bg-white border border-gray-200 text-gray-600 text-xs font-bold rounded-lg flex items-center justify-center gap-2 hover:bg-[#2D9B82] hover:text-white hover:border-[#2D9B82] transition-all shadow-sm"
+                            className="w-full py-2.5 bg-white border border-gray-200 text-gray-600 text-xs font-bold rounded-lg flex items-center justify-center gap-2 hover:bg-[#29a08e] hover:text-white hover:border-[#29a08e] transition-all shadow-sm"
                         >
                             <Download size={14} />
                             Download Current Resume

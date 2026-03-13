@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Naya Awasar theme */
+:root {
+    --naya-teal: #29a08e;
+    --naya-teal-hover: #228377;
+    --naya-dark: #212121;
+    --naya-divider: #e0e0e0;
+}
+
 /* Custom Scrollbar */
 @layer utilities {
     .scrollbar-hide::-webkit-scrollbar {

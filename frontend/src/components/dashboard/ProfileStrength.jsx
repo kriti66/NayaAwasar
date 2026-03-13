@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom';
 
 const ProfileStrength = ({ profileStrength }) => {
     const metrics = [
-        { label: 'Profile Completeness', value: profileStrength.completeness, color: 'bg-blue-600' },
+        { label: 'Profile Completeness', value: profileStrength.completeness, color: 'bg-[#29a08e]' },
         { label: 'Resume Quality', value: profileStrength.resumeQuality, color: 'bg-blue-400' },
-        { label: 'Skills Match', value: profileStrength.skillsMatch, color: 'bg-blue-500' },
+        { label: 'Skills Match', value: profileStrength.skillsMatch, color: 'bg-[#29a08e]/90' },
         { label: 'Activity Level', value: profileStrength.activityLevel, color: 'bg-blue-300' }
     ];
 
@@ -18,7 +18,7 @@ const ProfileStrength = ({ profileStrength }) => {
                     <div key={metric.label}>
                         <div className="flex justify-between text-[11px] font-bold text-gray-500 uppercase tracking-tighter mb-2">
                             <span>{metric.label}</span>
-                            <span className="text-blue-600">{metric.value}%</span>
+                            <span className="text-[#29a08e]">{metric.value}%</span>
                         </div>
                         <div className="h-1.5 bg-gray-50 rounded-full overflow-hidden">
                             <div
@@ -32,7 +32,7 @@ const ProfileStrength = ({ profileStrength }) => {
 
             <Link
                 to="/seeker/profile"
-                className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-bold flex items-center justify-center hover:bg-blue-700 transition-all active:scale-95 shadow-lg shadow-blue-100"
+                className="w-full py-3 bg-[#29a08e] text-white rounded-xl text-sm font-bold flex items-center justify-center hover:bg-[#228377] transition-all active:scale-95 shadow-lg shadow-[#29a08e]/10"
             >
                 Improve Profile
             </Link>

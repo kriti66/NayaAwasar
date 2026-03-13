@@ -15,33 +15,14 @@ const AI_SERVICE_URL = 'http://localhost:5002'; // Ensure this matches Flask por
  */
 router.post('/recommend', requireAuth, async (req, res) => {
     try {
-        const { skills, preferences } = req.body;
+        const userId = req.user.id;
+        console.log(`🤖 Requesting AI recommendations for user: ${userId}`);
 
-        // If no skills provided in body, fallback to user profile skills if available
-        let querySkills = skills;
-        if (!querySkills && req.user && req.user.skills) {
-            querySkills = Array.isArray(req.user.skills)
-                ? req.user.skills.join(', ')
-                : req.user.skills;
-        }
-
-        if (!querySkills) {
-            return res.status(400).json({
-                message: 'Please provide skills for recommendation or update your profile.'
-            });
-        }
-
-        console.log(`🤖 Requesting AI recommendations for user: ${req.user._id}`);
-        console.log(`📝 Skills: ${querySkills.substring(0, 50)}...`);
-
-        // Forward to Flask Microservice
+        // Forward to new Flask Microservice endpoint
         try {
-            const aiResponse = await axios.post(`${AI_SERVICE_URL}/recommend`, {
-                skills: querySkills,
-                preferences: preferences || {}
-            });
+            const aiResponse = await axios.post(`${AI_SERVICE_URL}/recommend-jobs/${userId}`);
 
-            console.log(`✅ AI Service responded with ${aiResponse.data.count} jobs`);
+            console.log(`✅ AI Service responded with ${aiResponse.data.count || 0} jobs`);
             res.json(aiResponse.data);
 
         } catch (axiosError) {
@@ -53,7 +34,7 @@ router.post('/recommend', requireAuth, async (req, res) => {
             }
             res.status(500).json({
                 message: 'Failed to fetch recommendations from AI service',
-                error: axiosError.message
+                error: axiosError.response?.data?.error || axiosError.message
             });
         }
 

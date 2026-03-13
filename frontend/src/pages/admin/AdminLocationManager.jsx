@@ -69,7 +69,7 @@ const AdminLocationManager = () => {
 
                         {loading ? (
                             <div className="py-20 flex flex-col items-center justify-center space-y-4">
-                                <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                                <div className="w-8 h-8 border-4 border-[#29a08e]/20 border-t-[#29a08e] rounded-full animate-spin"></div>
                                 <p className="text-xs text-gray-400 font-medium">Loading details...</p>
                             </div>
                         ) : (
@@ -91,7 +91,7 @@ const AdminLocationManager = () => {
                                             name="address"
                                             value={formData.address}
                                             onChange={handleChange}
-                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#29a08e] transition-all outline-none"
                                         />
                                     </div>
 
@@ -103,7 +103,7 @@ const AdminLocationManager = () => {
                                             name="latitude"
                                             value={formData.latitude}
                                             onChange={handleChange}
-                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#29a08e] transition-all outline-none"
                                         />
                                     </div>
                                     <div className="space-y-1.5">
@@ -114,7 +114,7 @@ const AdminLocationManager = () => {
                                             name="longitude"
                                             value={formData.longitude}
                                             onChange={handleChange}
-                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#29a08e] transition-all outline-none"
                                         />
                                     </div>
 
@@ -125,7 +125,7 @@ const AdminLocationManager = () => {
                                             name="phone"
                                             value={formData.phone}
                                             onChange={handleChange}
-                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#29a08e] transition-all outline-none"
                                         />
                                     </div>
                                     <div className="space-y-1.5">
@@ -135,7 +135,7 @@ const AdminLocationManager = () => {
                                             name="email"
                                             value={formData.email}
                                             onChange={handleChange}
-                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all outline-none"
+                                            className="block w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-semibold text-gray-900 focus:bg-white focus:ring-2 focus:ring-[#29a08e] transition-all outline-none"
                                         />
                                     </div>
                                 </div>
@@ -144,7 +144,7 @@ const AdminLocationManager = () => {
                                     <button
                                         type="submit"
                                         disabled={saving}
-                                        className="w-full py-3 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                                        className="w-full py-3 bg-[#29a08e] text-white rounded-lg text-sm font-bold hover:bg-[#228377] transition-colors shadow-sm disabled:opacity-50"
                                     >
                                         {saving ? 'Updating...' : 'Save Location'}
                                     </button>

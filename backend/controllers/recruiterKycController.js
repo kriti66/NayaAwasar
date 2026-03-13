@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import RecruiterKyc from '../models/RecruiterKyc.js';
 import ActivityLog from '../models/ActivityLog.js';
 import { createNotification } from './notificationController.js';
+import { logActivity } from '../utils/activityLogger.js';
 
 // Submit Recruiter KYC
 // Submit Recruiter KYC
@@ -44,7 +45,18 @@ export const submitRecruiterKyc = async (req, res) => {
         // Check if exists
         let existingKyc = await RecruiterKyc.findOne({ userId });
 
+        if (existingKyc && existingKyc.status === 'approved') {
+            return res.status(400).json({ success: false, message: 'KYC is already approved.' });
+        }
+
+        if (existingKyc && existingKyc.status === 'resubmission_locked') {
+            return res.status(403).json({ success: false, message: 'You have reached the maximum verification resubmission limit. Please contact admin/support for manual review.' });
+        }
+
         if (existingKyc) {
+            if (existingKyc.status === 'rejected') {
+                kycData.resubmissionCount = (existingKyc.resubmissionCount || 0) + 1;
+            }
             console.log(`[KYC] Updating existing record for user: ${userId}`);
             // If it was already approved, maybe we shouldn't allow simple overwrite?
             // But usually re-submission implies updating details.
@@ -65,12 +77,12 @@ export const submitRecruiterKyc = async (req, res) => {
         });
 
         // Log Activity
-        await ActivityLog.create({
-            actorId: userId,
-            actorRole: 'recruiter',
-            action: 'KYC_SUBMITTED',
-            message: `Recruiter submitted KYC verification from ${req.ip}`
-        });
+        // Log Activity
+        await logActivity(
+            userId,
+            'KYC_SUBMITTED',
+            `Recruiter ${fullName || 'User'} submitted KYC verification.`
+        );
 
         res.status(200).json({ success: true, message: 'KYC submitted successfully.' });
 
@@ -91,7 +103,9 @@ export const getRecruiterKycStatus = async (req, res) => {
         res.json({
             status: user.recruiterKycStatus,
             rejectionReason: kyc?.rejectionReason || null,
-            submittedAt: kyc?.updatedAt || kyc?.createdAt
+            submittedAt: kyc?.updatedAt || kyc?.createdAt,
+            kycData: kyc,
+            resubmissionCount: kyc?.resubmissionCount || 0
         });
     } catch (error) {
         console.error("[KYC Status Error]:", error);
@@ -128,45 +142,62 @@ export const reviewRecruiterKyc = async (req, res) => {
         const kyc = await RecruiterKyc.findById(kycId);
         if (!kyc) return res.status(404).json({ message: 'KYC not found.' });
 
-        // Update KYC
-        kyc.status = decision;
+        let finalDecision = decision;
+        if (decision === 'rejected') {
+            if (kyc.resubmissionCount >= 3) {
+                finalDecision = 'resubmission_locked';
+            }
+            kyc.rejectionReason = reason;
+            kyc.rejectionHistory.push({
+                reason: reason,
+                rejectedAt: new Date(),
+                rejectedBy: req.user.id
+            });
+        }
+
+        kyc.status = finalDecision;
         kyc.reviewedBy = req.user.id;
         kyc.reviewedAt = new Date();
-        if (decision === 'rejected') {
-            kyc.rejectionReason = reason;
-        }
         await kyc.save();
 
         // Update User
         const updatedUser = await User.findByIdAndUpdate(kyc.userId, {
-            recruiterKycStatus: decision,
-            kycStatus: decision, // Sync global status
-            isKycVerified: decision === 'approved',
-            kycRejectionReason: decision === 'rejected' ? reason : null,
-            kycVerifiedAt: decision === 'approved' ? new Date() : null
+            recruiterKycStatus: finalDecision,
+            kycStatus: finalDecision, // Sync global status
+            isKycVerified: finalDecision === 'approved',
+            kycRejectionReason: finalDecision === 'rejected' || finalDecision === 'resubmission_locked' ? reason : null,
+            kycVerifiedAt: finalDecision === 'approved' ? new Date() : null
         });
 
         // Notify Recruiter
+        let messageTitle = finalDecision === 'resubmission_locked' ? 'Verification Locked' : `Recruiter KYC ${finalDecision === 'approved' ? 'Approved' : 'Rejected'}`;
+        let messageBody = finalDecision === 'approved'
+                ? 'Your Recruiter Identity has been verified. You can now post jobs and create a company profile.'
+                : `Your Recruiter KYC was rejected. Reason: ${reason}`;
+        if (finalDecision === 'resubmission_locked') {
+            messageBody += " You have reached the maximum resubmission limit. Please contact support.";
+        } else if (finalDecision === 'rejected') {
+            messageBody += ` You have ${3 - (kyc.resubmissionCount || 0)} resubmission attempts remaining. Please update your documents and resubmit.`;
+        }
+
         await createNotification({
             recipient: kyc.userId,
             type: 'kyc_update',
-            title: `Recruiter KYC ${decision === 'approved' ? 'Approved' : 'Rejected'}`,
-            message: decision === 'approved'
-                ? 'Your Recruiter Identity has been verified. You can now post jobs and create a company profile.'
-                : `Your Recruiter KYC was rejected. Reason: ${reason}`,
+            title: messageTitle,
+            message: messageBody,
             link: '/kyc/recruiter',
             sender: req.user.id
         });
 
         // Log Activity
-        await ActivityLog.create({
-            actorId: req.user.id,
-            actorRole: 'admin',
-            action: `KYC_${decision.toUpperCase()}`,
-            message: `Admin ${decision} recruiter KYC for ${updatedUser ? updatedUser.fullName : kyc.fullName}.`
-        });
+        await logActivity(
+            req.user.id,
+            `KYC_${finalDecision.toUpperCase()}`,
+            `Admin ${finalDecision} recruiter KYC for ${updatedUser ? updatedUser.fullName : kyc.fullName}.`,
+            { actorRole: 'admin' }
+        );
 
-        res.json({ message: `KYC ${decision} successfully.` });
+        res.json({ message: `KYC ${finalDecision} successfully.` });
 
     } catch (error) {
         console.error("KYC Review Error:", error);

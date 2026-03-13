@@ -8,13 +8,13 @@ const WelcomeBanner = ({ user, interviewCount }) => {
                     Welcome back, {user?.fullName?.split(' ')[0] || 'Member'}
                 </h1>
                 <p className="text-lg text-gray-600 mb-8">
-                    You have <span className="text-blue-600 font-bold">{interviewCount} interview invitation{interviewCount !== 1 ? 's' : ''}</span> awaiting your action.
+                    You have <span className="text-[#29a08e] font-bold">{interviewCount} interview invitation{interviewCount !== 1 ? 's' : ''}</span> awaiting your action.
                 </p>
                 <div className="flex flex-wrap gap-4">
-                    <Link to="/seeker/interviews" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95">
+                    <Link to="/seeker/interviews" className="px-6 py-3 bg-[#29a08e] text-white rounded-xl font-bold shadow-lg shadow-[#29a08e]/20 hover:bg-[#228377] transition-all active:scale-95">
                         Respond to Interview
                     </Link>
-                    <Link to="/seeker/search" className="px-6 py-3 bg-white text-blue-600 border border-blue-100 rounded-xl font-bold hover:bg-blue-50 transition-all active:scale-95">
+                    <Link to="/seeker/search" className="px-6 py-3 bg-white text-[#29a08e] border border-[#29a08e]/20 rounded-xl font-bold hover:bg-[#29a08e]/5 transition-all active:scale-95">
                         Browse Career Matches
                     </Link>
                 </div>
@@ -29,8 +29,8 @@ const WelcomeBanner = ({ user, interviewCount }) => {
             </div>
 
             {/* Background decorative elements */}
-            <div className="absolute top-[-50px] left-[-50px] w-64 h-64 bg-blue-100 rounded-full opacity-30"></div>
-            <div className="absolute bottom-[-20px] right-20 w-32 h-32 bg-blue-200 rounded-full opacity-20"></div>
+            <div className="absolute top-[-50px] left-[-50px] w-64 h-64 bg-[#29a08e]/20 rounded-full opacity-30"></div>
+            <div className="absolute bottom-[-20px] right-20 w-32 h-32 bg-[#29a08e]/30 rounded-full opacity-20"></div>
         </div>
     );
 };

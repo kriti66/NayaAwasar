@@ -23,7 +23,7 @@ const Education = ({ isEditing, profile, formData, onItemsChange }) => {
             <div className="space-y-6">
                 <button
                     onClick={handleAdd}
-                    className="w-full py-4 border-2 border-dashed border-gray-100 rounded-[24px] text-gray-400 hover:border-[#2D9B82]/30 hover:text-[#2D9B82] hover:bg-[#F0FDF4]/50 transition-all font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                    className="w-full py-4 border-2 border-dashed border-gray-100 rounded-[24px] text-gray-400 hover:border-[#29a08e]/30 hover:text-[#29a08e] hover:bg-[#F0FDF4]/50 transition-all font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"
                 >
                     <Plus size={16} />
                     Add Education
@@ -46,7 +46,7 @@ const Education = ({ isEditing, profile, formData, onItemsChange }) => {
                                     placeholder="e.g. B.Tech in Computer Science"
                                     value={edu.degree}
                                     onChange={(e) => updateItem(idx, 'degree', e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] text-sm font-bold text-gray-800 transition-all"
+                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] text-sm font-bold text-gray-800 transition-all"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -56,7 +56,7 @@ const Education = ({ isEditing, profile, formData, onItemsChange }) => {
                                     placeholder="e.g. Kathmandu University"
                                     value={edu.institution}
                                     onChange={(e) => updateItem(idx, 'institution', e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] text-sm font-bold text-gray-800 transition-all"
+                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] text-sm font-bold text-gray-800 transition-all"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -66,7 +66,7 @@ const Education = ({ isEditing, profile, formData, onItemsChange }) => {
                                     placeholder="e.g. 2018 - 2022"
                                     value={edu.year}
                                     onChange={(e) => updateItem(idx, 'year', e.target.value)}
-                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] text-sm font-bold text-gray-800 transition-all"
+                                    className="w-full px-5 py-3.5 bg-white border border-gray-200 rounded-2xl outline-none focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] text-sm font-bold text-gray-800 transition-all"
                                 />
                             </div>
                         </div>
@@ -80,11 +80,11 @@ const Education = ({ isEditing, profile, formData, onItemsChange }) => {
         <div className="space-y-8">
             {profile.education?.length > 0 ? profile.education.map((edu, idx) => (
                 <div key={idx} className="flex gap-6 group">
-                    <div className="w-12 h-12 rounded-2xl bg-gray-50 text-gray-400 group-hover:text-[#2D9B82] group-hover:border-[#2D9B82]/20 border border-gray-100 flex items-center justify-center shrink-0 transition-all shadow-sm">
+                    <div className="w-12 h-12 rounded-2xl bg-gray-50 text-gray-400 group-hover:text-[#29a08e] group-hover:border-[#29a08e]/20 border border-gray-100 flex items-center justify-center shrink-0 transition-all shadow-sm">
                         <GraduationCap size={22} />
                     </div>
                     <div>
-                        <h4 className="text-lg font-bold text-gray-900 group-hover:text-[#2D9B82] transition-colors">{edu.degree}</h4>
+                        <h4 className="text-lg font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors">{edu.degree}</h4>
                         <p className="text-sm font-semibold text-gray-500 mb-2">{edu.institution}</p>
                         <div className="flex items-center gap-2 text-gray-400">
                             <Calendar size={12} />

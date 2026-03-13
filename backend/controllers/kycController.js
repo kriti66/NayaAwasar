@@ -1,5 +1,6 @@
 import KYC from '../models/KYC.js';
 import User from '../models/User.js';
+import Company from '../models/Company.js';
 import { validateJobSeekerKYC, validateRecruiterKYC } from '../services/kycValidation.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { createNotification } from './notificationController.js';
@@ -33,6 +34,9 @@ export const submitKYC = async (req, res) => {
         if (existingKYC && existingKYC.status === 'approved') {
             return res.status(400).json({ message: 'KYC is already approved' });
         }
+        if (existingKYC && existingKYC.status === 'resubmission_locked') {
+            return res.status(403).json({ message: 'You have reached the maximum verification resubmission limit. Please contact admin/support for manual review.' });
+        }
 
         const kycPayload = {
             userId,
@@ -65,6 +69,9 @@ export const submitKYC = async (req, res) => {
         };
 
         if (existingKYC) {
+            if (existingKYC.status === 'rejected') {
+                kycPayload.resubmissionCount = (existingKYC.resubmissionCount || 0) + 1;
+            }
             existingKYC = await KYC.findOneAndUpdate(
                 { userId },
                 { $set: kycPayload },
@@ -80,6 +87,37 @@ export const submitKYC = async (req, res) => {
             isKycVerified: false,
             kycRejectionReason: null
         });
+
+        // Also create/update company for recruiters
+        if (userRole === 'recruiter') {
+            let company = await Company.findOne({ recruiters: userId });
+            
+            const companyPayload = {
+                name: body.companyName?.trim(),
+                industry: body.industry?.trim() || 'Not Specified',
+                size: '1-10 employees', // Default required field
+                headquarters: body.companyAddress?.trim() || 'Not Specified',
+                contact: {
+                    email: body.officialEmail?.trim() || req.user.email,
+                    address: body.companyAddress?.trim() || 'Not Specified'
+                },
+                website: body.website?.trim() || undefined,
+                logo: body.companyLogo || undefined,
+                status: 'waiting_for_recruiter_approval'
+            };
+
+            if (company) {
+                 await Company.findByIdAndUpdate(company._id, { 
+                     $set: { ...companyPayload, status: 'waiting_for_recruiter_approval' },
+                     $addToSet: { recruiters: userId }
+                 });
+            } else {
+                 await Company.create({
+                     ...companyPayload,
+                     recruiters: [userId]
+                 });
+            }
+        }
 
         // Log KYC submission activity
         await logActivity(
@@ -111,13 +149,23 @@ export const getKYCStatus = async (req, res) => {
 
         if (!user) return res.status(404).json({ message: 'User not found' });
 
+        let companyStatus = null;
+        if (req.user.role === 'recruiter') {
+             const company = await Company.findOne({ recruiters: userId }).select('status').lean();
+             if (company) {
+                 companyStatus = company.status;
+             }
+        }
+
         return res.json({
             kycStatus: user.kycStatus || 'not_submitted',
             isKycSubmitted: user.isKycSubmitted || false,
             isKycVerified: user.isKycVerified || false,
             kycRejectionReason: user.kycRejectionReason || null,
             kycData: kyc || null,
-            kycCompletedAt: user.kycCompletedAt || null
+            kycCompletedAt: user.kycCompletedAt || null,
+            companyStatus: companyStatus,
+            resubmissionCount: kyc?.resubmissionCount || 0
         });
     } catch (error) {
         console.error('KYC Status Error:', error);
@@ -199,10 +247,18 @@ export const approveKYCByUserId = async (req, res) => {
             recipient: userId,
             type: 'kyc_update',
             title: 'KYC Approved',
-            message: 'Your KYC application has been approved. You now have full access to platform features.',
-            link: '/dashboard', // Changed from /kyc/status since dashboard is more relevant now
+            message: 'Your personal KYC application has been approved.',
+            link: '/dashboard', 
             sender: req.user.id
         });
+
+        // If recruiter, also advance Company status to 'pending' from 'waiting_for_recruiter_approval'
+        if (approvedUser?.role === 'recruiter') {
+             await Company.updateMany(
+                 { recruiters: userId, status: 'waiting_for_recruiter_approval' },
+                 { $set: { status: 'pending', 'adminFields.moderationStatus': 'under_review' } }
+             );
+        }
 
         return res.json({ success: true, message: 'KYC approved successfully' });
     } catch (error) {
@@ -225,24 +281,32 @@ export const rejectKYCByUserId = async (req, res) => {
 
         const reason = rejectionReason.trim();
         // Search by either the associated userId OR the KYC record's own _id
-        const kyc = await KYC.findOneAndUpdate(
-            {
-                $or: [
-                    { userId: userId },
-                    { _id: userId }
-                ],
-                status: 'pending'
-            },
-            { status: 'rejected', rejectionReason: reason },
-            { new: true }
-        );
+        const kyc = await KYC.findOne({
+            $or: [
+                { userId: userId },
+                { _id: userId }
+            ],
+            status: 'pending'
+        });
 
         if (!kyc) {
             return res.status(404).json({ message: 'KYC record not found or not pending' });
         }
 
+        const nextStatus = kyc.resubmissionCount >= 3 ? 'resubmission_locked' : 'rejected';
+
+        kyc.status = nextStatus;
+        kyc.rejectionReason = reason;
+        kyc.rejectionHistory.push({
+            reason: reason,
+            rejectedAt: new Date(),
+            rejectedBy: req.user.id
+        });
+
+        await kyc.save();
+
         await User.findByIdAndUpdate(userId, {
-            kycStatus: 'rejected',
+            kycStatus: nextStatus,
             isKycVerified: false,
             kycRejectionReason: reason
         });
@@ -257,14 +321,26 @@ export const rejectKYCByUserId = async (req, res) => {
         );
 
         // Notify User
+        const messageTitle = nextStatus === 'resubmission_locked' ? 'Verification Locked' : 'KYC Application Rejected';
+        let messageBody = `Your identity KYC application was rejected. Reason: ${reason}. `;
+        if (nextStatus === 'resubmission_locked') {
+            messageBody += "You have reached the maximum resubmission limit. Please contact support.";
+        } else {
+            messageBody += `You have ${3 - (kyc.resubmissionCount || 0)} resubmission attempts remaining. Please update your documents and resubmit.`;
+        }
+
         await createNotification({
             recipient: userId,
             type: 'kyc_update',
-            title: 'KYC Application Rejected',
-            message: `Your KYC application was rejected. Reason: ${reason}. Please update your documents and resubmit.`,
+            title: messageTitle,
+            message: messageBody,
             link: '/kyc/status',
             sender: req.user.id
         });
+
+        // Keep company waiting_for_recruiter_approval but it is implicitly blocked.
+        // The company cannot be approved.
+
 
         return res.json({ success: true, message: 'KYC rejected successfully' });
     } catch (error) {

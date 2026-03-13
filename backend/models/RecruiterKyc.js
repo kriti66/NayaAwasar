@@ -38,7 +38,7 @@ const recruiterKycSchema = new mongoose.Schema({
     // Status Tracking
     status: {
         type: String,
-        enum: ['pending', 'approved', 'rejected'],
+        enum: ['pending', 'approved', 'rejected', 'resubmission_locked'],
         default: 'pending'
     },
     submissionDate: { type: Date, default: Date.now },
@@ -47,7 +47,13 @@ const recruiterKycSchema = new mongoose.Schema({
         ref: 'User'
     },
     reviewedAt: { type: Date },
-    rejectionReason: { type: String }
+    rejectionReason: { type: String },
+    resubmissionCount: { type: Number, default: 0 },
+    rejectionHistory: [{
+        reason: { type: String, required: true },
+        rejectedAt: { type: Date, default: Date.now },
+        rejectedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+    }]
 }, {
     timestamps: true
 });

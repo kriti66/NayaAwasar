@@ -63,7 +63,7 @@ const EditJob = () => {
     if (loading) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-                <div className="w-12 h-12 border-4 border-emerald-100 border-t-[#2D9B82] rounded-full animate-spin"></div>
+                <div className="w-12 h-12 border-4 border-emerald-100 border-t-[#29a08e] rounded-full animate-spin"></div>
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Loading...</p>
             </div>
         );
@@ -82,7 +82,7 @@ const EditJob = () => {
                         <button
                             type="button"
                             onClick={() => navigate('/recruiter/jobs')}
-                            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D9B82]"
+                            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e]"
                         >
                             Cancel
                         </button>
@@ -100,7 +100,7 @@ const EditJob = () => {
                                     value={formData.title}
                                     onChange={handleChange}
                                     required
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2D9B82] focus:ring-[#2D9B82] sm:text-sm px-4 py-3 border"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3 border"
                                 />
                             </div>
                             <div>
@@ -111,7 +111,7 @@ const EditJob = () => {
                                     value={formData.company_name}
                                     onChange={handleChange}
                                     required
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2D9B82] focus:ring-[#2D9B82] sm:text-sm px-4 py-3 border"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3 border"
                                 />
                             </div>
                             <div>
@@ -122,7 +122,7 @@ const EditJob = () => {
                                     value={formData.location}
                                     onChange={handleChange}
                                     required
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2D9B82] focus:ring-[#2D9B82] sm:text-sm px-4 py-3 border"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3 border"
                                 />
                             </div>
                             <div>
@@ -131,7 +131,7 @@ const EditJob = () => {
                                     name="type"
                                     value={formData.type}
                                     onChange={handleChange}
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2D9B82] focus:ring-[#2D9B82] sm:text-sm px-4 py-3 border"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3 border"
                                 >
                                     <option>Full-time</option>
                                     <option>Part-time</option>
@@ -146,7 +146,7 @@ const EditJob = () => {
                                     name="salary_range"
                                     value={formData.salary_range}
                                     onChange={handleChange}
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2D9B82] focus:ring-[#2D9B82] sm:text-sm px-4 py-3 border"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3 border"
                                 />
                             </div>
                             <div className="col-span-2">
@@ -157,7 +157,7 @@ const EditJob = () => {
                                     onChange={handleChange}
                                     required
                                     rows="5"
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2D9B82] focus:ring-[#2D9B82] sm:text-sm px-4 py-3 border"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3 border"
                                 ></textarea>
                             </div>
                             <div className="col-span-2">
@@ -167,7 +167,7 @@ const EditJob = () => {
                                     value={formData.requirements}
                                     onChange={handleChange}
                                     rows="5"
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#2D9B82] focus:ring-[#2D9B82] sm:text-sm px-4 py-3 border"
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3 border"
                                 ></textarea>
                             </div>
                         </div>
@@ -175,13 +175,13 @@ const EditJob = () => {
                             <button
                                 type="button"
                                 onClick={() => navigate('/recruiter/jobs')}
-                                className="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D9B82]"
+                                className="px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e]"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-[#2D9B82] hover:bg-[#25836d] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#2D9B82]"
+                                className="px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-[#29a08e] hover:bg-[#228377] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e]"
                             >
                                 Update Job
                             </button>

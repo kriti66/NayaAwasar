@@ -84,7 +84,7 @@ const KycGuard = ({ children, customMessage = null }) => {
                             </button>
                             <button
                                 onClick={() => navigate(getTargetLink())}
-                                className="px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20 text-sm"
+                                className="px-5 py-2.5 bg-[#29a08e] text-white font-bold rounded-xl hover:bg-[#228377] transition-colors shadow-lg shadow-[#29a08e]/20 text-sm"
                             >
                                 {getButtonText()}
                             </button>

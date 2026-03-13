@@ -29,9 +29,9 @@ const RecommendedActions = ({ actions }) => {
                     <Link
                         key={action.id}
                         to={getLink(action.type)}
-                        className="flex items-center gap-4 p-4 border border-gray-50 rounded-2xl hover:border-blue-100 hover:bg-blue-50/30 transition-all group"
+                        className="flex items-center gap-4 p-4 border border-gray-50 rounded-2xl hover:border-[#29a08e]/20 hover:bg-[#29a08e]/5 transition-all group"
                     >
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 ${action.urgency === 'high' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl shrink-0 ${action.urgency === 'high' ? 'bg-red-50 text-red-500' : 'bg-[#29a08e]/10 text-[#29a08e]'}`}>
                             {action.urgency === 'high' ? (
                                 <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -48,7 +48,7 @@ const RecommendedActions = ({ actions }) => {
                                 {action.urgency === 'high' ? 'Priority action required' : 'Improve your discoverability'}
                             </p>
                         </div>
-                        <svg className="w-5 h-5 text-gray-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-5 h-5 text-gray-300 group-hover:text-[#29a08e] group-hover:translate-x-1 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>
                     </Link>

@@ -22,12 +22,12 @@ const ProfileCompleteness = ({ profile }) => {
         <div className="bg-white rounded-3xl border border-gray-100 p-8 shadow-sm">
             <div className="flex justify-between items-center mb-6">
                 <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Profile Completeness</h3>
-                <span className="text-sm font-black text-blue-600 tracking-tighter">{score}%</span>
+                <span className="text-sm font-black text-[#29a08e] tracking-tighter">{score}%</span>
             </div>
 
             <div className="h-2 bg-gray-50 rounded-full overflow-hidden mb-8">
                 <div
-                    className="h-full bg-blue-600 rounded-full transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(37,99,235,0.3)]"
+                    className="h-full bg-[#29a08e] rounded-full transition-all duration-1000 ease-out shadow-[0_0_8px_rgba(41,160,142,0.3)]"
                     style={{ width: `${score}%` }}
                 ></div>
             </div>
@@ -35,7 +35,7 @@ const ProfileCompleteness = ({ profile }) => {
             {score < 100 ? (
                 <div className="space-y-4">
                     <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
+                        <div className="w-4 h-4 rounded-full bg-[#29a08e]/10 text-[#29a08e] flex items-center justify-center">
                             <svg size={10} fill="none" viewBox="0 0 24 24" stroke="currentColor" className="w-2.5 h-2.5">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
@@ -45,7 +45,7 @@ const ProfileCompleteness = ({ profile }) => {
                     <div className="grid grid-cols-1 gap-2.5">
                         {missing.slice(0, 3).map((field, i) => (
                             <div key={i} className="flex items-center gap-2 px-3 py-2 bg-gray-50/50 rounded-lg border border-gray-50 group">
-                                <div className="w-1.5 h-1.5 rounded-full bg-gray-300 group-hover:bg-blue-400 transition-colors"></div>
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-300 group-hover:bg-[#29a08e] transition-colors"></div>
                                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight group-hover:text-gray-600 transition-colors">{field}</span>
                             </div>
                         ))}

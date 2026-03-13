@@ -66,12 +66,14 @@ const AdminCompanyReview = () => {
         <div className="min-h-screen flex flex-col bg-gray-100">
             <DashboardNavbar />
             <div className="flex-1 flex items-center justify-center">
-                <div className="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                <div className="w-10 h-10 border-4 border-[#29a08e]/20 border-t-[#29a08e] rounded-full animate-spin"></div>
             </div>
         </div>
     );
 
     if (!company) return null;
+
+    const isRecruiterApproved = company.recruiters?.some(r => r.kycStatus === 'approved');
 
     return (
         <div className="min-h-screen flex flex-col bg-gray-100">
@@ -89,10 +91,21 @@ const AdminCompanyReview = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
+                        {!isRecruiterApproved && (company.status === 'pending' || company.status === 'waiting_for_recruiter_approval') && (
+                            <span className="text-xs text-orange-600 font-bold flex items-center gap-1 bg-orange-50 px-3 py-1.5 rounded-md mr-2">
+                                <AlertCircle className="w-4 h-4" /> Company review locked until recruiter identity is approved.
+                            </span>
+                        )}
                         {company.status !== 'approved' && (
                             <button
                                 onClick={() => handleAction('approved')}
-                                className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 transition-colors flex items-center gap-2"
+                                disabled={!isRecruiterApproved}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors ${
+                                    isRecruiterApproved 
+                                    ? 'bg-green-600 text-white hover:bg-green-700' 
+                                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-50'
+                                }`}
+                                title={!isRecruiterApproved ? "Approve the recruiter identity first" : ""}
                             >
                                 <CheckCircle2 className="w-4 h-4" /> Approve
                             </button>
@@ -122,7 +135,7 @@ const AdminCompanyReview = () => {
                         <div className="flex items-center gap-6">
                             <div className={`w-14 h-14 rounded-lg flex items-center justify-center ${company.status === 'approved' ? 'bg-green-100 text-green-700' :
                                 company.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                    company.status === 'suspended' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+                                    company.status === 'suspended' ? 'bg-yellow-100 text-yellow-700' : 'bg-[#29a08e]/20 text-[#29a08e]'
                                 }`}>
                                 {company.status === 'approved' ? <ShieldCheck className="w-8 h-8" /> :
                                     company.status === 'rejected' ? <XCircle className="w-8 h-8" /> :
@@ -132,7 +145,7 @@ const AdminCompanyReview = () => {
                                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Current Status</p>
                                 <p className={`text-2xl font-bold capitalize ${company.status === 'approved' ? 'text-green-700' :
                                     company.status === 'rejected' ? 'text-red-700' :
-                                        company.status === 'suspended' ? 'text-yellow-700' : 'text-blue-700'
+                                        company.status === 'suspended' ? 'text-yellow-700' : 'text-[#29a08e]'
                                     }`}>{company.status}</p>
                             </div>
                         </div>
@@ -147,7 +160,7 @@ const AdminCompanyReview = () => {
                             {/* Profile Details */}
                             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
                                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center gap-2">
-                                    <Building2 className="w-4 h-4 text-blue-600" />
+                                    <Building2 className="w-4 h-4 text-[#29a08e]" />
                                     Company Information
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -157,7 +170,7 @@ const AdminCompanyReview = () => {
                                     </div>
                                     <div className="space-y-1">
                                         <p className="text-xs text-gray-400 font-medium">Website</p>
-                                        <a href={company.website} target="_blank" rel="noreferrer" className="text-sm font-semibold text-blue-600 hover:underline flex items-center gap-1">
+                                        <a href={company.website} target="_blank" rel="noreferrer" className="text-sm font-semibold text-[#29a08e] hover:underline flex items-center gap-1">
                                             {company.website} <ExternalLink className="w-3 h-3" />
                                         </a>
                                     </div>
@@ -181,7 +194,7 @@ const AdminCompanyReview = () => {
                             {/* Activity History */}
                             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
                                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-6 flex items-center gap-2">
-                                    <History className="w-4 h-4 text-blue-600" />
+                                    <History className="w-4 h-4 text-[#29a08e]" />
                                     Review History
                                 </h3>
                                 <div className="space-y-4">
@@ -212,7 +225,7 @@ const AdminCompanyReview = () => {
                                     <div>
                                         <p className="text-xs text-gray-400 font-medium mb-3">Recruiter</p>
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold">
+                                            <div className="w-10 h-10 rounded-lg bg-[#29a08e] text-white flex items-center justify-center font-bold">
                                                 {company.recruiters?.[0]?.fullName?.charAt(0) || 'R'}
                                             </div>
                                             <div className="min-w-0">
@@ -235,7 +248,7 @@ const AdminCompanyReview = () => {
                             {/* Placeholder Documents Section */}
                             <div className="bg-gray-900 rounded-xl p-6 text-white shadow-lg relative overflow-hidden">
                                 <FileText className="absolute -top-4 -right-4 w-24 h-24 text-white/5" />
-                                <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-6 relative z-10">Verification</h3>
+                                <h3 className="text-xs font-bold text-[#29a08e]/80 uppercase tracking-wider mb-6 relative z-10">Verification</h3>
                                 <div className="space-y-4 relative z-10">
                                     <div className="p-4 bg-white/5 rounded-lg border border-white/10">
                                         <p className="text-[10px] text-gray-400 uppercase font-bold mb-2">Legal Documents</p>
@@ -248,9 +261,13 @@ const AdminCompanyReview = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="px-4 py-2 bg-blue-600/20 border border-blue-500/20 rounded-lg">
-                                        <p className="text-[10px] font-bold text-blue-400 uppercase">Status</p>
-                                        <p className="text-xs font-bold text-white uppercase">Identity Verified</p>
+                                    <div className="px-4 py-2 bg-[#29a08e]/20 border border-[#29a08e]/20 rounded-lg flex flex-col items-start">
+                                        <p className="text-[10px] font-bold text-[#29a08e]/80 uppercase">Recruiter Status</p>
+                                        <div className={`mt-1 text-xs font-bold uppercase rounded-md px-2 py-0.5 ${
+                                            isRecruiterApproved ? 'bg-green-500/20 text-green-400' : 'bg-orange-500/20 text-orange-400'
+                                        }`}>
+                                            {isRecruiterApproved ? 'Identity Verified' : 'Identity Pending'}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

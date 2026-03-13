@@ -1,24 +1,18 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const PublicRoute = () => {
-    const { user, loading } = useAuth();
+    const { loading } = useAuth();
 
     if (loading) {
         return (
-            <div className="flex justify-center items-center h-screen">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+            <div className="flex justify-center items-center h-screen bg-gray-50">
+                <div className="w-12 h-12 border-4 border-[#29a08e]/30 border-t-[#29a08e] rounded-full animate-spin"></div>
             </div>
         );
     }
 
-    if (user) {
-        // Redirect based on role
-        if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
-        if (user.role === 'recruiter') return <Navigate to="/recruiter/dashboard" replace />;
-        return <Navigate to="/seeker/dashboard" replace />;
-    }
-
+    // Public pages are accessible to ALL users (logged in or out)
     return <Outlet />;
 };
 

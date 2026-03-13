@@ -18,7 +18,7 @@ const ProfileSectionCard = ({
             <div className="px-8 py-6 flex justify-between items-center border-b border-gray-50 bg-white">
                 <div className="flex items-center gap-4">
                     {Icon && (
-                        <div className="w-12 h-12 rounded-[1rem] bg-gray-50 text-[#2D9B82] flex items-center justify-center border border-gray-100/50">
+                        <div className="w-12 h-12 rounded-[1rem] bg-gray-50 text-[#29a08e] flex items-center justify-center border border-gray-100/50">
                             <Icon size={22} />
                         </div>
                     )}
@@ -42,7 +42,7 @@ const ProfileSectionCard = ({
                             </button>
                             <button
                                 onClick={onSave}
-                                className="flex items-center gap-1.5 px-5 py-2.5 bg-[#2D9B82] text-white text-xs font-bold rounded-xl hover:bg-[#25836d] transition-all shadow-lg shadow-[#2D9B82]/10"
+                                className="flex items-center gap-1.5 px-5 py-2.5 bg-[#29a08e] text-white text-xs font-bold rounded-xl hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/10"
                             >
                                 <CheckCircle size={14} />
                                 <span>Save</span>
@@ -53,7 +53,7 @@ const ProfileSectionCard = ({
                             {onAdd && (
                                 <button
                                     onClick={onAdd}
-                                    className="flex items-center gap-1.5 px-4 py-2.5 bg-[#F0FDF4] text-[#2D9B82] text-xs font-bold rounded-xl hover:bg-[#DCFCE7] transition-all border border-[#2D9B82]/10"
+                                    className="flex items-center gap-1.5 px-4 py-2.5 bg-[#F0FDF4] text-[#29a08e] text-xs font-bold rounded-xl hover:bg-[#DCFCE7] transition-all border border-[#29a08e]/10"
                                 >
                                     <Plus size={14} />
                                     <span>{addLabel || 'Add'}</span>
@@ -61,7 +61,7 @@ const ProfileSectionCard = ({
                             )}
                             <button
                                 onClick={onEdit}
-                                className="flex items-center justify-center w-10 h-10 bg-white border border-gray-100 text-gray-400 hover:text-[#2D9B82] hover:border-[#2D9B82]/20 hover:bg-gray-50 rounded-xl transition-all shadow-sm"
+                                className="flex items-center justify-center w-10 h-10 bg-white border border-gray-100 text-gray-400 hover:text-[#29a08e] hover:border-[#29a08e]/20 hover:bg-gray-50 rounded-xl transition-all shadow-sm"
                             >
                                 <Edit2 size={16} />
                             </button>

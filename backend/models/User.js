@@ -24,12 +24,12 @@ const userSchema = new mongoose.Schema({
     },
     kycStatus: {
         type: String,
-        enum: ['not_submitted', 'pending', 'approved', 'rejected'],
+        enum: ['not_submitted', 'pending', 'approved', 'rejected', 'resubmission_locked'],
         default: 'not_submitted'
     },
     recruiterKycStatus: {
         type: String,
-        enum: ['not_submitted', 'pending', 'approved', 'rejected'],
+        enum: ['not_submitted', 'pending', 'approved', 'rejected', 'resubmission_locked'],
         default: 'not_submitted'
     },
     isKycSubmitted: { type: Boolean, default: false },
@@ -131,7 +131,11 @@ const userSchema = new mongoose.Schema({
     resetOtpExpiry: { type: Date, default: null },
     reset_password_token: { type: String, default: null },
     reset_password_expires: { type: Date, default: null },
-    isActive: { type: Boolean, default: true }
+    isActive: { type: Boolean, default: true },
+
+    // AI Recommendation Fields
+    cvText: { type: String, default: '' }, // Extracted text from PDF
+    userProfileText: { type: String, default: '' } // Combined text for AI analysis
 }, { timestamps: true });
 
 const User = mongoose.model('User', userSchema);

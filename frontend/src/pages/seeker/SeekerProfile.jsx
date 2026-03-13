@@ -70,11 +70,11 @@ const SeekerProfile = () => {
                 <main className="py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
                     <div className="flex items-center justify-between mb-12">
                         <h1 className="text-4xl font-black text-gray-900 uppercase tracking-tight italic">
-                            My <span className="text-[#2D9B82]">Profile</span>
+                            My <span className="text-[#29a08e]">Profile</span>
                         </h1>
                         <button
                             onClick={() => { if (isEditing) handleUpdate(); else setIsEditing(true); }}
-                            className="px-8 py-4 bg-[#2D9B82] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#25836d] transition-all shadow-xl shadow-[#2D9B82]/20 transform active:scale-95"
+                            className="px-8 py-4 bg-[#29a08e] text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-[#228377] transition-all shadow-xl shadow-[#29a08e]/20 transform active:scale-95"
                         >
                             {isEditing ? 'Save Changes' : 'Edit Profile'}
                         </button>
@@ -87,7 +87,7 @@ const SeekerProfile = () => {
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Name</label>
                                     <div className="relative">
                                         <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
-                                            <div className="h-2 w-2 rounded-full bg-[#2D9B82]/40"></div>
+                                            <div className="h-2 w-2 rounded-full bg-[#29a08e]/40"></div>
                                         </div>
                                         <input
                                             type="text"
@@ -101,7 +101,7 @@ const SeekerProfile = () => {
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Terminal</label>
                                     <div className="relative">
                                         <div className="absolute inset-y-0 left-0 pl-6 flex items-center pointer-events-none">
-                                            <div className="h-2 w-2 rounded-full bg-[#2D9B82]/40"></div>
+                                            <div className="h-2 w-2 rounded-full bg-[#29a08e]/40"></div>
                                         </div>
                                         <input
                                             type="email"
@@ -122,7 +122,7 @@ const SeekerProfile = () => {
                                             placeholder="e.g. Kathmandu, Nepal"
                                             className={`block w-full px-6 py-4 rounded-2xl text-sm font-black transition-all outline-none border-2 
                                                 ${isEditing
-                                                    ? 'bg-white border-[#2D9B82] text-gray-900 shadow-lg shadow-[#2D9B82]/5'
+                                                    ? 'bg-white border-[#29a08e] text-gray-900 shadow-lg shadow-[#29a08e]/5'
                                                     : 'bg-gray-50 border-gray-50 text-gray-900'}`}
                                         />
                                     </div>
@@ -138,7 +138,7 @@ const SeekerProfile = () => {
                                             placeholder="React, Node.js, Python..."
                                             className={`block w-full px-6 py-4 rounded-2xl text-sm font-black transition-all outline-none border-2 
                                                 ${isEditing
-                                                    ? 'bg-white border-[#2D9B82] text-gray-900 shadow-lg shadow-[#2D9B82]/5'
+                                                    ? 'bg-white border-[#29a08e] text-gray-900 shadow-lg shadow-[#29a08e]/5'
                                                     : 'bg-gray-50 border-gray-50 text-gray-900'}`}
                                         />
                                     </div>
@@ -153,7 +153,7 @@ const SeekerProfile = () => {
                                         placeholder="Tell us about your professional journey..."
                                         className={`block w-full px-6 py-4 rounded-2xl text-sm font-black transition-all outline-none border-2 resize-none
                                             ${isEditing
-                                                ? 'bg-white border-[#2D9B82] text-gray-900 shadow-lg shadow-[#2D9B82]/5'
+                                                ? 'bg-white border-[#29a08e] text-gray-900 shadow-lg shadow-[#29a08e]/5'
                                                 : 'bg-gray-50 border-gray-50 text-gray-900'}`}
                                     ></textarea>
                                 </div>
@@ -161,7 +161,7 @@ const SeekerProfile = () => {
                                 <div className="col-span-2 pt-10 border-t border-gray-50">
                                     <div className="flex flex-col md:flex-row items-center justify-between gap-8 bg-gray-50/50 p-8 rounded-[2rem] border border-gray-100">
                                         <div className="flex items-center gap-6">
-                                            <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center text-[#2D9B82] border border-gray-100 shadow-sm font-black">PDF</div>
+                                            <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center text-[#29a08e] border border-gray-100 shadow-sm font-black">PDF</div>
                                             <div>
                                                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Resume / CV File</h4>
                                                 {profile.resume_url ? (
@@ -169,7 +169,7 @@ const SeekerProfile = () => {
                                                         href={`http://localhost:5000${profile.resume_url}`}
                                                         target="_blank"
                                                         rel="noreferrer"
-                                                        className="text-xs font-black text-[#2D9B82] hover:text-[#25836d] underline underline-offset-4 decoration-2 uppercase tracking-widest italic"
+                                                        className="text-xs font-black text-[#29a08e] hover:text-[#228377] underline underline-offset-4 decoration-2 uppercase tracking-widest italic"
                                                     >
                                                         Current_Manifest_v1.0.pdf
                                                     </a>

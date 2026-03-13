@@ -39,7 +39,7 @@ const companySchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['draft', 'pending', 'approved', 'rejected'],
+        enum: ['draft', 'pending', 'waiting_for_recruiter_approval', 'approved', 'rejected'],
         default: 'draft'
     },
     verification_status: { // Added per prompt
@@ -85,7 +85,7 @@ const companySchema = new mongoose.Schema({
         complianceFlags: [{ type: String }],
         moderationStatus: {
             type: String,
-            enum: ['approved', 'rejected', 'under_review', 'suspended'],
+            enum: ['approved', 'rejected', 'under_review', 'waiting_for_recruiter_approval', 'suspended'],
             default: 'under_review'
         },
         reviewHistory: [{

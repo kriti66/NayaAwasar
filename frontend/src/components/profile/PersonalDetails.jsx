@@ -11,7 +11,7 @@ const PersonalDetails = ({ isEditing, profile, formData, handleInputChange }) =>
                         name="fullName"
                         value={formData.fullName || ''}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-semibold text-gray-800"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#29a08e] outline-none transition-all font-semibold text-gray-800"
                         placeholder="Your full name"
                     />
                 </div>
@@ -22,7 +22,7 @@ const PersonalDetails = ({ isEditing, profile, formData, handleInputChange }) =>
                         name="professionalHeadline"
                         value={formData.professionalHeadline || ''}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-semibold text-gray-800"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#29a08e] outline-none transition-all font-semibold text-gray-800"
                         placeholder="e.g. Full Stack Developer"
                     />
                 </div>
@@ -33,7 +33,7 @@ const PersonalDetails = ({ isEditing, profile, formData, handleInputChange }) =>
                         value={formData.bio || ''}
                         onChange={handleInputChange}
                         rows="4"
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium text-gray-700 resize-none"
+                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#29a08e] outline-none transition-all font-medium text-gray-700 resize-none"
                         placeholder="Tell us about yourself..."
                     ></textarea>
                 </div>

@@ -145,124 +145,102 @@ const JobseekerProfileDashboard = () => {
 
     // --- RENDER ---
     return (
-        <>
-            <div className="min-h-screen bg-gray-50/50 pb-12 font-sans text-gray-800">
-                {/* 1. Header Section */}
-                {/* 1. Header Section */}
-                <div className="bg-white border-b border-gray-100 shadow-sm transition-all">
-                    <div className="max-w-7xl mx-auto px-4 md:px-8 py-6">
-                        {/* Profile Header Card */}
-                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 md:p-7 flex flex-col md:flex-row gap-8 items-start justify-between">
+        <div className="min-h-screen bg-[#F3F4F6] pb-20 font-sans text-gray-800">
+            {/* Dark Modern Hero Banner */}
+            <div className="bg-[#111827] text-white pt-10 pb-32 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+                {/* Decorative Gradients */}
+                <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 rounded-full bg-[#29a08e]/10 blur-3xl pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-[#29a08e]/10 blur-3xl pointer-events-none"></div>
 
-                            {/* LEFT COLUMN: Avatar + Info */}
-                            <div className="flex items-start gap-6 w-full md:w-3/5">
-                                {/* Avatar */}
-                                <div className="shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-full bg-emerald-50 border-2 border-emerald-100 flex items-center justify-center text-emerald-600 text-3xl font-bold shadow-sm overflow-hidden">
-                                    {profile.user?.profileImage ? (
-                                        <img
-                                            src={`${import.meta.env.VITE_API_URL}${profile.user.profileImage}`}
-                                            alt={profile.user?.fullName}
-                                            className="w-full h-full object-cover"
-                                            onError={(e) => { e.target.style.display = 'none'; }}
-                                        />
-                                    ) : (
-                                        profile.user?.fullName?.[0] || 'U'
-                                    )}
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 truncate">
-                                        {profile.user?.fullName || 'User'}
-                                    </h1>
-
-                                    {/* Headline */}
-                                    {profile.headline ? (
-                                        <p className="text-gray-900 font-medium text-base mt-1 line-clamp-2">
-                                            {profile.headline}
-                                        </p>
-                                    ) : (
-                                        <button
-                                            onClick={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary, profileImage: profile.user?.profileImage } })}
-                                            className="text-emerald-600 text-sm font-medium mt-1 hover:underline flex items-center gap-1"
-                                        >
-                                            <Plus size={14} /> Add headline
-                                        </button>
-                                    )}
-
-                                    {/* Meta Row */}
-                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-sm text-gray-500">
-                                        <div className="flex items-center gap-1">
-                                            <MapPin size={14} className="text-gray-400" />
-                                            <span>{profile.location || 'Add location'}</span>
-                                        </div>
-                                        {profile.jobPreferences?.seniority && (
-                                            <div className="flex items-center gap-1 before:content-['•'] before:mr-2 before:text-gray-300">
-                                                <Briefcase size={14} className="text-gray-400" />
-                                                <span>{profile.jobPreferences.seniority}</span>
-                                            </div>
-                                        )}
-                                        {/* Open to Work Chip (Static for now based on context) */}
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded textxs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 ml-1">
-                                            Open to work
-                                        </span>
-                                    </div>
+                <div className="max-w-7xl mx-auto relative z-10 flex flex-col md:flex-row gap-8 items-start justify-between">
+                    {/* LEFT COLUMN: Avatar + Info */}
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-8 w-full md:w-3/5">
+                        {/* Avatar */}
+                        <div className="shrink-0 w-24 h-24 md:w-32 md:h-32 rounded-[2rem] bg-white border border-gray-800 p-1 flex items-center justify-center text-[#29a08e] text-4xl font-black shadow-2xl relative group">
+                            <div className="w-full h-full rounded-[1.75rem] overflow-hidden bg-gray-50 flex items-center justify-center relative">
+                                {profile.user?.profileImage ? (
+                                    <img
+                                        src={profile.user.profileImage.startsWith('http') ? profile.user.profileImage : `${import.meta.env.VITE_API_URL}${profile.user.profileImage}`}
+                                        alt={profile.user?.fullName}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                    />
+                                ) : (
+                                    profile.user?.fullName?.[0] || 'U'
+                                )}
+                                <div onClick={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary, profileImage: profile.user?.profileImage } })} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                                    <Edit2 size={24} className="text-white" />
                                 </div>
                             </div>
+                        </div>
 
-                            {/* RIGHT COLUMN: Actions & Stats */}
-                            <div className="w-full md:w-2/5 flex flex-col gap-5 border-t md:border-t-0 md:border-l border-gray-100 pt-5 md:pt-0 md:pl-8">
+                        <div className="flex-1 min-w-0">
+                            <h1 className="text-3xl md:text-5xl font-black text-white truncate tracking-tight mb-2">
+                                {profile.user?.fullName || 'User'}
+                            </h1>
 
-                                {/* Profile Strength Block */}
-                                <div>
-                                    <div className="flex justify-between items-center mb-2">
-                                        <span className="text-sm font-bold text-gray-700">Profile Strength</span>
-                                        <span className={`text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider ${(profile.profileStrength || 0) < 40 ? 'bg-red-100 text-red-600' :
-                                            (profile.profileStrength || 0) < 80 ? 'bg-amber-100 text-amber-600' :
-                                                'bg-emerald-100 text-emerald-600'
-                                            }`}>
-                                            {(profile.profileStrength || 0) < 40 ? 'Weak' : (profile.profileStrength || 0) < 80 ? 'Good' : 'Strong'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full rounded-full transition-all duration-1000 ${(profile.profileStrength || 0) < 40 ? 'bg-red-500' :
-                                                    (profile.profileStrength || 0) < 80 ? 'bg-amber-500' :
-                                                        'bg-emerald-500'
-                                                    }`}
-                                                style={{ width: `${profile.profileStrength || 0}%` }}
-                                            ></div>
+                            {/* Headline */}
+                            {profile.headline ? (
+                                <p className="text-gray-300 font-medium text-lg leading-snug mb-4">
+                                    {profile.headline}
+                                </p>
+                            ) : (
+                                <button
+                                    onClick={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary, profileImage: profile.user?.profileImage } })}
+                                    className="text-[#29a08e] text-sm font-bold hover:underline py-1 flex items-center gap-1 mb-3"
+                                >
+                                    <Plus size={14} /> Add professional headline
+                                </button>
+                            )}
+
+                            {/* Meta Row */}
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-400 font-bold">
+                                <div className="flex items-center gap-1.5">
+                                    <MapPin size={16} className="text-[#29a08e]" />
+                                    <span>{profile.location || 'Add location'}</span>
+                                </div>
+                                {profile.jobPreferences?.seniority && (
+                                    <>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-600"></span>
+                                        <div className="flex items-center gap-1.5">
+                                            <Briefcase size={16} className="text-[#29a08e]" />
+                                            <span>{profile.jobPreferences.seniority} Level</span>
                                         </div>
-                                        <span className="text-sm font-bold text-gray-900 min-w-[3ch] text-right">{profile.profileStrength || 0}%</span>
-                                    </div>
-                                    <p className="text-xs text-gray-400 mt-1.5 font-medium">Complete your profile to get noticed</p>
-                                </div>
-
-                                {/* Actions Row */}
-                                <div className="flex items-center justify-between gap-4 mt-auto">
-                                    {/* Visibility Badge */}
-                                    <div className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${profile.visibleToRecruiters
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                                        : 'bg-gray-50 text-gray-500 border-gray-200'
-                                        }`}>
-                                        {profile.visibleToRecruiters ? <Eye size={14} /> : <EyeOff size={14} />}
-                                        {profile.visibleToRecruiters ? 'Visible to Recruiters' : 'Hidden from Recruiters'}
-                                    </div>
-
-                                    <button
-                                        onClick={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary, profileImage: profile.user?.profileImage } })}
-                                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-bold shadow-md shadow-emerald-200 transition-all flex items-center gap-2"
-                                    >
-                                        <Edit2 size={14} /> Edit Profile
-                                    </button>
-                                </div>
-
+                                    </>
+                                )}
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-600"></span>
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-[#29a08e]/20 text-[#29a08e] border border-[#29a08e]/30 shadow-[0_0_15px_rgba(41,160,142,0.2)]">
+                                    Open to work
+                                </span>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <div className="max-w-7xl mx-auto px-4 md:px-8 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* RIGHT COLUMN: Actions */}
+                    <div className="w-full md:w-auto flex flex-col items-start md:items-end gap-3 mt-4 md:mt-0">
+                        {/* Visibility Badge */}
+                        <button
+                            onClick={toggleVisibility}
+                            className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 border transition-all ${profile.visibleToRecruiters
+                                ? 'bg-[#29a08e]/20 text-[#29a08e] border-[#29a08e]/30 hover:bg-[#29a08e]/30 shadow-[0_0_15px_rgba(41,160,142,0.15)]'
+                                : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'
+                                }`}
+                        >
+                            {profile.visibleToRecruiters ? <Eye size={14} /> : <EyeOff size={14} />}
+                            {profile.visibleToRecruiters ? 'Visible to Recruiters' : 'Hidden from Recruiters'}
+                        </button>
+
+                        <button
+                            onClick={() => setModal({ type: 'basic', data: { headline: profile.headline, location: profile.location, summary: profile.summary, profileImage: profile.user?.profileImage } })}
+                            className="w-full md:w-auto px-5 py-3 bg-white text-gray-900 border border-transparent hover:bg-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2"
+                        >
+                            <Edit2 size={14} /> Edit Profile
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="max-w-7xl mx-auto px-4 md:px-8 -mt-20 relative z-20 grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                     {/* --- LEFT COLUMN (Content) --- */}
                     <div className="lg:col-span-2 space-y-6">
@@ -383,7 +361,7 @@ const JobseekerProfileDashboard = () => {
                     <div className="space-y-6">
 
                         {/* Strength Detail Card */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="font-bold text-gray-900">Profile Strength</h3>
                                 <span className={`text-xs font-bold px-2 py-1 rounded bg-gray-100 ${profile.strengthLabel === 'WEAK' ? 'text-red-500' :
@@ -409,7 +387,7 @@ const JobseekerProfileDashboard = () => {
                         </div>
 
                         {/* Resume Card */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
                             <h3 className="font-bold text-gray-900 mb-6">Resume Management</h3>
 
                             {/* Auto Builder Promo (if no resume) */}
@@ -499,7 +477,7 @@ const JobseekerProfileDashboard = () => {
                         </div>
 
                         {/* Job Preferences */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
                             <div className="flex justify-between items-start mb-4">
                                 <h3 className="font-bold text-gray-900">Job Preferences</h3>
                                 <button onClick={() => setModal({ type: 'preferences', data: profile.jobPreferences })} className="text-xs px-2 py-1 bg-gray-50 hover:bg-gray-100 rounded text-gray-600 font-medium transition-colors">Edit</button>
@@ -527,7 +505,7 @@ const JobseekerProfileDashboard = () => {
                         {/* Activity */}
 
                         {/* Activity */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
                             <h3 className="font-bold text-gray-900 mb-4">Recent Activity</h3>
                             <div className="relative border-l border-gray-100 ml-2 space-y-6">
                                 {activity.map((act, i) => {
@@ -549,7 +527,7 @@ const JobseekerProfileDashboard = () => {
 
                                     let colorClass = 'bg-gray-400';
                                     if (act.type === 'APPLIED_JOB') colorClass = 'bg-emerald-500';
-                                    if (act.type === 'RECRUITER_VIEW') colorClass = 'bg-blue-500';
+                                    if (act.type === 'RECRUITER_VIEW') colorClass = 'bg-[#29a08e]';
                                     if (act.type === 'MESSAGE') colorClass = 'bg-purple-500';
                                     if (act.type === 'STATUS_CHANGE') colorClass = 'bg-orange-500';
 
@@ -568,7 +546,7 @@ const JobseekerProfileDashboard = () => {
                         </div>
 
                         {/* Visibility Toggle Card */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                        <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h3 className="font-bold text-gray-900">Profile Visibility</h3>
@@ -614,7 +592,6 @@ const JobseekerProfileDashboard = () => {
                     </div>
                 )}
             </div>
-        </>
     );
 
 };
@@ -622,23 +599,26 @@ const JobseekerProfileDashboard = () => {
 // --- SUB-COMPONENTS ---
 
 const Section = ({ title, children, onEdit, onAdd }) => (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 transition-all hover:shadow-md">
-        <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+    <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100 transition-all hover:shadow-md relative overflow-hidden group">
+        <div className="flex justify-between items-center mb-8 relative z-10 w-full">
+            <h2 className="text-xl font-black text-gray-900 flex items-center gap-3">
+                <div className="w-1.5 h-8 bg-[#29a08e] rounded-full"></div>
                 {title}
             </h2>
-            <div className="flex gap-2">
-                {onAdd && <button onClick={onAdd} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"><Plus size={20} /></button>}
-                {onEdit && <button onClick={onEdit} className="p-2 text-gray-400 hover:bg-gray-50 hover:text-emerald-600 rounded-full transition-colors"><Edit2 size={18} /></button>}
+            <div className="flex gap-2 shrink-0">
+                {onAdd && <button onClick={onAdd} className="w-10 h-10 flex items-center justify-center bg-gray-50 text-gray-500 hover:text-[#29a08e] hover:bg-emerald-50 rounded-xl transition-all shadow-sm"><Plus size={18} /></button>}
+                {onEdit && <button onClick={onEdit} className="w-10 h-10 flex items-center justify-center bg-gray-50 text-gray-500 hover:text-[#29a08e] hover:bg-emerald-50 rounded-xl transition-all shadow-sm"><Edit2 size={16} /></button>}
             </div>
         </div>
-        {children}
+        <div className="relative z-10 text-[15px]">
+            {children}
+        </div>
     </div>
 );
 
 const EmptyState = ({ text }) => (
-    <div className="py-8 text-center bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
-        <p className="text-gray-400 text-sm font-medium">{text}</p>
+    <div className="py-12 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+        <p className="text-gray-400 text-xs font-black uppercase tracking-widest">{text}</p>
     </div>
 );
 

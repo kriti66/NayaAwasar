@@ -10,7 +10,7 @@ const Home = () => {
                     <div className="flex-1 text-center lg:text-left">
                         <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight">
                             Your Journey to a <br />
-                            <span className="text-blue-600">Brighter Future</span> Starts Here
+                            <span className="text-[#29a08e]">Brighter Future</span> Starts Here
                         </h1>
                         <p className="mt-6 text-lg text-gray-500 max-w-2xl mx-auto lg:mx-0">
                             Discover thousands of job opportunities or find the perfect talent for your team. Naya Awasar is Nepal's most trusted recruitment bridge.
@@ -18,7 +18,7 @@ const Home = () => {
                         <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                             <Link
                                 to="/register?role=jobseeker"
-                                className="px-8 py-4 bg-blue-600 text-white rounded-xl font-bold text-lg hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 text-center"
+                                className="px-8 py-4 bg-[#29a08e] text-white rounded-xl font-bold text-lg hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/20 text-center"
                             >
                                 I'm a Job Seeker
                             </Link>
@@ -46,15 +46,15 @@ const Home = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 text-center">
                         <div className="p-8 bg-white rounded-2xl border border-gray-100 shadow-sm">
                             <p className="text-4xl font-extrabold text-gray-900">10K+</p>
-                            <p className="mt-2 text-sm font-bold text-blue-600 uppercase tracking-widest">Jobs Posted</p>
+                            <p className="mt-2 text-sm font-bold text-[#29a08e] uppercase tracking-widest">Jobs Posted</p>
                         </div>
                         <div className="p-8 bg-white rounded-2xl border border-gray-100 shadow-sm">
                             <p className="text-4xl font-extrabold text-gray-900">50K+</p>
-                            <p className="mt-2 text-sm font-bold text-blue-600 uppercase tracking-widest">Active Seekers</p>
+                            <p className="mt-2 text-sm font-bold text-[#29a08e] uppercase tracking-widest">Active Seekers</p>
                         </div>
                         <div className="p-8 bg-white rounded-2xl border border-gray-100 shadow-sm">
                             <p className="text-4xl font-extrabold text-gray-900">500+</p>
-                            <p className="mt-2 text-sm font-bold text-blue-600 uppercase tracking-widest">Companies</p>
+                            <p className="mt-2 text-sm font-bold text-[#29a08e] uppercase tracking-widest">Companies</p>
                         </div>
                     </div>
                 </div>
@@ -64,7 +64,7 @@ const Home = () => {
             <div className="py-20 bg-white">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center mb-16">
-                        <h2 className="text-3xl font-bold text-gray-900">Why Choose <span className="text-blue-600">Naya Awasar?</span></h2>
+                        <h2 className="text-3xl font-bold text-gray-900">Why Choose <span className="text-[#29a08e]">Naya Awasar?</span></h2>
                         <p className="mt-4 text-lg text-gray-500">We provide a seamless experience for both job seekers and employers.</p>
                     </div>
 
@@ -99,7 +99,7 @@ const Home = () => {
                             },
                         ].map((item, i) => (
                             <div key={i} className="flex flex-col items-center text-center p-6 rounded-2xl hover:bg-gray-50 transition-colors">
-                                <div className="h-14 w-14 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center mb-6 shadow-sm">
+                                <div className="h-14 w-14 bg-[#29a08e]/10 text-[#29a08e] rounded-xl flex items-center justify-center mb-6 shadow-sm">
                                     {item.icon}
                                 </div>
                                 <h3 className="text-xl font-bold text-gray-900 mb-2">{item.title}</h3>
@@ -113,7 +113,7 @@ const Home = () => {
             {/* Testimonials Section */}
             <div className="bg-gray-50 py-20">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <h2 className="text-3xl font-bold text-center text-gray-900 mb-16">What Our <span className="text-blue-600">Users Say</span></h2>
+                    <h2 className="text-3xl font-bold text-center text-gray-900 mb-16">What Our <span className="text-[#29a08e]">Users Say</span></h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         {[
                             {
@@ -138,10 +138,10 @@ const Home = () => {
                             <div key={i} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between hover:shadow-md transition-shadow">
                                 <p className="text-gray-600 italic mb-8">"{t.quote}"</p>
                                 <div className="flex items-center gap-4">
-                                    <img className="h-12 w-12 rounded-full border-2 border-blue-100" src={t.image} alt={t.name} />
+                                    <img className="h-12 w-12 rounded-full border-2 border-[#29a08e]/20" src={t.image} alt={t.name} />
                                     <div>
                                         <p className="font-bold text-gray-900">{t.name}</p>
-                                        <p className="text-sm text-blue-600 font-medium">{t.role}</p>
+                                        <p className="text-sm text-[#29a08e] font-medium">{t.role}</p>
                                     </div>
                                 </div>
                             </div>
@@ -151,18 +151,18 @@ const Home = () => {
             </div>
 
             {/* CTA Section */}
-            <div className="bg-blue-600 py-16">
+            <div className="bg-[#29a08e] py-16">
                 <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                     <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
                         Ready to take the next step?
                     </h2>
-                    <p className="mt-4 text-xl text-blue-100">
+                    <p className="mt-4 text-xl text-white/90">
                         Join thousands of professionals finding success on Naya Awasar today.
                     </p>
                     <div className="mt-10">
                         <Link
                             to="/register"
-                            className="inline-flex items-center justify-center px-10 py-4 border border-transparent text-lg font-bold rounded-xl text-blue-600 bg-white hover:bg-blue-50 transition-all shadow-xl"
+                            className="inline-flex items-center justify-center px-10 py-4 border border-transparent text-lg font-bold rounded-xl text-[#29a08e] bg-white hover:bg-[#29a08e]/5 transition-all shadow-xl"
                         >
                             Get Started for Free
                         </Link>

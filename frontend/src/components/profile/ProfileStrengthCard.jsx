@@ -43,7 +43,7 @@ const ProfileStrengthCard = ({ profile }) => {
 
                 <div className="h-2 w-full bg-gray-50 rounded-full overflow-hidden mb-8">
                     <div
-                        className={`h-full transition-all duration-1000 ${strength === 'Strong' ? 'bg-[#2D9B82]' :
+                        className={`h-full transition-all duration-1000 ${strength === 'Strong' ? 'bg-[#29a08e]' :
                             strength === 'Medium' ? 'bg-yellow-400' : 'bg-red-400'
                             }`}
                         style={{ width: `${completion}%` }}
@@ -56,7 +56,7 @@ const ProfileStrengthCard = ({ profile }) => {
                         {checklist.map((item) => (
                             <div key={item.id} className="flex items-center gap-3 group cursor-pointer">
                                 {item.done ? (
-                                    <CheckCircle2 size={18} className="text-[#2D9B82]" />
+                                    <CheckCircle2 size={18} className="text-[#29a08e]" />
                                 ) : (
                                     <Circle size={18} className="text-gray-300 group-hover:text-gray-400" />
                                 )}

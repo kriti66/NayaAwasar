@@ -11,7 +11,7 @@ const AboutSection = ({ isEditing, profile, formData, handleInputChange }) => {
                         value={formData.bio || ''}
                         onChange={handleInputChange}
                         rows="6"
-                        className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-[24px] focus:ring-4 focus:ring-[#2D9B82]/10 focus:border-[#2D9B82] outline-none transition-all font-medium text-gray-700 resize-none leading-relaxed"
+                        className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-[24px] focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] outline-none transition-all font-medium text-gray-700 resize-none leading-relaxed"
                         placeholder="Share your professional journey, key achievements, and what makes you unique..."
                     ></textarea>
                 </div>

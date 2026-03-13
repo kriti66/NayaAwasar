@@ -1,16 +1,26 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 
 const ResetPassword = () => {
-    const { token } = useParams();
-    const navigate = useNavigate();
-
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState('');
     const [error, setError] = useState('');
+    const [successMessage, setSuccessMessage] = useState('');
+    
+    const location = useLocation();
+    const navigate = useNavigate();
+    
+    const email = location.state?.email;
+    const otp = location.state?.otp;
+
+    useEffect(() => {
+        if (!email || !otp) {
+            navigate('/forgot-password');
+        }
+    }, [email, otp, navigate]);
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -22,12 +32,12 @@ const ResetPassword = () => {
 
         setLoading(true);
         setError('');
-        setMessage('');
+        setSuccessMessage('');
 
         try {
-            const res = await api.post(`/auth/reset-password/${token}`, { password });
-            setMessage(res.data.message);
-            // Optional: Redirect to login after a delay
+            const res = await api.post('/auth/reset-password-otp', { email, otp, newPassword: password });
+            setSuccessMessage(res.data.message);
+            // Redirect to login after a delay
             setTimeout(() => {
                 navigate('/login');
             }, 3000);
@@ -41,24 +51,40 @@ const ResetPassword = () => {
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
             <div className="sm:mx-auto sm:w-full sm:max-w-md">
-                <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-                    Set new <span className="text-blue-600">password</span>
+                <div className="flex justify-center mb-6">
+                    <div className="bg-[#29a08e] text-white p-3 rounded-xl shadow-lg shadow-[#29a08e]/20">
+                        <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
+                    </div>
+                </div>
+                <h2 className="mt-2 text-center text-3xl font-extrabold text-gray-900">
+                    Set New Password
                 </h2>
                 <p className="mt-2 text-center text-sm text-gray-600">
-                    Please enter your new password below.
+                    Create a new, strong password.
                 </p>
             </div>
 
             <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-                <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
-                    {message && (
-                        <div className="mb-4 bg-blue-50 border border-blue-100 p-4 rounded-md">
-                            <p className="text-sm text-blue-700 font-medium">{message}</p>
-                            <p className="text-xs text-blue-600 mt-1">Redirecting to login...</p>
+                <div className="bg-white py-8 px-4 shadow sm:rounded-xl sm:px-10 border border-gray-100">
+                    {successMessage && (
+                        <div className="mb-4 bg-[#29a08e]/10 border border-[#29a08e]/20 p-4 rounded-lg flex items-center gap-2">
+                             <svg className="h-5 w-5 text-[#29a08e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                            <div>
+                                <p className="text-sm text-[#29a08e] font-medium">{successMessage}</p>
+                                <p className="text-xs text-[#29a08e] mt-1">Redirecting to login...</p>
+                            </div>
                         </div>
                     )}
+                    
                     {error && (
-                        <div className="mb-4 bg-red-50 border border-red-100 p-4 rounded-md">
+                         <div className="mb-4 bg-red-50 border border-red-200 p-3 rounded-lg flex items-center gap-2">
+                            <svg className="h-4 w-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
                             <p className="text-sm text-red-700">{error}</p>
                         </div>
                     )}
@@ -72,7 +98,7 @@ const ResetPassword = () => {
                                     required
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-[#29a08e] focus:border-[#29a08e] sm:text-sm"
                                     placeholder="••••••••"
                                 />
                             </div>
@@ -85,7 +111,7 @@ const ResetPassword = () => {
                                     required
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
-                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-[#29a08e] focus:border-[#29a08e] sm:text-sm"
                                     placeholder="••••••••"
                                 />
                             </div>
@@ -93,8 +119,8 @@ const ResetPassword = () => {
 
                         <button
                             type="submit"
-                            disabled={loading}
-                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                            disabled={loading || !!successMessage}
+                            className="w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#29a08e] hover:bg-[#228377] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] disabled:opacity-50 transition-colors"
                         >
                             {loading ? 'Updating...' : 'Reset Password'}
                         </button>

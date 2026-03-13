@@ -12,7 +12,7 @@ const Navbar = () => {
     };
 
     const isActive = (path) => {
-        return location.pathname === path ? "text-blue-600 font-semibold" : "text-gray-500 hover:text-blue-600";
+        return location.pathname === path ? "text-[#29a08e] font-semibold" : "text-gray-500 hover:text-[#29a08e]";
     };
 
     const getDashboardPath = () => {
@@ -33,12 +33,12 @@ const Navbar = () => {
                     {/* Left: Logo */}
                     <div className="flex-shrink-0 flex items-center">
                         <Link to={user ? getDashboardPath() : '/'} className="flex items-center gap-2">
-                            <div className="bg-blue-600 text-white p-1.5 rounded-lg">
+                            <div className="bg-[#29a08e] text-white p-1.5 rounded-lg">
                                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                 </svg>
                             </div>
-                            <span className="text-xl font-bold text-gray-900 tracking-tight">Naya <span className="text-blue-600">Awasar</span></span>
+                            <span className="text-xl font-bold text-gray-900 tracking-tight">Naya <span className="text-[#29a08e]">Awasar</span></span>
                         </Link>
                     </div>
 
@@ -77,7 +77,7 @@ const Navbar = () => {
                                 </span>
                                 <Link
                                     to={getDashboardPath()}
-                                    className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                                    className="px-4 py-2 text-sm font-semibold text-white bg-[#29a08e] rounded-lg hover:bg-[#228377] transition-colors"
                                 >
                                     Dashboard
                                 </Link>
@@ -90,12 +90,12 @@ const Navbar = () => {
                             </div>
                         ) : (
                             <div className="flex items-center space-x-4">
-                                <Link to="/login" className="text-sm font-medium text-gray-500 hover:text-blue-600">
+                                <Link to="/login" className="text-sm font-medium text-gray-500 hover:text-[#29a08e]">
                                     Sign In
                                 </Link>
                                 <Link
                                     to="/register"
-                                    className="px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                                    className="px-4 py-2 text-sm font-bold text-white bg-[#29a08e] rounded-lg hover:bg-[#228377] transition-colors shadow-sm"
                                 >
                                     Sign Up
                                 </Link>

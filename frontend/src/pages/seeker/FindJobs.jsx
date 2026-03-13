@@ -9,6 +9,7 @@ import {
     Filter, X, ChevronDown, Bookmark, Star,
     ArrowRight, LayoutGrid, List, Sparkles
 } from 'lucide-react';
+import Pagination from '../../components/common/Pagination';
 
 const FindJobs = () => {
     const { user } = useAuth();
@@ -56,7 +57,7 @@ const FindJobs = () => {
                 setLoading(true);
                 const [jobsRes, recRes] = await Promise.all([
                     api.get('/jobs'),
-                    api.get('/jobs/recommended')
+                    api.get('/recommendations')
                 ]);
                 setJobs(jobsRes.data);
                 setRecommendedJobs(recRes.data);
@@ -132,11 +133,11 @@ const FindJobs = () => {
     const totalPages = Math.ceil(filteredJobs.length / jobsPerPage);
 
     const JobCard = ({ job, isRecommended = false }) => (
-        <div className={`group bg-white rounded-xl border transition-all duration-300 hover:shadow-lg hover:border-[#2D9B82]/30 p-6 relative ${isRecommended ? 'border-[#2D9B82]/20 bg-emerald-50/10' : 'border-gray-200 shadow-sm'}`}>
+        <div className={`group bg-white rounded-xl border transition-all duration-300 hover:shadow-lg hover:border-[#29a08e]/30 p-6 relative ${isRecommended ? 'border-[#29a08e]/20 bg-emerald-50/10' : 'border-gray-200 shadow-sm'}`}>
             {isRecommended && (
                 <div className="absolute -top-3 right-6">
-                    <span className="flex items-center gap-1.5 px-3 py-1 bg-[#2D9B82] text-white rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md">
-                        <Sparkles size={10} /> 95% Match
+                    <span className="flex items-center gap-1.5 px-3 py-1 bg-[#29a08e] text-white rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md">
+                        <Sparkles size={10} /> {job.matchScore ? `${job.matchScore}% Match` : 'AI Recommendation'}
                     </span>
                 </div>
             )}
@@ -146,7 +147,7 @@ const FindJobs = () => {
                     {job.company_logo_url ? (
                         <img src={job.company_logo_url} alt={job.company_name} className="w-full h-full object-contain" />
                     ) : (
-                        <div className="text-[#2D9B82] font-bold text-2xl">
+                        <div className="text-[#29a08e] font-bold text-2xl">
                             {job.company_name?.charAt(0)}
                         </div>
                     )}
@@ -155,12 +156,12 @@ const FindJobs = () => {
                 <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-2">
                         <div>
-                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#2D9B82] transition-colors line-clamp-1">{job.title}</h3>
+                            <h3 className="text-lg font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors line-clamp-1">{job.title}</h3>
                             <p className="text-sm font-medium text-gray-500">{job.company_name} • <span className="text-xs text-gray-400">4h ago</span></p>
                         </div>
                         <button
                             onClick={() => toggleSaveJob(job.id || job._id)}
-                            className={`p-1 rounded-full transition-colors ${savedJobIds.includes(job.id || job._id) ? 'text-[#2D9B82] bg-emerald-50' : 'text-gray-400 hover:text-[#2D9B82] hover:bg-emerald-50'}`}
+                            className={`p-1 rounded-full transition-colors ${savedJobIds.includes(job.id || job._id) ? 'text-[#29a08e] bg-emerald-50' : 'text-gray-400 hover:text-[#29a08e] hover:bg-emerald-50'}`}
                         >
                             <Bookmark size={18} fill={savedJobIds.includes(job.id || job._id) ? "currentColor" : "none"} />
                         </button>
@@ -176,12 +177,12 @@ const FindJobs = () => {
 
                     <div className="flex items-center justify-between pt-4 border-t border-gray-50">
                         <div className="flex items-center gap-1 text-gray-700 font-bold text-xs">
-                            <DollarSign size={14} className="text-[#2D9B82]" />
+                            <DollarSign size={14} className="text-[#29a08e]" />
                             {job.salary_range || 'Negotiable'}
                         </div>
                         <Link
                             to={`/jobseeker/jobs/${job.id || job._id}`}
-                            className="px-5 py-2 bg-[#2D9B82] text-white rounded-lg text-xs font-bold hover:bg-[#25836d] transition-all shadow-sm shadow-[#2D9B82]/20"
+                            className="px-5 py-2 bg-[#29a08e] text-white rounded-lg text-xs font-bold hover:bg-[#228377] transition-all shadow-sm shadow-[#29a08e]/20"
                         >
                             Details
                         </Link>
@@ -196,7 +197,7 @@ const FindJobs = () => {
             <>
                 <div className="flex items-center justify-center min-h-[60vh]">
                     <div className="flex flex-col items-center gap-4">
-                        <div className="w-12 h-12 border-4 border-[#2D9B82] border-t-transparent rounded-full animate-spin"></div>
+                        <div className="w-12 h-12 border-4 border-[#29a08e] border-t-transparent rounded-full animate-spin"></div>
                         <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Loading Jobs...</p>
                     </div>
                 </div>
@@ -231,7 +232,7 @@ const FindJobs = () => {
                                 className="w-full pl-11 pr-4 py-3 bg-transparent outline-none font-medium text-sm text-gray-700 placeholder:text-gray-400"
                             />
                         </div>
-                        <button className="px-8 py-3 bg-[#2D9B82] text-white rounded-xl font-bold text-sm hover:bg-[#25836d] transition-all shadow-lg shadow-[#2D9B82]/20">
+                        <button className="px-8 py-3 bg-[#29a08e] text-white rounded-xl font-bold text-sm hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/20">
                             Search
                         </button>
                     </div>
@@ -244,7 +245,7 @@ const FindJobs = () => {
                             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                                        <Filter size={16} className="text-[#2D9B82]" /> Filters
+                                        <Filter size={16} className="text-[#29a08e]" /> Filters
                                     </h3>
                                     <button
                                         onClick={clearFilters}
@@ -262,7 +263,7 @@ const FindJobs = () => {
                                         value={sidebarTitle}
                                         onChange={(e) => setSidebarTitle(e.target.value)}
                                         placeholder="e.g. Designer"
-                                        className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg outline-none focus:border-[#2D9B82] transition-colors text-xs font-bold"
+                                        className="w-full px-4 py-2 bg-gray-50 border border-gray-100 rounded-lg outline-none focus:border-[#29a08e] transition-colors text-xs font-bold"
                                     />
                                 </div>
 
@@ -272,7 +273,7 @@ const FindJobs = () => {
                                     <div className="space-y-2">
                                         {['Full-time', 'Part-time', 'Freelance', 'Internship'].map(type => (
                                             <label key={type} className="flex items-center cursor-pointer group">
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 transition-colors ${filters.jobType.includes(type) ? 'bg-[#2D9B82] border-[#2D9B82]' : 'border-gray-200 group-hover:border-[#2D9B82]'}`}>
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 transition-colors ${filters.jobType.includes(type) ? 'bg-[#29a08e] border-[#29a08e]' : 'border-gray-200 group-hover:border-[#29a08e]'}`}>
                                                     {filters.jobType.includes(type) && <X size={10} className="text-white" />}
                                                 </div>
                                                 <span className="text-xs font-bold text-gray-600 group-hover:text-gray-900">{type}</span>
@@ -287,7 +288,7 @@ const FindJobs = () => {
                                     <div className="space-y-2">
                                         {['Fresher', 'Intermediate', 'Expert'].map(level => (
                                             <label key={level} className="flex items-center cursor-pointer group">
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 transition-colors ${filters.experienceLevel.includes(level) ? 'bg-[#2D9B82] border-[#2D9B82]' : 'border-gray-200 group-hover:border-[#2D9B82]'}`}>
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center mr-3 transition-colors ${filters.experienceLevel.includes(level) ? 'bg-[#29a08e] border-[#29a08e]' : 'border-gray-200 group-hover:border-[#29a08e]'}`}>
                                                     {filters.experienceLevel.includes(level) && <X size={10} className="text-white" />}
                                                 </div>
                                                 <span className="text-xs font-bold text-gray-600 group-hover:text-gray-900">{level}</span>
@@ -304,7 +305,7 @@ const FindJobs = () => {
                                             <button
                                                 key={tag}
                                                 onClick={() => toggleTag(tag)}
-                                                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all border ${selectedTags.includes(tag) ? 'bg-[#2D9B82] text-white border-[#2D9B82]' : 'bg-gray-50 text-gray-500 border-gray-100'}`}
+                                                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all border ${selectedTags.includes(tag) ? 'bg-[#29a08e] text-white border-[#29a08e]' : 'bg-gray-50 text-gray-500 border-gray-100'}`}
                                             >
                                                 {tag}
                                             </button>
@@ -320,16 +321,23 @@ const FindJobs = () => {
                         {/* Results Header */}
                         <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center justify-between shadow-sm">
                             <h2 className="text-sm font-bold text-gray-900">
-                                <span className="text-[#2D9B82]">{filteredJobs.length}</span> Jobs Found
+                                <span className="text-[#29a08e]">{filteredJobs.length}</span> Jobs Found
                             </h2>
                             <div className="flex items-center gap-3">
-                                <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded transition-all ${viewMode === 'grid' ? 'bg-gray-100 text-[#2D9B82]' : 'text-gray-400'}`}><LayoutGrid size={16} /></button>
-                                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded transition-all ${viewMode === 'list' ? 'bg-gray-100 text-[#2D9B82]' : 'text-gray-400'}`}><List size={16} /></button>
+                                <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded transition-all ${viewMode === 'grid' ? 'bg-gray-100 text-[#29a08e]' : 'text-gray-400'}`}><LayoutGrid size={16} /></button>
+                                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded transition-all ${viewMode === 'list' ? 'bg-gray-100 text-[#29a08e]' : 'text-gray-400'}`}><List size={16} /></button>
                             </div>
                         </div>
 
                         {/* Jobs Grid */}
-                        <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'} gap-4`}>
+                        <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'} gap-4 mb-8`}>
+                            {/* Render AI Recommendations First on Page 1 if no search is active */}
+                            {currentPage === 1 && !searchQuery && !selectedLocation && !headerLocation && filters.jobType.length === 0 &&
+                                (Array.isArray(recommendedJobs) ? recommendedJobs.slice(0, 2) : (recommendedJobs.jobs ? recommendedJobs.jobs.slice(0, 2) : [])).map(job => (
+                                    <JobCard key={`rec-${job._id || job.id}`} job={job} isRecommended={true} />
+                                ))
+                            }
+
                             {currentJobs.length > 0 ? (
                                 currentJobs.map(job => (
                                     <JobCard key={job._id || job.id} job={job} />
@@ -347,31 +355,11 @@ const FindJobs = () => {
 
                         {/* Pagination */}
                         {totalPages > 1 && (
-                            <div className="flex justify-center gap-2 pt-6">
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                    disabled={currentPage === 1}
-                                    className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-[#2D9B82] disabled:opacity-50 text-xs font-bold"
-                                >
-                                    &lt;
-                                </button>
-                                {[...Array(totalPages)].map((_, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => setCurrentPage(i + 1)}
-                                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${currentPage === i + 1 ? 'bg-[#2D9B82] text-white shadow-md' : 'bg-white border border-gray-200 text-gray-500'}`}
-                                    >
-                                        {i + 1}
-                                    </button>
-                                ))}
-                                <button
-                                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                    disabled={currentPage === totalPages}
-                                    className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-[#2D9B82] disabled:opacity-50 text-xs font-bold"
-                                >
-                                    &gt;
-                                </button>
-                            </div>
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                onPageChange={setCurrentPage}
+                            />
                         )}
                     </div>
                 </div>

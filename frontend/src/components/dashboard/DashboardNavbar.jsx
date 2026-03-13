@@ -123,13 +123,13 @@ const DashboardNavbar = () => {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="flex justify-between items-center h-20">
                     {/* Logo */}
-                    <Link to="/" className="flex items-center gap-2 group">
-                        <div className="bg-blue-600 text-white p-2 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20 group-hover:scale-105 transition-transform">
+                    <Link to={user?.role === 'admin' ? '/admin/dashboard' : user?.role === 'recruiter' ? '/recruiter/dashboard' : '/seeker/dashboard'} className="flex items-center gap-2 group">
+                        <div className="bg-[#29a08e] text-white p-2 rounded-xl flex items-center justify-center shadow-lg shadow-[#29a08e]/20 group-hover:scale-105 transition-transform">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
                         </div>
-                        <span className="text-xl font-bold text-white tracking-tight">Naya <span className="text-blue-500">Awasar</span></span>
+                        <span className="text-xl font-bold text-white tracking-tight">Naya <span className="text-[#29a08e]">Awasar</span></span>
                     </Link>
 
                     {/* Nav Links */}
@@ -144,7 +144,7 @@ const DashboardNavbar = () => {
                                 >
                                     {link.label}
                                     {active && (
-                                        <span className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-blue-500 rounded-full mb-1"></span>
+                                        <span className="absolute bottom-0 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-[#29a08e] rounded-full mb-1"></span>
                                     )}
                                 </Link>
                             );
@@ -179,7 +179,7 @@ const DashboardNavbar = () => {
                                         {unreadCount > 0 && (
                                             <button
                                                 onClick={markAllRead}
-                                                className="text-[10px] font-bold text-blue-500 hover:text-blue-400 uppercase tracking-widest hover:underline decoration-blue-500/30 underline-offset-4 transition-all"
+                                                className="text-[10px] font-bold text-[#29a08e] hover:text-[#228377] uppercase tracking-widest hover:underline decoration-[#29a08e]/30 underline-offset-4 transition-all"
                                             >
                                                 Mark all read
                                             </button>
@@ -195,18 +195,22 @@ const DashboardNavbar = () => {
                                                         markRead(notif._id);
                                                         if (notif.link) {
                                                             setIsNotificationOpen(false);
-                                                            navigate(notif.link);
+                                                            let targetLink = notif.link;
+                                                            if (targetLink.startsWith('/jobs/')) {
+                                                                targetLink = `/jobseeker${targetLink}`;
+                                                            }
+                                                            navigate(targetLink);
                                                         }
                                                     }}
                                                     className={`group px-5 py-4 border-b border-gray-800 hover:bg-gray-800/60 transition-all cursor-pointer relative ${!notif.isRead ? 'bg-gray-800/30' : ''
                                                         }`}
                                                 >
                                                     {!notif.isRead && (
-                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-indigo-600"></div>
+                                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#29a08e] to-[#228377]"></div>
                                                     )}
 
                                                     <div className="flex gap-4">
-                                                        <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${!notif.isRead ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'bg-transparent'}`}></div>
+                                                        <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${!notif.isRead ? 'bg-[#29a08e] shadow-[0_0_8px_rgba(41,160,142,0.6)]' : 'bg-transparent'}`}></div>
                                                         <div className="flex-1 min-w-0"> {/* min-w-0 ensures truncation works */}
                                                             <div className="flex justify-between items-start gap-2 mb-1">
                                                                 <h4 className={`text-sm ${!notif.isRead ? 'text-white font-bold' : 'text-gray-300 font-semibold'} line-clamp-1`}>
@@ -259,10 +263,10 @@ const DashboardNavbar = () => {
                                     <p className="text-xs font-bold text-white">{user?.fullName || 'User'}</p>
                                     <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{user?.role || 'Guest'}</p>
                                 </div>
-                                <div className={`w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border-2 transition-all ${isDropdownOpen ? 'border-blue-500 shadow-md shadow-blue-500/20' : 'border-gray-700 group-hover:border-blue-500/50'}`}>
+                                <div className={`w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center overflow-hidden border-2 transition-all ${isDropdownOpen ? 'border-[#29a08e] shadow-md shadow-[#29a08e]/20' : 'border-gray-700 group-hover:border-[#29a08e]/50'}`}>
                                     {user?.profileImage ? (
                                         <img
-                                            src={`${import.meta.env.VITE_API_URL}${user.profileImage}`}
+                                            src={user.profileImage.startsWith('http') ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`}
                                             alt=""
                                             className="w-full h-full object-cover"
                                             onError={(e) => { e.target.style.display = 'none'; }}
@@ -271,7 +275,7 @@ const DashboardNavbar = () => {
                                         <span className="text-xs font-bold text-gray-400">{user?.fullName?.charAt(0) || 'U'}</span>
                                     )}
                                 </div>
-                                <svg className={`w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-all duration-300 ${isDropdownOpen ? 'rotate-180 text-blue-500' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className={`w-4 h-4 text-gray-500 group-hover:text-gray-300 transition-all duration-300 ${isDropdownOpen ? 'rotate-180 text-[#29a08e]' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                                 </svg>
                             </div>

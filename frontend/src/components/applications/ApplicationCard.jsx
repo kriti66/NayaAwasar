@@ -22,7 +22,7 @@ const ApplicationCard = ({ application }) => {
 
     const getStatusBadgeStyles = (s) => {
         switch (s) {
-            case 'Under Review': return 'bg-blue-50 text-blue-600 border-blue-100';
+            case 'Under Review': return 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20';
             case 'Interview Scheduled': return 'bg-purple-50 text-purple-600 border-purple-100';
             case 'Offer Extended': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
             case 'Rejected': return 'bg-rose-50 text-rose-600 border-rose-100';
@@ -31,7 +31,7 @@ const ApplicationCard = ({ application }) => {
     };
 
     return (
-        <div className={`bg-white border rounded-2xl overflow-hidden transition-all duration-300 ${isExpanded ? 'shadow-lg border-blue-100 ring-1 ring-blue-50' : 'shadow-sm border-slate-100 hover:border-slate-200'}`}>
+        <div className={`bg-white border rounded-2xl overflow-hidden transition-all duration-300 ${isExpanded ? 'shadow-lg border-[#29a08e]/20 ring-1 ring-[#29a08e]/10' : 'shadow-sm border-slate-100 hover:border-slate-200'}`}>
             {/* Header / Summary Section */}
             <div className="p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                 <div className="flex items-center gap-5">
@@ -67,7 +67,7 @@ const ApplicationCard = ({ application }) => {
 
                         <div className="hidden md:flex items-center gap-3">
                             {status === 'Interview Scheduled' && (
-                                <Link to="/seeker/interviews" className="px-5 py-2 bg-blue-600 text-white text-[11px] font-black uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95">
+                                <Link to="/seeker/interviews" className="px-5 py-2 bg-[#29a08e] text-white text-[11px] font-black uppercase tracking-wider rounded-xl shadow-lg shadow-[#29a08e]/20 hover:bg-[#228377] transition-all active:scale-95">
                                     View Interview
                                 </Link>
                             )}
@@ -113,8 +113,8 @@ const ApplicationCard = ({ application }) => {
                                     return (
                                         <div key={step} className="relative flex flex-col items-center group">
                                             <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black z-10 border-4 border-white transition-all duration-500 ${status === 'Rejected' ? 'bg-slate-100 text-slate-400' :
-                                                isCurrent ? 'bg-blue-600 text-white ring-4 ring-blue-50 scale-125' :
-                                                    isActive ? 'bg-blue-500 text-white' :
+                                                isCurrent ? 'bg-[#29a08e] text-white ring-4 ring-[#29a08e]/10 scale-125' :
+                                                    isActive ? 'bg-[#29a08e] text-white' :
                                                         'bg-slate-100 text-slate-400'
                                                 }`}>
                                                 {isActive ? <FileCheck size={14} strokeWidth={3} /> : idx + 1}
@@ -134,13 +134,13 @@ const ApplicationCard = ({ application }) => {
                         <div className={`rounded-2xl p-6 border ${status === 'Interview Scheduled' ? 'bg-purple-50/50 border-purple-100 text-purple-900' :
                             status === 'Offer Extended' ? 'bg-emerald-50/50 border-emerald-100 text-emerald-900' :
                                 status === 'Rejected' ? 'bg-rose-50/50 border-rose-100 text-rose-900' :
-                                    'bg-blue-50/50 border-blue-100 text-blue-900'
+                                    'bg-blue-50/50 border-[#29a08e]/20 text-[#228377]'
                             }`}>
                             <div className="flex gap-4">
                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${status === 'Interview Scheduled' ? 'bg-purple-600 text-white' :
                                     status === 'Offer Extended' ? 'bg-emerald-600 text-white' :
                                         status === 'Rejected' ? 'bg-rose-600 text-white' :
-                                            'bg-blue-600 text-white'
+                                            'bg-[#29a08e] text-white'
                                     }`}>
                                     {status === 'Interview Scheduled' ? <MessageSquare size={18} /> :
                                         status === 'Offer Extended' ? <ExternalLink size={18} /> :

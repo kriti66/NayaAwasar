@@ -144,7 +144,7 @@ const ApplyJob = () => {
         return (
             <>
                 <div className="flex items-center justify-center min-h-[60vh]">
-                    <div className="w-12 h-12 border-4 border-[#2D9B82] border-t-transparent rounded-full animate-spin"></div>
+                    <div className="w-12 h-12 border-4 border-[#29a08e] border-t-transparent rounded-full animate-spin"></div>
                 </div>
             </>
         );
@@ -163,7 +163,7 @@ const ApplyJob = () => {
                 <div className="flex items-center justify-between mb-12 relative">
                     <div className="absolute top-1/2 left-0 w-full h-0.5 bg-gray-100 -translate-y-1/2 z-0"></div>
                     <div
-                        className="absolute top-1/2 left-0 h-0.5 bg-[#2D9B82] -translate-y-1/2 z-0 transition-all duration-500"
+                        className="absolute top-1/2 left-0 h-0.5 bg-[#29a08e] -translate-y-1/2 z-0 transition-all duration-500"
                         style={{ width: `${((step - 1) / 2) * 100}%` }}
                     ></div>
 
@@ -173,7 +173,7 @@ const ApplyJob = () => {
                         { num: 3, label: 'Resume', icon: Upload }
                     ].map((s) => (
                         <div key={s.num} className="relative z-10 flex flex-col items-center">
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white shadow-sm ${step >= s.num ? 'bg-[#2D9B82] text-white shadow-[#2D9B82]/20' : 'bg-gray-100 text-gray-400'
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 border-4 border-white shadow-sm ${step >= s.num ? 'bg-[#29a08e] text-white shadow-[#29a08e]/20' : 'bg-gray-100 text-gray-400'
                                 }`}>
                                 <s.icon size={18} />
                             </div>
@@ -196,21 +196,21 @@ const ApplyJob = () => {
                                 <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Full Name</label>
                                     <div className="flex items-center gap-3 text-gray-900 font-bold">
-                                        <User size={18} className="text-[#2D9B82]" />
+                                        <User size={18} className="text-[#29a08e]" />
                                         {user?.fullName}
                                     </div>
                                 </div>
                                 <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Email Address</label>
                                     <div className="flex items-center gap-3 text-gray-900 font-bold">
-                                        <Mail size={18} className="text-[#2D9B82]" />
+                                        <Mail size={18} className="text-[#29a08e]" />
                                         {user?.email}
                                     </div>
                                 </div>
                                 <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 md:col-span-2">
                                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-2">Job Category</label>
                                     <div className="flex items-center gap-3 text-gray-900 font-bold">
-                                        <Briefcase size={18} className="text-[#2D9B82]" />
+                                        <Briefcase size={18} className="text-[#29a08e]" />
                                         {job?.title} (Application Role)
                                     </div>
                                 </div>
@@ -227,12 +227,12 @@ const ApplyJob = () => {
 
                             <div className="relative">
                                 <textarea
-                                    className="w-full bg-gray-50 border border-gray-100 rounded-[24px] p-6 text-sm font-medium text-gray-700 focus:outline-none focus:ring-4 focus:ring-[#2D9B82]/5 focus:border-[#2D9B82] transition-all min-h-[300px] shadow-inner"
+                                    className="w-full bg-gray-50 border border-gray-100 rounded-[24px] p-6 text-sm font-medium text-gray-700 focus:outline-none focus:ring-4 focus:ring-[#29a08e]/5 focus:border-[#29a08e] transition-all min-h-[300px] shadow-inner"
                                     value={coverLetter}
                                     onChange={(e) => setCoverLetter(e.target.value)}
                                     placeholder="Start writing..."
                                 />
-                                <div className={`absolute bottom-6 right-6 text-[10px] font-black tracking-widest uppercase ${coverLetter.length < 50 ? 'text-amber-500' : 'text-[#2D9B82]'
+                                <div className={`absolute bottom-6 right-6 text-[10px] font-black tracking-widest uppercase ${coverLetter.length < 50 ? 'text-amber-500' : 'text-[#29a08e]'
                                     }`}>
                                     {coverLetter.length} / 50 characters min
                                 </div>
@@ -252,18 +252,18 @@ const ApplyJob = () => {
                                 <div
                                     onClick={() => setResumeType('Generated')}
                                     className={`p-6 rounded-[28px] border-2 cursor-pointer transition-all group ${resumeType === 'Generated'
-                                        ? 'border-[#2D9B82] bg-[#2D9B82]/5 shadow-lg shadow-[#2D9B82]/10'
-                                        : 'border-gray-100 hover:border-[#2D9B82]/30 hover:bg-gray-50'
+                                        ? 'border-[#29a08e] bg-[#29a08e]/5 shadow-lg shadow-[#29a08e]/10'
+                                        : 'border-gray-100 hover:border-[#29a08e]/30 hover:bg-gray-50'
                                         }`}
                                 >
-                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors ${resumeType === 'Generated' ? 'bg-[#2D9B82] text-white' : 'bg-gray-100 text-gray-400 group-hover:bg-[#2D9B82]/10 group-hover:text-[#2D9B82]'
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors ${resumeType === 'Generated' ? 'bg-[#29a08e] text-white' : 'bg-gray-100 text-gray-400 group-hover:bg-[#29a08e]/10 group-hover:text-[#29a08e]'
                                         }`}>
                                         <Briefcase size={22} />
                                     </div>
                                     <h3 className="font-bold text-gray-900 mb-1">Use Generated CV</h3>
                                     <p className="text-xs text-gray-500 font-medium mb-4">Naya Awasar auto-generated resume based on your profile.</p>
                                     {profile?.resume?.source === 'generated' ? (
-                                        <div className="flex items-center gap-1.5 text-[10px] font-black text-[#2D9B82] uppercase tracking-wider bg-white rounded-lg px-3 py-1.5 shadow-sm border border-emerald-50 w-fit">
+                                        <div className="flex items-center gap-1.5 text-[10px] font-black text-[#29a08e] uppercase tracking-wider bg-white rounded-lg px-3 py-1.5 shadow-sm border border-emerald-50 w-fit">
                                             <CheckCircle size={12} /> Ready to Use
                                         </div>
                                     ) : (
@@ -275,11 +275,11 @@ const ApplyJob = () => {
                                 <div
                                     onClick={() => setResumeType('Uploaded')}
                                     className={`p-6 rounded-[28px] border-2 cursor-pointer transition-all group ${resumeType === 'Uploaded'
-                                        ? 'border-[#2D9B82] bg-[#2D9B82]/5 shadow-lg shadow-[#2D9B82]/10'
-                                        : 'border-gray-100 hover:border-[#2D9B82]/30 hover:bg-gray-50'
+                                        ? 'border-[#29a08e] bg-[#29a08e]/5 shadow-lg shadow-[#29a08e]/10'
+                                        : 'border-gray-100 hover:border-[#29a08e]/30 hover:bg-gray-50'
                                         }`}
                                 >
-                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors ${resumeType === 'Uploaded' ? 'bg-[#2D9B82] text-white' : 'bg-gray-100 text-gray-400 group-hover:bg-[#2D9B82]/10 group-hover:text-[#2D9B82]'
+                                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 transition-colors ${resumeType === 'Uploaded' ? 'bg-[#29a08e] text-white' : 'bg-gray-100 text-gray-400 group-hover:bg-[#29a08e]/10 group-hover:text-[#29a08e]'
                                         }`}>
                                         <Upload size={22} />
                                     </div>
@@ -296,7 +296,7 @@ const ApplyJob = () => {
                                     )}
 
                                     {resumeFile && (
-                                        <div className="mt-3 flex items-center gap-2 text-[10px] font-black text-[#2D9B82] uppercase tracking-wider">
+                                        <div className="mt-3 flex items-center gap-2 text-[10px] font-black text-[#29a08e] uppercase tracking-wider">
                                             <CheckCircle size={12} /> {resumeFile.name.slice(0, 15)}...
                                         </div>
                                     )}
@@ -330,7 +330,7 @@ const ApplyJob = () => {
                         <button
                             onClick={handleSubmit}
                             disabled={submitting}
-                            className={`px-12 py-3.5 bg-[#2D9B82] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] hover:bg-[#25836d] transition-all shadow-xl shadow-[#2D9B82]/20 flex items-center gap-2 ${submitting ? 'opacity-70 cursor-not-allowed' : 'transform active:scale-95'}`}
+                            className={`px-12 py-3.5 bg-[#29a08e] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] hover:bg-[#228377] transition-all shadow-xl shadow-[#29a08e]/20 flex items-center gap-2 ${submitting ? 'opacity-70 cursor-not-allowed' : 'transform active:scale-95'}`}
                         >
                             {submitting ? 'Submitting...' : 'Submit Application'} <CheckCircle size={16} />
                         </button>

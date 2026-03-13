@@ -23,7 +23,8 @@ const interviewSchema = new mongoose.Schema({
     },
     roomId: {
         type: String,
-        unique: true
+        unique: true,
+        sparse: true // Allows null/undefined if Onsite
     },
     status: {
         type: String,
@@ -40,20 +41,30 @@ const interviewSchema = new mongoose.Schema({
     },
     mode: {
         type: String,
-        default: 'OneONoneCall'
+        enum: ['Online', 'Onsite'],
+        required: true
     },
-    meetingLink: String,
+    location: {
+        type: String
+    },
     notes: String,
+    timezone: String, // Added timezone as requested
     startTime: Date,
     endTime: Date
 }, { timestamps: true });
 
-// Auto-generate roomId before saving
-interviewSchema.pre('save', function (next) {
-    if (this.isNew || !this.roomId) {
-        this.roomId = `interview_${this._id}`;
+// Auto-generate roomId before saving if Online
+interviewSchema.pre('save', async function () {
+    if (this.mode === 'Online') {
+        if (!this.roomId) {
+            this.roomId = `interview_${this.applicationId}_${Date.now()}`;
+        }
+    } else if (this.mode === 'Onsite') {
+        this.roomId = undefined; // Ensure sparse index ignores this
+        if (!this.location || this.location.trim() === '') {
+            throw new Error('Location is required for Onsite interviews.');
+        }
     }
-    next();
 });
 
 const Interview = mongoose.model('Interview', interviewSchema);

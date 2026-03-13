@@ -1,18 +1,15 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Calendar } from 'lucide-react';
 
 const UpcomingInterviewWidget = ({ interviews }) => {
     const nextInterview = interviews && interviews.length > 0 ? interviews[0] : null;
 
     return (
-        <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-8">
+        <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-bold text-gray-900">Upcoming Interview</h3>
-                <button className="text-gray-400 hover:text-gray-600 transition-colors">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z" />
-                    </svg>
-                </button>
+                <Link to="/seeker/interviews" className="text-xs font-bold text-[#29a08e] hover:underline">View all</Link>
             </div>
 
             {nextInterview ? (
@@ -41,7 +38,7 @@ const UpcomingInterviewWidget = ({ interviews }) => {
                                 </svg>
                                 <span>{nextInterview.interview?.time || 'Time TBD'}</span>
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-[#2D9B82] font-bold">
+                            <div className="flex items-center gap-3 text-xs text-[#29a08e] font-bold">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                 </svg>
@@ -50,7 +47,7 @@ const UpcomingInterviewWidget = ({ interviews }) => {
                                         href={nextInterview.interview?.meetLink}
                                         target="_blank"
                                         rel="noreferrer"
-                                        className="underline cursor-pointer hover:text-[#25836d]"
+                                        className="underline cursor-pointer hover:text-[#228377]"
                                     >
                                         Join Meeting
                                     </a>
@@ -66,7 +63,7 @@ const UpcomingInterviewWidget = ({ interviews }) => {
                                     href={nextInterview.interview.meetLink}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="flex-1 py-2 bg-[#2D9B82] text-white text-[10px] font-black uppercase tracking-wider rounded-lg hover:bg-[#25836d] transition-all text-center flex items-center justify-center"
+                                    className="flex-1 py-2 bg-[#29a08e] text-white text-[10px] font-black uppercase tracking-wider rounded-lg hover:bg-[#228377] transition-all text-center flex items-center justify-center"
                                 >
                                     Join
                                 </a>
@@ -81,8 +78,9 @@ const UpcomingInterviewWidget = ({ interviews }) => {
                     </div>
                 </div>
             ) : (
-                <div className="py-8 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                    <p className="text-xs text-gray-500 font-medium">No interviews scheduled yet</p>
+                <div className="py-10 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                    <Calendar className="w-12 h-12 text-[#29a08e] mx-auto mb-3" />
+                    <p className="text-sm text-gray-600 font-medium">No interviews scheduled yet</p>
                 </div>
             )}
         </div>
