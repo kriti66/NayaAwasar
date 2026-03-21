@@ -43,6 +43,8 @@ router.post('/apply', requireKycVerified, upload.single('resume'), applicationCo
 router.patch('/:id/withdraw', requireAuth, applicationController.withdrawApplication);
 router.patch('/:id/accept-offer', requireAuth, applicationController.acceptOffer);
 router.post('/:id/request-reschedule', requireAuth, applicationController.requestReschedule);
+router.put('/:id/recruiter-reschedule/accept', requireAuth, applicationController.acceptRecruiterReschedule);
+router.put('/:id/recruiter-reschedule/reject', requireAuth, applicationController.rejectRecruiterReschedule);
 
 // RECRUITER ROUTES
 router.get('/job/:jobId', requireKycApproved, requireRole('recruiter', 'admin'), applicationController.getJobApplications);
@@ -51,5 +53,6 @@ router.patch('/:id/reject', requireKycApproved, requireRole('recruiter', 'admin'
 router.patch('/:id/status', requireKycApproved, requireRole('recruiter', 'admin'), applicationController.updateApplicationStatus);
 router.put('/:id/approve-reschedule-request', requireKycApproved, applicationController.approveReschedule);
 router.put('/:id/reject-reschedule-request', requireKycApproved, applicationController.rejectReschedule);
+router.put('/:id/recruiter-propose-reschedule', requireKycApproved, requireRole('recruiter', 'admin'), applicationController.proposeRecruiterReschedule);
 
 export default router;

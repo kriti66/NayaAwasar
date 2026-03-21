@@ -50,6 +50,8 @@ import AdminKYCPanel from '../pages/admin/AdminKYCPanel';
 import AdminCompanies from '../pages/admin/AdminCompanies';
 import AdminLocationManager from '../pages/admin/AdminLocationManager';
 import AdminJobs from '../pages/admin/AdminJobs';
+import AdminContactMessages from '../pages/admin/AdminContactMessages';
+import AdminPromotedJobs from '../pages/admin/AdminPromotedJobs';
 import Notifications from '../pages/shared/Notifications';
 import InterviewCall from '../pages/shared/InterviewCall';
 
@@ -168,7 +170,9 @@ const AppRoutes = () => {
                         <Route path="/admin/companies/:id" element={<CompanyProfile />} />
                         <Route path="/admin/location" element={<AdminLocationManager />} />
                         <Route path="/admin/jobs" element={<AdminJobs />} />
+                        <Route path="/admin/promoted-jobs" element={<AdminPromotedJobs />} />
                         <Route path="/admin/notifications" element={<Notifications />} />
+                        <Route path="/admin/contact-messages" element={<AdminContactMessages />} />
                     </Route>
                 </Route>
 

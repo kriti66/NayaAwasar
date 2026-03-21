@@ -101,6 +101,16 @@ const companyService = {
         }
     },
 
+    // Resubmit company for review after rejection
+    resubmitForReview: async (id) => {
+        try {
+            const response = await api.post(`/companies/${id}/resubmit`);
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
+    },
+
     // Legacy/Shared Verify (can keep or redirect to new)
     verifyCompany: async (id, status, comment) => {
         try {

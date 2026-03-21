@@ -6,6 +6,20 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** Build full backend base URL for images (Puppeteer needs absolute URLs) */
+const getBaseUrl = () => {
+    const base = process.env.BASE_URL || process.env.API_URL;
+    if (base) return base.replace(/\/api\/?$/, '').replace(/\/$/, '');
+    const port = process.env.PORT || 5001;
+    return `http://localhost:${port}`;
+};
+
+/** Default avatar SVG (initials in circle) as data URI when no profile image */
+const getDefaultAvatarSvg = (initial) => {
+    const letter = encodeURIComponent((initial || 'J').toUpperCase().charAt(0));
+    return `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect fill='%23e5e7eb' width='100' height='100' rx='50'/%3E%3Ctext x='50' y='58' font-size='40' font-weight='600' fill='%236b7280' text-anchor='middle' font-family='Helvetica,Arial,sans-serif'%3E${letter}%3C/text%3E%3C/svg%3E`;
+};
+
 export const generateCV_PDF = async (profile) => {
     try {
         // Ensure directory exists
@@ -38,28 +52,45 @@ export const generateCV_PDF = async (profile) => {
                     -webkit-font-smoothing: antialiased;
                 }
                 .header {
+                    display: flex;
+                    align-items: center;
+                    gap: 18px;
                     border-bottom: 2px solid #2D9B82;
-                    padding-bottom: 20px;
-                    margin-bottom: 30px;
+                    padding-bottom: 16px;
+                    margin-bottom: 24px;
+                }
+                .header-avatar {
+                    width: 60px;
+                    height: 60px;
+                    min-width: 60px;
+                    min-height: 60px;
+                    border-radius: 50%;
+                    object-fit: cover;
+                    border: 2px solid #2D9B82;
+                    background: #f3f4f6;
+                }
+                .header-content {
+                    flex: 1;
+                    min-width: 0;
                 }
                 .name {
-                    font-size: 32px;
+                    font-size: 22px;
                     font-weight: 700;
                     color: #111827;
                     text-transform: uppercase;
                     letter-spacing: 0.5px;
-                    margin: 0;
+                    margin: 0 0 2px 0;
                 }
                 .headline {
-                    font-size: 16px;
+                    font-size: 13px;
                     color: #2D9B82;
                     font-weight: 600;
-                    margin-top: 5px;
-                    margin-bottom: 10px;
+                    margin: 0 0 4px 0;
                 }
                 .meta {
-                    font-size: 13px;
+                    font-size: 11px;
                     color: #666;
+                    line-height: 1.5;
                 }
                 .section-title {
                     font-size: 14px;
@@ -129,14 +160,19 @@ export const generateCV_PDF = async (profile) => {
         </head>
         <body>
             <div class="header">
-                ${profile.user?.profileImage ? `
-                    <img src="http://localhost:${process.env.PORT || 5001}${profile.user.profileImage}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; float: right; margin-top: 10px;" />
-                ` : ''}
-                <h1 class="name">${profile.user?.fullName || 'Job Seeker'}</h1>
-                <div class="headline">${profile.headline || 'Professional'}</div>
-                <div class="meta">
-                    ${profile.location || ''} &bull; ${profile.user?.email || ''} 
-                    ${profile.phoneNumber ? `&bull; ${profile.phoneNumber}` : ''}
+                <img
+                    class="header-avatar"
+                    src="${(profile.user?.profileImage && profile.user.profileImage.trim())
+                        ? (profile.user.profileImage.startsWith('http') ? profile.user.profileImage : getBaseUrl() + (profile.user.profileImage.startsWith('/') ? '' : '/') + profile.user.profileImage)
+                        : getDefaultAvatarSvg(profile.user?.fullName?.charAt(0))}"
+                    alt="${profile.user?.fullName || 'Profile'} photo"
+                />
+                <div class="header-content">
+                    <h1 class="name">${profile.user?.fullName || 'Job Seeker'}</h1>
+                    <div class="headline">${profile.headline || profile.user?.professionalHeadline || 'Professional'}</div>
+                    <div class="meta">
+                        ${[profile.location, profile.user?.email, profile.user?.phoneNumber].filter(Boolean).join(' \u2022 ')}
+                    </div>
                 </div>
             </div>
 

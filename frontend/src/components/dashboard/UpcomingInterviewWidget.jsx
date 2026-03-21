@@ -1,86 +1,225 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Calendar } from 'lucide-react';
+import {
+    Calendar,
+    Clock,
+    Video,
+    MapPin,
+    AlertCircle,
+    ChevronRight,
+    ExternalLink,
+    Loader2
+} from 'lucide-react';
+import applicationService from '../../services/applicationService';
+import toast from 'react-hot-toast';
 
-const UpcomingInterviewWidget = ({ interviews }) => {
-    const nextInterview = interviews && interviews.length > 0 ? interviews[0] : null;
+const formatDate = (date) => {
+    if (!date) return 'Date TBD';
+    const d = new Date(date);
+    if (Number.isNaN(d.getTime())) return 'Date TBD';
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const formatTime = (time) => time || 'Time TBD';
+
+const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleAction }) => {
+    const [actionLoading, setActionLoading] = useState(false);
+    const nextInterview = interviews && Array.isArray(interviews) && interviews.length > 0 ? interviews[0] : null;
+    const interviewDoc = nextInterview?.interview?.interviewId;
+    const interviewStatus = interviewDoc?.interviewStatus || 'scheduled';
+    const isReschedulePending = interviewStatus === 'reschedule_pending';
+
+    const handleAcceptReschedule = async () => {
+        if (!nextInterview?._id) return;
+        setActionLoading(true);
+        try {
+            await applicationService.acceptRecruiterReschedule(nextInterview._id);
+            toast.success('Reschedule accepted. Your interview has been updated to the new date.');
+            onRescheduleAction?.();
+        } catch (err) {
+            const msg = err?.message || err?.response?.data?.message || 'Failed to accept reschedule';
+            toast.error(msg);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleDeclineReschedule = async () => {
+        if (!nextInterview?._id) return;
+        setActionLoading(true);
+        try {
+            await applicationService.rejectRecruiterReschedule(nextInterview._id);
+            toast.success('Reschedule declined. Your original schedule remains active.');
+            onRescheduleAction?.();
+        } catch (err) {
+            const msg = err?.message || err?.response?.data?.message || 'Failed to decline reschedule';
+            toast.error(msg);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-bold text-gray-900">Upcoming Interview</h3>
+                </div>
+                <div className="py-12 flex flex-col items-center justify-center gap-3">
+                    <Loader2 className="w-10 h-10 text-[#29a08e] animate-spin" />
+                    <p className="text-sm text-gray-500 font-medium">Loading interviews...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+        <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-6">
                 <h3 className="text-lg font-bold text-gray-900">Upcoming Interview</h3>
-                <Link to="/seeker/interviews" className="text-xs font-bold text-[#29a08e] hover:underline">View all</Link>
+                <Link
+                    to="/seeker/interviews"
+                    className="text-xs font-bold text-[#29a08e] hover:text-[#228377] hover:underline transition-colors"
+                >
+                    View all
+                </Link>
             </div>
 
             {nextInterview ? (
-                <div className="space-y-6">
-                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
-                        <div className="flex items-start justify-between mb-4">
-                            <div>
-                                <h4 className="text-sm font-bold text-gray-900 mb-1">{nextInterview.job_id?.title || 'Job Position'}</h4>
-                                <p className="text-xs font-semibold text-gray-400">{nextInterview.job_id?.company_name || 'Company Name'}</p>
+                <div className="space-y-4">
+                    <div className="bg-gray-50 rounded-2xl p-5 border border-gray-100">
+                        <div className="flex items-start justify-between gap-3 mb-4">
+                            <div className="min-w-0 flex-1">
+                                <h4 className="text-sm font-bold text-gray-900 truncate">
+                                    {nextInterview.job_id?.title || 'Job Position'}
+                                </h4>
+                                <p className="text-xs font-semibold text-gray-500 truncate">
+                                    {nextInterview.job_id?.company_name || 'Company Name'}
+                                </p>
                             </div>
-                            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-gray-400 shadow-sm border border-gray-100 font-bold text-xs uppercase">
+                            <div className="w-9 h-9 rounded-xl bg-white border border-gray-100 flex items-center justify-center shrink-0 font-bold text-[#29a08e] text-sm shadow-sm">
                                 {nextInterview.job_id?.company_name?.charAt(0) || 'C'}
                             </div>
                         </div>
 
-                        <div className="space-y-3 mb-4">
-                            <div className="flex items-center gap-3 text-xs text-gray-500 font-medium">
-                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                </svg>
-                                <span>{nextInterview.interview?.date ? new Date(nextInterview.interview.date).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) : 'Date TBD'}</span>
+                        {/* Status badge */}
+                        {isReschedulePending && (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider border border-amber-200 mb-4">
+                                <AlertCircle size={12} />
+                                Reschedule Pending
+                            </span>
+                        )}
+
+                        <div className="space-y-3">
+                            {/* Original date/time */}
+                            <div className="flex items-center gap-3 text-xs text-gray-600 font-medium">
+                                <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span>
+                                    {formatDate(nextInterview.interview?.date)} at{' '}
+                                    {formatTime(nextInterview.interview?.time)}
+                                </span>
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-gray-500 font-medium">
-                                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <span>{nextInterview.interview?.time || 'Time TBD'}</span>
-                            </div>
+
+                            {/* Proposed date/time (only when reschedule_pending) */}
+                            {isReschedulePending && interviewDoc?.proposedDate && (
+                                <div className="flex items-start gap-3 text-xs bg-amber-50/80 rounded-xl p-3 border border-amber-100">
+                                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-bold text-amber-800 mb-0.5">Proposed new time:</p>
+                                        <p className="text-amber-700">
+                                            {formatDate(interviewDoc.proposedDate)} at{' '}
+                                            {formatTime(interviewDoc.proposedTime)}
+                                        </p>
+                                        {interviewDoc.rescheduleReason && (
+                                            <p className="text-amber-700/90 mt-1 italic">
+                                                Reason: {interviewDoc.rescheduleReason}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Mode & location / join link */}
                             <div className="flex items-center gap-3 text-xs text-[#29a08e] font-bold">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
                                 {nextInterview.interview?.mode === 'Online' ? (
-                                    <a
-                                        href={nextInterview.interview?.meetLink}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="underline cursor-pointer hover:text-[#228377]"
-                                    >
-                                        Join Meeting
-                                    </a>
+                                    <Video className="w-4 h-4 shrink-0" />
                                 ) : (
-                                    <span>{nextInterview.interview?.location || 'Onsite Interview'}</span>
+                                    <MapPin className="w-4 h-4 shrink-0" />
+                                )}
+                                {nextInterview.interview?.mode === 'Online' ? (
+                                    nextInterview.interview?.roomId ? (
+                                        <Link
+                                            to={`/interview/call/${nextInterview.interview.roomId}`}
+                                            className="hover:text-[#228377] underline transition-colors inline-flex items-center gap-1"
+                                        >
+                                            Join Meeting <ExternalLink size={12} />
+                                        </Link>
+                                    ) : (
+                                        <span className="text-gray-400">Join link will be available soon</span>
+                                    )
+                                ) : (
+                                    <span className="text-gray-700">
+                                        {nextInterview.interview?.location || 'Onsite Interview'}
+                                    </span>
                                 )}
                             </div>
                         </div>
 
-                        <div className="flex gap-2">
-                            {nextInterview.interview?.mode === 'Online' && nextInterview.interview?.meetLink && (
-                                <a
-                                    href={nextInterview.interview.meetLink}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex-1 py-2 bg-[#29a08e] text-white text-[10px] font-black uppercase tracking-wider rounded-lg hover:bg-[#228377] transition-all text-center flex items-center justify-center"
-                                >
-                                    Join
-                                </a>
+                        {/* Action buttons */}
+                        <div className="flex gap-2 mt-5">
+                            {isReschedulePending ? (
+                                <>
+                                    <button
+                                        onClick={handleAcceptReschedule}
+                                        disabled={actionLoading}
+                                        className="flex-1 py-2.5 bg-[#29a08e] text-white text-[10px] font-bold uppercase tracking-wider rounded-xl hover:bg-[#228377] transition-all flex items-center justify-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    >
+                                        {actionLoading ? (
+                                            <Loader2 size={14} className="animate-spin" />
+                                        ) : (
+                                            'Accept'
+                                        )}
+                                    </button>
+                                    <button
+                                        onClick={handleDeclineReschedule}
+                                        disabled={actionLoading}
+                                        className="flex-1 py-2.5 bg-white border border-amber-200 text-amber-700 text-[10px] font-bold uppercase tracking-wider rounded-xl hover:bg-amber-50 transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
+                                    >
+                                        Decline
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    {nextInterview.interview?.mode === 'Online' && nextInterview.interview?.roomId && (
+                                        <Link
+                                            to={`/interview/call/${nextInterview.interview.roomId}`}
+                                            className="flex-1 py-2.5 bg-[#29a08e] text-white text-[10px] font-bold uppercase tracking-wider rounded-xl hover:bg-[#228377] transition-all text-center flex items-center justify-center"
+                                        >
+                                            Join
+                                        </Link>
+                                    )}
+                                    <Link
+                                        to="/seeker/interviews?focused=true"
+                                        className="flex-1 py-2.5 bg-white border border-gray-200 text-gray-600 text-[10px] font-bold uppercase tracking-wider rounded-xl hover:bg-gray-50 transition-all text-center flex items-center justify-center"
+                                    >
+                                        Details
+                                    </Link>
+                                </>
                             )}
-                            <Link
-                                to={`/seeker/interviews?focused=true`}
-                                className="flex-1 py-2 bg-white border border-gray-200 text-gray-500 text-[10px] font-black uppercase tracking-wider rounded-lg hover:bg-gray-50 transition-all text-center flex items-center justify-center"
-                            >
-                                Details
-                            </Link>
                         </div>
                     </div>
                 </div>
             ) : (
-                <div className="py-10 text-center bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                    <Calendar className="w-12 h-12 text-[#29a08e] mx-auto mb-3" />
-                    <p className="text-sm text-gray-600 font-medium">No interviews scheduled yet</p>
+                <div className="py-10 text-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                    <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm font-semibold text-gray-600">No upcoming interviews</p>
+                    <p className="text-xs text-gray-500 mt-1">When recruiters schedule an interview, it will appear here.</p>
+                    <Link
+                        to="/seeker/interviews"
+                        className="inline-flex items-center gap-1 mt-3 text-xs font-bold text-[#29a08e] hover:underline"
+                    >
+                        View all <ChevronRight size={14} />
+                    </Link>
                 </div>
             )}
         </div>

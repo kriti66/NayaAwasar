@@ -41,11 +41,11 @@ export const getMyProfile = async (req, res) => {
             ...profile.toObject(),
             // Merge User fields ensuring we have name/email
             user: {
-                fullName: user.fullName,
-                email: user.email,
-                role: user.role,
-                isKycVerified: user.isKycVerified,
-                profileImage: user.profileImage
+                fullName: user?.fullName || 'Unknown User',
+                email: user?.email || '',
+                role: user?.role || 'jobseeker',
+                isKycVerified: user?.isKycVerified || false,
+                profileImage: user?.profileImage || ''
             },
             strengthLabel: label,
             tips

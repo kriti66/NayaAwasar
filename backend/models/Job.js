@@ -90,6 +90,28 @@ const jobSchema = new mongoose.Schema({
     adminComments: {
         type: String,
         default: ''
+    },
+    // --- Promotional / Advertisement Fields ---
+    isPromoted: {
+        type: Boolean,
+        default: false
+    },
+    promotionType: {
+        type: String,
+        enum: ["NONE", "FEATURED", "HOMEPAGE_BANNER", "TOP_LISTING"],
+        default: "NONE"
+    },
+    promotionStartDate: {
+        type: Date,
+        default: null
+    },
+    promotionEndDate: {
+        type: Date,
+        default: null
+    },
+    promotionPriority: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
 

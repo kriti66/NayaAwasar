@@ -24,6 +24,7 @@ export const getJobApplications = async (req, res) => {
 
         const applications = await Application.find({ job_id: jobId })
             .populate('seeker_id', 'fullName email location phoneNumber profileImage')
+            .populate('interview.interviewId')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -618,18 +619,69 @@ export const acceptOffer = async (req, res) => {
     }
 };
 
-// Get upcoming interviews
+// Get upcoming interviews (Interview model as single source of truth)
 export const getMyInterviews = async (req, res) => {
     const seekerId = req.user.id;
 
     try {
-        const interviews = await Application.find({
-            seeker_id: seekerId,
-            status: 'interview',
-            'interview.date': { $gte: new Date().setHours(0, 0, 0, 0) }
-        }).populate('job_id', 'title company_name location');
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
 
-        res.json(interviews);
+        // Fetch from Interview model: scheduled, reschedule_pending, confirmed
+        const interviewDocs = await Interview.find({
+            seekerId,
+            status: 'Scheduled',
+            date: { $gte: startOfToday },
+            $or: [
+                { interviewStatus: { $in: ['scheduled', 'reschedule_pending', 'confirmed'] } },
+                { interviewStatus: { $exists: false } },
+                { interviewStatus: null }
+            ]
+        })
+            .populate('applicationId')
+            .populate('jobId', 'title company_name location')
+            .sort({ date: 1 })
+            .lean();
+
+        // Build response in Application-like shape for frontend compatibility
+        const result = interviewDocs
+            .filter((inv) => inv.applicationId && inv.applicationId.status === 'interview')
+            .map((inv) => {
+                const app = inv.applicationId;
+                const appObj = app?.toObject ? app.toObject() : app;
+                return {
+                    ...appObj,
+                    _id: app._id,
+                    job_id: inv.jobId,
+                    interview: {
+                        date: inv.date,
+                        time: inv.time,
+                        mode: inv.mode,
+                        location: inv.location,
+                        roomId: inv.roomId,
+                        notes: inv.notes,
+                        timezone: inv.timezone,
+                        duration: app?.interview?.duration,
+                        interviewer: app?.interview?.interviewer,
+                        interviewId: {
+                            _id: inv._id,
+                            interviewStatus: inv.interviewStatus || 'scheduled',
+                            rescheduleStatus: inv.rescheduleStatus || 'NONE',
+                            proposedDate: inv.proposedDate,
+                            proposedTime: inv.proposedTime,
+                            rescheduleReason: inv.rescheduleReason,
+                            rescheduleRequestedBy: inv.rescheduleRequestedBy,
+                            rescheduleRequestedAt: inv.rescheduleRequestedAt,
+                            requestedDate: inv.requestedDate,
+                            requestedTime: inv.requestedTime,
+                            recruiterDecisionAt: inv.recruiterDecisionAt,
+                            rescheduleRejectedReason: inv.rescheduleRejectedReason
+                        }
+                    }
+                };
+            });
+
+        res.json(result);
     } catch (error) {
         console.error("Fetch interviews error:", error);
         res.status(500).json({ message: 'Error fetching interviews' });
@@ -663,6 +715,24 @@ export const requestReschedule = async (req, res) => {
         };
 
         await application.save();
+
+        // Sync to Interview (single source of truth)
+        const interviewId = application.interview?.interviewId;
+        if (interviewId) {
+            const interviewDoc = await Interview.findById(interviewId);
+            if (interviewDoc) {
+                interviewDoc.rescheduleRequestedBy = 'jobseeker';
+                interviewDoc.rescheduleRequestedAt = new Date();
+                interviewDoc.requestedDate = preferredDate ? new Date(preferredDate) : undefined;
+                interviewDoc.requestedTime = preferredTime || undefined;
+                interviewDoc.rescheduleReason = reason;
+                interviewDoc.rescheduleStatus = 'PENDING';
+                interviewDoc.interviewStatus = 'reschedule_pending';
+                interviewDoc.rescheduleRejectedReason = undefined;
+                interviewDoc.recruiterDecisionAt = undefined;
+                await interviewDoc.save();
+            }
+        }
 
         await createNotification({
             recipient: application.job_id.recruiter_id,
@@ -715,6 +785,8 @@ export const approveReschedule = async (req, res) => {
             interviewDoc.notes = notes;
             interviewDoc.timezone = timezone;
             interviewDoc.status = 'Scheduled';
+            interviewDoc.interviewStatus = 'scheduled';
+            interviewDoc.rescheduleStatus = 'NONE';
             await interviewDoc.save();
         } else {
             interviewDoc = await Interview.create({
@@ -777,7 +849,7 @@ export const approveReschedule = async (req, res) => {
 // Reject Reschedule
 export const rejectReschedule = async (req, res) => {
     const { id } = req.params;
-    const { feedback } = req.body;
+    const { reason, feedback } = req.body;
     const recruiterId = req.user.id;
 
     try {
@@ -788,29 +860,291 @@ export const rejectReschedule = async (req, res) => {
             return res.status(403).json({ message: 'Unauthorized' });
         }
 
+        const rejectionReason = reason || feedback || 'Your reschedule request was declined.';
+
         application.reschedule.requested = false;
         application.reschedule.reviewed = true;
+        application.reschedule.rejectionReason = rejectionReason;
 
         application.interviewHistory.push({
             action: 'Reschedule Rejected',
-            reason: feedback || 'Declined reschedule request',
+            reason: rejectionReason,
             timestamp: new Date()
         });
 
         await application.save();
 
+        // Store rejection in Interview (single source of truth) - keep original schedule active
+        const interviewId = application.interview?.interviewId;
+        if (interviewId) {
+            const interviewDoc = await Interview.findById(interviewId);
+            if (interviewDoc) {
+                interviewDoc.rescheduleStatus = 'REJECTED';
+                interviewDoc.rescheduleRejectedReason = rejectionReason;
+                interviewDoc.recruiterDecisionAt = new Date();
+                interviewDoc.interviewStatus = 'scheduled';
+                // Keep original date/time - do not modify
+                await interviewDoc.save();
+            }
+        }
+
+        // Notify Seeker (still create notification for alert)
         await createNotification({
             recipient: application.seeker_id,
             type: 'application_update',
-            title: 'Reschedule Rejected',
-            message: `Your reschedule request for ${application.job_id.title} was declined. Original time stands.`,
+            title: 'Reschedule Declined',
+            message: `Your reschedule request for ${application.job_id.title} was declined. Reason: ${rejectionReason}`,
             link: '/seeker/interviews?focused=true&from=notifications',
             sender: recruiterId
         });
 
-        res.json({ success: true, message: 'Reschedule rejected', application });
+        res.json({ success: true, message: 'Reschedule request rejected', application });
     } catch (error) {
         console.error("Reject reschedule error:", error);
-        res.status(500).json({ message: 'Error rejecting reschedule' });
+        res.status(500).json({ message: 'Error rejecting reschedule request' });
+    }
+};
+
+// Recruiter proposes a reschedule to the jobseeker (jobseeker decides)
+export const proposeRecruiterReschedule = async (req, res) => {
+    const { id } = req.params;
+    const { proposedDate, proposedTime, reason } = req.body;
+    const requesterId = req.user.id;
+
+    if (!proposedDate) return res.status(400).json({ message: 'proposedDate is required' });
+    if (!proposedTime) return res.status(400).json({ message: 'proposedTime is required' });
+    if (!reason || !reason.trim()) return res.status(400).json({ message: 'Reason is required' });
+
+    const proposedDateObj = new Date(proposedDate);
+    if (Number.isNaN(proposedDateObj.getTime())) {
+        return res.status(400).json({ message: 'Invalid proposedDate' });
+    }
+
+    try {
+        const application = await Application.findById(id)
+            .populate('job_id', 'title recruiter_id')
+            .populate('seeker_id', 'fullName email');
+
+        if (!application) return res.status(404).json({ message: 'Application not found' });
+        if (application.status !== 'interview') return res.status(400).json({ message: 'Cannot reschedule: application is not in interview stage' });
+
+        // Recruiter owns the job / interview
+        if (req.user.role !== 'admin' && application.job_id.recruiter_id.toString() !== requesterId) {
+            return res.status(403).json({ message: 'Unauthorized access' });
+        }
+
+        // If jobseeker has a pending reschedule request (existing flow), block recruiter proposals
+        if (application.reschedule?.requested && !application.reschedule?.reviewed) {
+            return res.status(400).json({ message: 'A reschedule request is already pending review for this interview' });
+        }
+
+        const interviewId = application.interview?.interviewId;
+        if (!interviewId) return res.status(404).json({ message: 'Interview not found' });
+
+        const interviewDoc = await Interview.findById(interviewId);
+        if (!interviewDoc) return res.status(404).json({ message: 'Interview not found' });
+
+        if (req.user.role !== 'admin' && interviewDoc.recruiterId.toString() !== requesterId) {
+            return res.status(403).json({ message: 'Unauthorized access to this interview' });
+        }
+
+        if (['Completed', 'Cancelled', 'Missed'].includes(interviewDoc.status)) {
+            return res.status(400).json({ message: `Cannot reschedule interview in state: ${interviewDoc.status}` });
+        }
+
+        const currentStatus = interviewDoc.rescheduleStatus || 'NONE';
+        if (['PENDING', 'PROPOSED'].includes(currentStatus)) {
+            return res.status(400).json({ message: 'A recruiter reschedule request is already pending' });
+        }
+
+        // Keep original date/time unchanged; store proposed separately
+        interviewDoc.rescheduleRequestedBy = 'recruiter';
+        interviewDoc.proposedDate = proposedDateObj;
+        interviewDoc.proposedTime = proposedTime;
+        interviewDoc.rescheduleReason = reason;
+        interviewDoc.rescheduleStatus = 'PROPOSED';
+        interviewDoc.interviewStatus = 'reschedule_pending';
+        await interviewDoc.save();
+
+        // Optional audit trail
+        application.interviewHistory = Array.isArray(application.interviewHistory) ? application.interviewHistory : [];
+        application.interviewHistory.push({
+            action: 'Recruiter Reschedule Proposed',
+            reason,
+            details: {
+                proposedDate: proposedDateObj,
+                proposedTime,
+                mode: interviewDoc.mode
+            },
+            timestamp: new Date()
+        });
+        await application.save();
+
+        await createNotification({
+            recipient: application.seeker_id._id,
+            type: 'application_update',
+            title: 'Reschedule Proposed',
+            message: `Recruiter wants to reschedule your interview for ${application.job_id.title} to ${proposedDateObj.toLocaleDateString()} at ${proposedTime}.`,
+            link: '/seeker/interviews?focused=true&from=notifications',
+            sender: requesterId
+        });
+
+        res.json({ success: true, message: 'Reschedule request sent' });
+    } catch (error) {
+        console.error('Propose recruiter reschedule error:', error);
+        res.status(500).json({ message: 'Error sending reschedule request' });
+    }
+};
+
+// Jobseeker accepts recruiter-proposed reschedule
+export const acceptRecruiterReschedule = async (req, res) => {
+    const { id } = req.params;
+    const seekerId = req.user.id;
+
+    try {
+        const application = await Application.findById(id)
+            .populate('job_id', 'title recruiter_id')
+            .populate('seeker_id', 'fullName email')
+            .populate('interview.interviewId');
+
+        if (!application) return res.status(404).json({ message: 'Application not found' });
+        if (application.seeker_id.toString() !== seekerId) return res.status(403).json({ message: 'Unauthorized' });
+        if (application.status !== 'interview') return res.status(400).json({ message: 'Cannot accept: application is not in interview stage' });
+
+        const interviewDoc = application.interview?.interviewId;
+        if (!interviewDoc) return res.status(404).json({ message: 'Interview not found' });
+
+        if (['Completed', 'Cancelled', 'Missed'].includes(interviewDoc.status)) {
+            return res.status(400).json({ message: `Cannot reschedule interview in state: ${interviewDoc.status}` });
+        }
+
+        if (interviewDoc.rescheduleRequestedBy !== 'recruiter') {
+            return res.status(400).json({ message: 'No recruiter reschedule proposal pending' });
+        }
+
+        const currentStatus = interviewDoc.rescheduleStatus || 'NONE';
+        if (!['PENDING', 'PROPOSED'].includes(currentStatus)) {
+            return res.status(400).json({ message: 'No pending recruiter reschedule request' });
+        }
+
+        if (!interviewDoc.proposedDate || !interviewDoc.proposedTime) {
+            return res.status(400).json({ message: 'Proposed date/time missing' });
+        }
+
+        // Apply proposal
+        const newDate = new Date(interviewDoc.proposedDate);
+        const newTime = interviewDoc.proposedTime;
+
+        interviewDoc.date = newDate;
+        interviewDoc.time = newTime;
+        interviewDoc.status = 'Scheduled';
+        interviewDoc.interviewStatus = 'confirmed';
+        interviewDoc.rescheduleStatus = 'APPROVED';
+        interviewDoc.proposedDate = undefined;
+        interviewDoc.proposedTime = undefined;
+        interviewDoc.rescheduleReason = undefined;
+
+        // If online, regenerate roomId so the join link remains valid.
+        let roomId = interviewDoc.roomId;
+        if (interviewDoc.mode === 'Online') {
+            roomId = `interview_${application._id}_${Date.now()}`;
+            interviewDoc.roomId = roomId;
+        }
+
+        await interviewDoc.save();
+
+        application.interview = application.interview || {};
+        application.interview.date = newDate;
+        application.interview.time = newTime;
+        if (interviewDoc.mode === 'Online') {
+            application.interview.roomId = roomId;
+        }
+        application.interview.scheduledAt = new Date();
+
+        application.interviewHistory = Array.isArray(application.interviewHistory) ? application.interviewHistory : [];
+        application.interviewHistory.push({
+            action: 'Recruiter Reschedule Approved',
+            reason: interviewDoc.rescheduleReason,
+            timestamp: new Date()
+        });
+        await application.save();
+
+        await createNotification({
+            recipient: application.job_id.recruiter_id,
+            type: 'application_update',
+            title: 'Reschedule Approved',
+            message: `${application.seeker_id.fullName} accepted the reschedule for ${application.job_id.title}.`,
+            link: `/recruiter/applications?jobId=${application.job_id._id}`,
+            sender: seekerId
+        });
+
+        res.json({ success: true, message: 'Reschedule approved', application });
+    } catch (error) {
+        console.error('Accept recruiter reschedule error:', error);
+        res.status(500).json({ message: 'Error approving reschedule' });
+    }
+};
+
+// Jobseeker rejects recruiter-proposed reschedule (keeps old date/time)
+export const rejectRecruiterReschedule = async (req, res) => {
+    const { id } = req.params;
+    const seekerId = req.user.id;
+    const { reason } = req.body || {};
+
+    try {
+        const application = await Application.findById(id)
+            .populate('job_id', 'title recruiter_id')
+            .populate('seeker_id', 'fullName email')
+            .populate('interview.interviewId');
+
+        if (!application) return res.status(404).json({ message: 'Application not found' });
+        if (application.seeker_id.toString() !== seekerId) return res.status(403).json({ message: 'Unauthorized' });
+        if (application.status !== 'interview') return res.status(400).json({ message: 'Cannot reject: application is not in interview stage' });
+
+        const interviewDoc = application.interview?.interviewId;
+        if (!interviewDoc) return res.status(404).json({ message: 'Interview not found' });
+
+        if (['Completed', 'Cancelled', 'Missed'].includes(interviewDoc.status)) {
+            return res.status(400).json({ message: `Cannot reschedule interview in state: ${interviewDoc.status}` });
+        }
+
+        if (interviewDoc.rescheduleRequestedBy !== 'recruiter') {
+            return res.status(400).json({ message: 'No recruiter reschedule proposal pending' });
+        }
+
+        const currentStatus = interviewDoc.rescheduleStatus || 'NONE';
+        if (!['PENDING', 'PROPOSED'].includes(currentStatus)) {
+            return res.status(400).json({ message: 'No pending recruiter reschedule request' });
+        }
+
+        // Reject proposal: keep original interview.date/time unchanged; original schedule remains active.
+        interviewDoc.rescheduleStatus = 'REJECTED';
+        interviewDoc.interviewStatus = 'scheduled';
+        interviewDoc.proposedDate = undefined;
+        interviewDoc.proposedTime = undefined;
+        interviewDoc.rescheduleReason = undefined;
+        await interviewDoc.save();
+
+        application.interviewHistory = Array.isArray(application.interviewHistory) ? application.interviewHistory : [];
+        application.interviewHistory.push({
+            action: 'Recruiter Reschedule Rejected',
+            reason: reason || interviewDoc.rescheduleReason,
+            timestamp: new Date()
+        });
+        await application.save();
+
+        await createNotification({
+            recipient: application.job_id.recruiter_id,
+            type: 'application_update',
+            title: 'Reschedule Rejected',
+            message: `${application.seeker_id.fullName} rejected the reschedule for ${application.job_id.title}.`,
+            link: `/recruiter/applications?jobId=${application.job_id._id}`,
+            sender: seekerId
+        });
+
+        res.json({ success: true, message: 'Reschedule rejected', application });
+    } catch (error) {
+        console.error('Reject recruiter reschedule error:', error);
+        res.status(500).json({ message: 'Error rejecting reschedule request' });
     }
 };

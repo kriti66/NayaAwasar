@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import CompanyLogo from '../common/CompanyLogo';
 
 const RecommendedJobs = () => {
     const [jobs, setJobs] = useState([]);
@@ -61,15 +62,11 @@ const RecommendedJobs = () => {
                     <div key={job._id || idx} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group">
                         <div className="flex flex-col md:flex-row gap-6">
                             {/* Company Logo/Icon */}
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${idx === 0 ? 'bg-pink-100 text-pink-500' :
+                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden ${idx === 0 ? 'bg-pink-100 text-pink-500' :
                                     idx === 1 ? 'bg-[#29a08e]/20 text-[#29a08e]' :
                                         'bg-[#29a08e]/10 text-[#228377]'
                                 }`}>
-                                {job.company_logo ? (
-                                    <img src={job.company_logo} alt="" className="w-full h-full object-cover rounded-2xl" />
-                                ) : (
-                                    <span className="text-xl font-bold">{job.company_name?.charAt(0) || 'J'}</span>
-                                )}
+                                <CompanyLogo job={job} className="w-full h-full rounded-2xl bg-transparent border-0" imgClassName="w-full h-full object-cover rounded-2xl" fallbackClassName="text-xl font-bold" />
                             </div>
 
                             {/* Job Info */}

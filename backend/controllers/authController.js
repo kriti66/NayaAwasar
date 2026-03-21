@@ -1,8 +1,11 @@
 import User from '../models/User.js';
 import bcrypt from 'bcryptjs';
 import sendEmail from '../utils/sendEmail.js';
-
-// Generate a secure 6-digit OTP
+import { OAuth2Client } from 'google-auth-library';
+import axios from 'axios';
+import jwt from 'jsonwebtoken';
+import { getJwtSecret } from '../middleware/auth.js';
+import { logActivity } from '../utils/activityLogger.js';// Generate a secure 6-digit OTP
 const generateOTP = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
 };
@@ -137,5 +140,163 @@ export const resetPassword = async (req, res) => {
     } catch (error) {
         console.error("Error in resetPassword:", error);
         res.status(500).json({ success: false, message: "Server error during password reset." });
+    }
+};
+
+// 4. GOOGLE LOGIN
+export const googleLogin = async (req, res) => {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ success: false, message: "Google token is required." });
+
+    try {
+        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const { sub, email, name, picture } = payload;
+
+        let user = await User.findOne({ email: email.toLowerCase().trim() });
+
+        if (user) {
+            if (user.role === 'admin') {
+                return res.status(403).json({ success: false, message: "Admin accounts cannot login via social providers." });
+            }
+            if (!user.providerId) {
+                user.provider = 'google';
+                user.providerId = sub;
+                if (!user.profileImage && picture) {
+                    user.profileImage = picture;
+                }
+                user.isVerified = true;
+                await user.save();
+            }
+        } else {
+            user = new User({
+                fullName: name.trim(),
+                email: email.toLowerCase().trim(),
+                provider: 'google',
+                providerId: sub,
+                role: 'jobseeker',
+                kycStatus: 'not_submitted',
+                profileCompletion: 20,
+                profileImage: picture || '',
+                isVerified: true
+            });
+            await user.save();
+
+            await logActivity(
+                user._id,
+                'USER_REGISTERED',
+                `New user '${user.fullName}' registered via Google.`,
+                { role: 'jobseeker', provider: 'google' }
+            );
+        }
+
+        const jwtToken = jwt.sign(
+            { id: user._id.toString(), role: user.role, isKycVerified: user.isKycVerified },
+            getJwtSecret(),
+            { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Login successful",
+            token: jwtToken,
+            user: {
+                id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                role: user.role,
+                kycStatus: user.kycStatus,
+                isKycSubmitted: user.isKycSubmitted,
+                isKycVerified: user.isKycVerified,
+                profileImage: user.profileImage
+            }
+        });
+    } catch (error) {
+        console.error("Error in Google Login:", error);
+        res.status(500).json({ success: false, message: "Failed to authenticate with Google." });
+    }
+};
+
+// 5. FACEBOOK LOGIN
+export const facebookLogin = async (req, res) => {
+    const { accessToken } = req.body;
+    if (!accessToken) return res.status(400).json({ success: false, message: "Facebook access token is required." });
+
+    try {
+        const { data } = await axios.get(`https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${accessToken}`);
+
+        const { id, name, email } = data;
+        const picture = data.picture?.data?.url;
+
+        if (!email) {
+            return res.status(400).json({ success: false, message: "Facebook login requires email permission. Please try again and accept email access." });
+        }
+
+        let user = await User.findOne({ email: email.toLowerCase().trim() });
+
+        if (user) {
+            if (user.role === 'admin') {
+                return res.status(403).json({ success: false, message: "Admin accounts cannot login via social providers." });
+            }
+            if (!user.providerId) {
+                user.provider = 'facebook';
+                user.providerId = id;
+                if (!user.profileImage && picture) {
+                    user.profileImage = picture;
+                }
+                user.isVerified = true;
+                await user.save();
+            }
+        } else {
+            user = new User({
+                fullName: name.trim(),
+                email: email.toLowerCase().trim(),
+                provider: 'facebook',
+                providerId: id,
+                role: 'jobseeker',
+                kycStatus: 'not_submitted',
+                profileCompletion: 20,
+                profileImage: picture || '',
+                isVerified: true
+            });
+            await user.save();
+
+            await logActivity(
+                user._id,
+                'USER_REGISTERED',
+                `New user '${user.fullName}' registered via Facebook.`,
+                { role: 'jobseeker', provider: 'facebook' }
+            );
+        }
+
+        const jwtToken = jwt.sign(
+            { id: user._id.toString(), role: user.role, isKycVerified: user.isKycVerified },
+            getJwtSecret(),
+            { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+        );
+
+        res.status(200).json({
+            success: true,
+            message: "Login successful",
+            token: jwtToken,
+            user: {
+                id: user._id,
+                fullName: user.fullName,
+                email: user.email,
+                role: user.role,
+                kycStatus: user.kycStatus,
+                isKycSubmitted: user.isKycSubmitted,
+                isKycVerified: user.isKycVerified,
+                profileImage: user.profileImage
+            }
+        });
+    } catch (error) {
+        console.error("Error in Facebook Login:", error);
+        res.status(500).json({ success: false, message: "Failed to authenticate with Facebook." });
     }
 };

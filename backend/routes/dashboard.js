@@ -1,7 +1,9 @@
 import express from 'express';
 import Application from '../models/Application.js';
+import Interview from '../models/Interview.js';
 import Job from '../models/Job.js';
 import User from '../models/User.js';
+import { getValidSavedJobIds } from '../utils/savedJobsUtils.js';
 import KYC from '../models/KYC.js';
 import Company from '../models/Company.js';
 import { calculateRecruiterStrength } from '../utils/recruiterStrength.js';
@@ -19,15 +21,15 @@ router.get('/', async (req, res) => {
             const user = await User.findById(userId).select('fullName profileCompletion kycStatus kycRejectionReason resume_url skills savedJobs professionalHeadline jobPreferences location');
 
             // Stats
-            const [appliedCount, inReviewCount, interviewCount, offerCount, userWithSaved] = await Promise.all([
+            const [appliedCount, inReviewCount, interviewCount, offerCount, validSavedIds] = await Promise.all([
                 Application.countDocuments({ seeker_id: userId }), // Total Applied
                 Application.countDocuments({ seeker_id: userId, status: { $in: ['applied', 'in_review'] } }), // In Review
                 Application.countDocuments({ seeker_id: userId, status: 'interview' }), // Interview
                 Application.countDocuments({ seeker_id: userId, status: 'offered' }), // Offers
-                User.findById(userId).select('savedJobs')
+                getValidSavedJobIds(userId)
             ]);
 
-            const savedCount = userWithSaved?.savedJobs?.length || 0;
+            const savedCount = validSavedIds?.length || 0;
 
             // Profile Views (from Activity collection)
             // Assuming we log 'RECRUITER_VIEW' activities where userId or meta.targetUserId is the seeker
@@ -49,14 +51,44 @@ router.get('/', async (req, res) => {
             const { default: Activity } = await import('../models/Activity.js');
             const profileViews = await Activity.countDocuments({ userId: userId, type: 'RECRUITER_VIEW' });
 
-            // Application Pipeline Details
-            const upcomingInterviews = await Application.find({
-                seeker_id: userId,
-                status: 'interview',
-                'interview.date': { $gte: new Date().setHours(0, 0, 0, 0) }
-            }).populate('job_id', 'title company_name company_logo')
-                .sort({ 'interview.date': 1 })
-                .limit(1);
+            // Application Pipeline Details (Interview model as single source of truth)
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+            const interviewDocs = await Interview.find({
+                seekerId: userId,
+                status: 'Scheduled',
+                date: { $gte: startOfToday },
+                $or: [
+                    { interviewStatus: { $in: ['scheduled', 'reschedule_pending', 'confirmed'] } },
+                    { interviewStatus: { $exists: false } },
+                    { interviewStatus: null }
+                ]
+            })
+                .populate('applicationId')
+                .populate('jobId', 'title company_name company_logo')
+                .sort({ date: 1 })
+                .limit(1)
+                .lean();
+            const upcomingInterviews = interviewDocs
+                .filter((inv) => inv.applicationId && inv.applicationId.status === 'interview')
+                .map((inv) => ({
+                    _id: inv.applicationId._id,
+                    job_id: inv.jobId,
+                    interview: {
+                        date: inv.date,
+                        time: inv.time,
+                        mode: inv.mode,
+                        location: inv.location,
+                        roomId: inv.roomId,
+                        interviewId: {
+                            interviewStatus: inv.interviewStatus || 'scheduled',
+                            rescheduleStatus: inv.rescheduleStatus || 'NONE',
+                            proposedDate: inv.proposedDate,
+                            proposedTime: inv.proposedTime,
+                            rescheduleReason: inv.rescheduleReason
+                        }
+                    }
+                }));
 
             // Recent Activity (Mixed types: Applications, Messages, etc)
             // We want activities related to this user
@@ -190,12 +222,13 @@ router.get('/seeker/stats', async (req, res) => {
     if (!seekerId) return res.status(401).json({ message: 'Unauthorized' });
 
     try {
-        const [appliedCount, interviewCount] = await Promise.all([
+        const [appliedCount, interviewCount, validSavedIds] = await Promise.all([
             Application.countDocuments({ seeker_id: seekerId }),
-            Application.countDocuments({ seeker_id: seekerId, status: 'interview' })
+            Application.countDocuments({ seeker_id: seekerId, status: 'interview' }),
+            getValidSavedJobIds(seekerId)
         ]);
 
-        res.json({ applied: appliedCount, saved: 0, interviews: interviewCount });
+        res.json({ applied: appliedCount, saved: validSavedIds?.length || 0, interviews: interviewCount });
     } catch (error) {
         console.error("Seeker stats error:", error);
         res.status(500).json({ message: 'Error fetching stats' });
@@ -226,9 +259,29 @@ router.get('/recruiter/stats', async (req, res) => {
             status: { $nin: ['hired', 'rejected', 'withdrawn'] }
         });
 
-        // Fetch company for profile views
+        // Fetch company for profile views and calculate growth
         const company = await Company.findOne({ recruiters: recruiterId });
-        const profileViews = company?.profileViews?.total || 0;
+        let profileViews = 0;
+        let profileViewsGrowth = 0;
+
+        if (company && company.profileViews) {
+            profileViews = company.profileViews.total || 0;
+            
+            // Calculate Monthly Growth
+            const now = new Date();
+            const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+            const thisMonthViews = company.profileViews.viewedBy.filter(v => v.viewedAt >= startOfThisMonth).length;
+            const lastMonthViews = company.profileViews.viewedBy.filter(v => v.viewedAt >= startOfLastMonth && v.viewedAt <= endOfLastMonth).length;
+
+            if (lastMonthViews === 0) {
+                profileViewsGrowth = thisMonthViews > 0 ? 100 : 0;
+            } else {
+                profileViewsGrowth = Math.round(((thisMonthViews - lastMonthViews) / lastMonthViews) * 100);
+            }
+        }
 
         // Calculate Recruiter Strength
         // Need user kycStatus for calculation
@@ -239,6 +292,7 @@ router.get('/recruiter/stats', async (req, res) => {
             posted_jobs: postedJobsCount,
             applicants: applicantCount,
             profile_views: profileViews,
+            profile_views_growth: profileViewsGrowth,
             recruiter_strength: recruiterStrength
         });
     } catch (error) {

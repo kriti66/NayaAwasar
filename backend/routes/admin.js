@@ -15,6 +15,10 @@ import {
     getPendingRecruiterKycs,
     reviewRecruiterKyc
 } from '../controllers/recruiterKycController.js';
+import {
+    promoteJob,
+    removePromotion
+} from '../controllers/promotedJobController.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -36,5 +40,9 @@ router.put('/kyc/recruiter/review/:kycId', reviewRecruiterKyc);
 router.get('/companies', getAllCompanies);
 router.get('/companies/:id', getCompanyDetails);
 router.patch('/companies/:id/status', updateCompanyStatus);
+
+// Job Advertisement Management
+router.patch('/jobs/:id/promote', promoteJob);
+router.patch('/jobs/:id/remove-promotion', removePromotion);
 
 export default router;

@@ -4,6 +4,7 @@ import ActivityLog from '../models/ActivityLog.js';
 import Company from '../models/Company.js';
 import Job from '../models/Job.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { getProfileFingerprint } from '../utils/companyVerificationUtils.js';
 
 /**
  * GET /api/admin/stats
@@ -84,7 +85,9 @@ export const getCompanyDetails = async (req, res) => {
     try {
         const company = await Company.findById(req.params.id)
             .populate('recruiters', 'fullName email kycStatus')
-            .populate('adminFields.reviewHistory.adminId', 'fullName role');
+            .populate('reviewedBy', 'fullName email')
+            .populate('adminFields.reviewHistory.adminId', 'fullName role')
+            .populate('adminFields.verificationAuditLog.adminId', 'fullName email');
 
         if (!company) {
             return res.status(404).json({ message: 'Company not found' });
@@ -121,6 +124,20 @@ export const updateCompanyStatus = async (req, res) => {
 
         // Backend validation: company cannot be approved before recruiter approval
         if (status === 'approved') {
+             if (company.status === 'approved') {
+                 return res.status(400).json({
+                     success: false,
+                     message: 'This company has already been approved.'
+                 });
+             }
+
+             if (!company.recruiters || company.recruiters.length === 0) {
+                 return res.status(400).json({
+                     success: false,
+                     message: 'Linked recruiter record was not found.'
+                 });
+             }
+
              // Check if at least one recruiter associated with the company is approved
              const hasApprovedRecruiter = await User.exists({ 
                  _id: { $in: company.recruiters }, 
@@ -129,7 +146,8 @@ export const updateCompanyStatus = async (req, res) => {
              
              if (!hasApprovedRecruiter) {
                  return res.status(400).json({ 
-                     message: 'Company cannot be approved because the associated recruiter identity is not approved yet.' 
+                     success: false,
+                     message: 'Company approval failed because the recruiter account is not approved yet.' 
                  });
              }
         }
@@ -138,12 +156,47 @@ export const updateCompanyStatus = async (req, res) => {
 
         if (status === 'rejected') {
             if (!comment || comment.trim() === '') {
-                return res.status(400).json({ message: 'Rejection reason is required' });
+                return res.status(400).json({ success: false, message: 'Rejection reason is required' });
             }
             company.adminFeedback = comment;
+            company.rejectionReason = comment.trim();
+            company.lastReviewedAt = new Date();
+            company.reviewedBy = req.user.id;
+            company.lastRejectedAt = new Date();
+            company.lastRejectedSnapshot = { fingerprint: getProfileFingerprint(company), at: new Date() };
+            company.verificationStatus = 'rejected';
+
+            if (company.reapplyCount >= 3) {
+                company.isLockedAfterMaxAttempts = true;
+                company.verificationStatus = 'resubmission_locked';
+            }
+
+            if (!company.adminFields) company.adminFields = {};
+            if (!company.adminFields.verificationAuditLog) company.adminFields.verificationAuditLog = [];
+            company.adminFields.verificationAuditLog.push({
+                date: new Date(),
+                action: company.isLockedAfterMaxAttempts ? 'locked' : 'rejected',
+                adminId: req.user.id,
+                rejectionReason: comment.trim(),
+                reapplyCount: company.reapplyCount,
+                metadata: { locked: company.isLockedAfterMaxAttempts }
+            });
         } else if (status === 'approved') {
-            // Clear feedback on approval
             company.adminFeedback = '';
+            company.rejectionReason = '';
+            company.verificationStatus = 'approved';
+            company.isLockedAfterMaxAttempts = false;
+            company.lastReviewedAt = new Date();
+            company.reviewedBy = req.user.id;
+
+            if (!company.adminFields) company.adminFields = {};
+            if (!company.adminFields.verificationAuditLog) company.adminFields.verificationAuditLog = [];
+            company.adminFields.verificationAuditLog.push({
+                date: new Date(),
+                action: 'approved',
+                adminId: req.user.id,
+                reapplyCount: company.reapplyCount
+            });
         }
 
         company.adminFields.moderationStatus = (status === 'approved') ? 'approved' : (status === 'suspended' ? 'suspended' : 'rejected');
@@ -163,10 +216,14 @@ export const updateCompanyStatus = async (req, res) => {
             { companyId: company._id }
         );
 
-        res.json({ message: `Company status updated to ${status}`, company });
+        res.json({ 
+            success: true,
+            message: status === 'approved' ? 'Company profile approved successfully.' : `Company status updated to ${status}.`,
+            company 
+        });
     } catch (error) {
         console.error('Admin updateCompanyStatus error:', error);
-        res.status(500).json({ message: 'Error updating company status' });
+        res.status(500).json({ success: false, message: 'Error updating company status' });
     }
 };
 

@@ -2,32 +2,35 @@ import { Link } from 'react-router-dom';
 
 const Unauthorized = () => {
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 text-center">
-            <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 max-w-md w-full">
-                <div className="mb-6 inline-flex items-center justify-center p-4 bg-red-100 rounded-full">
-                    <svg className="h-12 w-12 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-[#0d2f2b] to-slate-900 flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+            <div className="absolute inset-0 opacity-10">
+                <div className="absolute top-20 left-20 w-80 h-80 bg-red-500 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-20 right-20 w-64 h-64 bg-[#29a08e] rounded-full blur-3xl"></div>
+            </div>
+            <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '28px 28px' }}></div>
+
+            <div className="relative z-10 max-w-md mx-auto">
+                <div className="w-20 h-20 bg-red-500/20 border border-red-500/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <svg className="h-10 w-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                     </svg>
                 </div>
 
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                    Access Denied
-                </h1>
-
-                <p className="text-gray-600 mb-8">
-                    You don't have permission to access this page. Please contact your administrator if you believe this is an error.
+                <h1 className="text-4xl font-black text-white mb-3">Access Denied</h1>
+                <p className="text-gray-400 mb-10 leading-relaxed">
+                    You don't have permission to access this page. If you believe this is an error, please contact support.
                 </p>
 
-                <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
                     <Link
                         to="/"
-                        className="block w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors shadow-sm"
+                        className="px-8 py-3.5 bg-[#29a08e] text-white rounded-2xl font-bold hover:bg-[#228377] transition-all shadow-2xl shadow-[#29a08e]/30"
                     >
-                        Back to Home
+                        ← Back to Home
                     </Link>
                     <Link
                         to="/contact"
-                        className="block w-full px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg font-bold hover:bg-gray-50 transition-colors"
+                        className="px-8 py-3.5 bg-white/10 backdrop-blur-sm text-white border border-white/20 rounded-2xl font-bold hover:bg-white/20 transition-all"
                     >
                         Contact Support
                     </Link>

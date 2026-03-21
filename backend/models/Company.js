@@ -55,6 +55,19 @@ const companySchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    // Verification resubmission flow
+    verificationStatus: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected', 'resubmission_locked'],
+        default: 'pending'
+    },
+    reapplyCount: { type: Number, default: 0 },
+    rejectionReason: { type: String, default: '' },
+    lastReviewedAt: { type: Date },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    isLockedAfterMaxAttempts: { type: Boolean, default: false },
+    lastRejectedAt: { type: Date },
+    lastRejectedSnapshot: { type: mongoose.Schema.Types.Mixed },
     about: {
         mission: { type: String, default: '' },
         services: { type: String, default: '' },
@@ -93,6 +106,14 @@ const companySchema = new mongoose.Schema({
             action: String,
             adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
             comment: String
+        }],
+        verificationAuditLog: [{
+            date: { type: Date, default: Date.now },
+            action: { type: String, enum: ['rejected', 'resubmitted', 'approved', 'locked'] },
+            adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            rejectionReason: String,
+            reapplyCount: Number,
+            metadata: mongoose.Schema.Types.Mixed
         }]
     },
     profileViews: {

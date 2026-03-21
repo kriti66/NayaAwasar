@@ -26,6 +26,8 @@ const CompanyProfile = () => {
     // Admin Actions
     const [showRejectModal, setShowRejectModal] = useState(false);
     const [rejectReason, setRejectReason] = useState('');
+    const [resubmitting, setResubmitting] = useState(false);
+    const [resubmitOnSave, setResubmitOnSave] = useState(false);
 
     const getImageUrl = (path) => {
         if (!path) return null;
@@ -137,6 +139,20 @@ const CompanyProfile = () => {
             setLogoFile(null);
             setShowEditModal(false);
             fetchCompany();
+
+            if (resubmitOnSave && company.status === 'rejected') {
+                setResubmitOnSave(false);
+                try {
+                    setResubmitting(true);
+                    const res = await companyService.resubmitForReview(companyId);
+                    toast.success(res.message || 'Profile resubmitted for review.');
+                    fetchCompany();
+                } catch (err) {
+                    toast.error(err.response?.data?.message || 'Resubmission failed.');
+                } finally {
+                    setResubmitting(false);
+                }
+            }
         } catch (error) {
             console.error("Error saving company:", error);
             toast.error("Failed to commit changes");
@@ -174,6 +190,27 @@ const CompanyProfile = () => {
         }
         performStatusUpdate('rejected', rejectReason);
     };
+
+    const handleResubmit = async () => {
+        if (!company?._id || resubmitting) return;
+        try {
+            setResubmitting(true);
+            const res = await companyService.resubmitForReview(company._id);
+            toast.success(res.message || 'Profile resubmitted for review.');
+            fetchCompany();
+        } catch (error) {
+            const msg = error.response?.data?.message || 'Resubmission failed.';
+            toast.error(msg);
+        } finally {
+            setResubmitting(false);
+        }
+    };
+
+    const isRejected = company?.status === 'rejected';
+    const isLocked = company?.isLockedAfterMaxAttempts;
+    const reapplyCount = company?.reapplyCount ?? 0;
+    const remainingAttempts = Math.max(0, 3 - reapplyCount);
+    const canResubmit = isRejected && !isLocked && remainingAttempts > 0 && isOwner;
 
     const handleChange = (e, path) => {
         const { value } = e.target;
@@ -337,8 +374,11 @@ const CompanyProfile = () => {
                                             <Clock className="w-3.5 h-3.5" /> PENDING REVIEW
                                         </span>
                                     ) : company.status === 'rejected' ? (
-                                        <span className="px-2.5 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-bold flex items-center gap-1">
-                                            <X className="w-3.5 h-3.5" /> REJECTED
+                                        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 ${
+                                            company.isLockedAfterMaxAttempts ? 'bg-gray-200 text-gray-700' : 'bg-red-100 text-red-700'
+                                        }`}>
+                                            <X className="w-3.5 h-3.5" />
+                                            {company.isLockedAfterMaxAttempts ? 'RESUBMISSION LOCKED' : 'REJECTED'}
                                         </span>
                                     ) : (
                                         <span className="px-2.5 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-bold flex items-center gap-1">
@@ -346,15 +386,26 @@ const CompanyProfile = () => {
                                         </span>
                                     )}
                                 </div>
-                                {canEdit && (
-                                    <button
-                                        onClick={() => setShowEditModal(true)}
-                                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#29a08e] hover:bg-[#228377] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] transition-colors uppercase tracking-wide"
-                                    >
-                                        <Edit3 className="w-4 h-4 mr-2" />
-                                        Edit Company Profile
-                                    </button>
-                                )}
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {canEdit && (
+                                        <button
+                                            onClick={() => setShowEditModal(true)}
+                                            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-[#29a08e] hover:bg-[#228377] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] transition-colors uppercase tracking-wide"
+                                        >
+                                            <Edit3 className="w-4 h-4 mr-2" />
+                                            Edit Company Profile
+                                        </button>
+                                    )}
+                                    {canResubmit && (
+                                        <button
+                                            onClick={() => { setResubmitOnSave(true); setShowEditModal(true); }}
+                                            disabled={resubmitting}
+                                            className="inline-flex items-center px-4 py-2 border border-[#29a08e] rounded-lg shadow-sm text-sm font-bold text-[#29a08e] bg-white hover:bg-[#29a08e]/5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e] transition-colors uppercase tracking-wide disabled:opacity-60"
+                                        >
+                                            Edit and Resubmit
+                                        </button>
+                                    )}
+                                </div>
 
                                 {canReview && (
                                     <div className="flex items-center gap-2">
@@ -381,6 +432,41 @@ const CompanyProfile = () => {
                             </div>
 
                             <p className="text-lg text-gray-600 font-medium mb-6">{company.industry || 'Industry not specified'}</p>
+
+                            {/* Rejection / Locked Info Card (owner view when rejected) */}
+                            {isRejected && isOwner && (
+                                <div className={`mb-6 p-5 rounded-xl border ${
+                                    isLocked ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-200'
+                                }`}>
+                                    <div className="flex items-start gap-3">
+                                        <ShieldAlert className={`w-6 h-6 shrink-0 mt-0.5 ${isLocked ? 'text-gray-500' : 'text-red-600'}`} />
+                                        <div className="flex-1 min-w-0">
+                                            {isLocked ? (
+                                                <>
+                                                    <h4 className="text-sm font-bold text-gray-900 mb-1">Resubmission Limit Reached</h4>
+                                                    <p className="text-sm text-gray-600 mb-0">
+                                                        You have used all 3 resubmission attempts. Please contact support or an administrator to request a manual review.
+                                                    </p>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <h4 className="text-sm font-bold text-red-800 mb-1">Profile Rejected</h4>
+                                                    {(company.rejectionReason || company.adminFeedback) && (
+                                                        <p className="text-sm text-red-700 mb-3">
+                                                            <span className="font-semibold">Reason: </span>
+                                                            {company.rejectionReason || company.adminFeedback}
+                                                        </p>
+                                                    )}
+                                                    <p className="text-sm text-gray-600 mb-0">
+                                                        <span className="font-bold text-gray-900">{remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} remaining.</span>
+                                                        {' '}Edit your profile above, then click <strong>Resubmit for Review</strong>.
+                                                    </p>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-6 border-t border-gray-100">
                                 <div>
@@ -552,7 +638,7 @@ const CompanyProfile = () => {
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900">Edit Company Profile</h3>
                             </div>
-                            <button onClick={() => setShowEditModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600">
+                            <button onClick={() => { setShowEditModal(false); setResubmitOnSave(false); }} className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-400 hover:text-gray-600">
                                 <X className="w-6 h-6" />
                             </button>
                         </header>
@@ -667,7 +753,7 @@ const CompanyProfile = () => {
                                 <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-100 sticky bottom-0 bg-white/95 backdrop-blur py-4 z-10">
                                     <button
                                         type="button"
-                                        onClick={() => setShowEditModal(false)}
+                                        onClick={() => { setShowEditModal(false); setResubmitOnSave(false); }}
                                         className="px-6 py-2 border border-gray-300 shadow-sm text-sm font-bold rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#29a08e]"
                                     >
                                         Cancel

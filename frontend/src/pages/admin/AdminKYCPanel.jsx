@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import DashboardNavbar from '../../components/dashboard/DashboardNavbar';
 import api from '../../services/api';
 import {
     ShieldCheck,
@@ -41,22 +40,19 @@ const AdminKYCPanel = () => {
                 api.get('/admin/kyc/recruiter/pending')
             ]);
 
-            // Transform Recruiter Data to match UI structure if needed
             const recruiterData = recruiterRes.data.map(k => ({
                 ...k,
-                role: 'recruiter', // Ensure role identifies it
+                role: 'recruiter',
                 fullName: k.userId?.fullName || k.fullName,
                 email: k.userId?.email || k.officialEmail,
                 userId: k.userId
             }));
 
-            // Transform Seeker Data just in case
             const seekerData = seekerRes.data.map(k => ({
                 ...k,
-                role: k.role || 'jobseeker' // Default if not present
+                role: k.role || 'jobseeker'
             }));
 
-            // Merge
             setPendingKYC([...seekerData, ...recruiterData]);
         } catch (err) {
             console.error('Error fetching KYC:', err);
@@ -66,13 +62,12 @@ const AdminKYCPanel = () => {
     };
 
     const getUserId = (kyc) => {
-        // Handle different ID structures
         return kyc.userId?._id || kyc.userId || kyc._id;
     };
 
     const handleApprove = async (kycRecord) => {
         const userId = getUserId(kycRecord);
-        const kycId = kycRecord._id; // Recruiter kyc uses its own ID for review
+        const kycId = kycRecord._id;
         setProcessing(true);
         try {
             if (kycRecord.role === 'recruiter') {
@@ -80,7 +75,6 @@ const AdminKYCPanel = () => {
             } else {
                 await api.patch(`/admin/kyc/${userId}/approve`);
             }
-            // Remove from list
             setPendingKYC((prev) => prev.filter((k) => k._id !== kycId && getUserId(k) !== userId));
             setSelectedKYC(null);
         } catch (err) {
@@ -121,64 +115,100 @@ const AdminKYCPanel = () => {
     );
 
     return (
-        <div className="flex-1 w-full flex flex-col h-[calc(100vh-64px)] overflow-hidden">
-            <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 shrink-0">
-                <div>
-                    <h1 className="text-xl font-bold text-gray-900">KYC Verification</h1>
-                    <p className="text-xs text-gray-500">Review pending verification requests.</p>
+        <div className="flex-1 w-full flex flex-col min-h-[calc(100vh-64px)]">
+            {/* Hero Header */}
+            <div className="relative bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] overflow-hidden shrink-0">
+                <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.3) 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+                <div className="absolute top-0 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
+                
+                <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+                    <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                        <div>
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="h-10 w-10 bg-purple-500/20 rounded-xl flex items-center justify-center border border-purple-500/30">
+                                    <ShieldCheck className="h-5 w-5 text-purple-400" />
+                                </div>
+                                <span className="text-[11px] font-bold text-purple-400 uppercase tracking-[0.2em]">Identity Verification</span>
+                            </div>
+                            <h1 className="text-3xl font-black text-white tracking-tight">KYC Verification</h1>
+                            <p className="text-gray-400 mt-1.5 font-medium text-sm">Review and process pending verification requests.</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <div className="px-4 py-2.5 rounded-xl border bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs font-bold">
+                                {pendingKYC.length} Pending
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </header>
+            </div>
 
-            <main className="flex-1 p-8 overflow-hidden">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full">
+            <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 pb-12 relative z-10 w-full">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full" style={{ minHeight: '600px' }}>
                     {/* Queue List */}
-                    <div className="lg:col-span-4 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-                        <div className="p-6 border-b border-gray-200 space-y-4">
-                            <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                                Queue ({pendingKYC.length})
-                            </h2>
+                    <div className="lg:col-span-4 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                        <div className="p-5 border-b border-gray-100 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                                    <div className="h-6 w-6 bg-[#29a08e]/10 rounded-lg flex items-center justify-center">
+                                        <Clock className="w-3 h-3 text-[#29a08e]" />
+                                    </div>
+                                    Queue
+                                </h2>
+                                <span className="text-[11px] font-bold text-[#29a08e] bg-[#29a08e]/10 px-2.5 py-1 rounded-lg">
+                                    {pendingKYC.length} items
+                                </span>
+                            </div>
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
-                                    placeholder="Search..."
+                                    placeholder="Search applicants..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-[#29a08e] outline-none"
+                                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#29a08e]/30 focus:border-[#29a08e] outline-none transition-all"
                                 />
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto">
-                            <div className="divide-y divide-gray-100">
+                            <div className="divide-y divide-gray-50">
                                 {filteredKYC.map(kyc => (
                                     <div
                                         key={kyc._id || getUserId(kyc)}
                                         onClick={() => setSelectedKYC(kyc)}
-                                        className={`p-4 cursor-pointer transition-all hover:bg-gray-50 border-l-4 ${selectedKYC?._id === kyc._id ? 'border-[#29a08e] bg-[#29a08e]/5' : 'border-transparent'}`}
+                                        className={`p-4 cursor-pointer transition-all hover:bg-[#29a08e]/[0.03] border-l-[3px] ${selectedKYC?._id === kyc._id ? 'border-[#29a08e] bg-[#29a08e]/[0.04]' : 'border-transparent'}`}
                                     >
                                         <div className="flex items-center justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <h3 className="text-sm font-semibold text-gray-900 truncate">{kyc.fullName}</h3>
-                                                <p className="text-xs text-gray-500 truncate">{kyc.email}</p>
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0 ${kyc.role === 'recruiter' ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-emerald-500 to-emerald-600'}`}>
+                                                    {kyc.fullName.charAt(0)}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <h3 className="text-sm font-semibold text-gray-900 truncate">{kyc.fullName}</h3>
+                                                    <p className="text-xs text-gray-400 truncate">{kyc.email}</p>
+                                                </div>
                                             </div>
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight shrink-0 ${kyc.role === 'recruiter'
-                                                ? 'bg-purple-100 text-purple-700'
-                                                : 'bg-green-100 text-green-700'
-                                                }`}>
+                                            <span className={`px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-tight shrink-0 border ${kyc.role === 'recruiter'
+                                                ? 'bg-purple-50 text-purple-600 border-purple-200'
+                                                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                            }`}>
                                                 {kyc.role}
                                             </span>
                                         </div>
-                                        <div className="mt-2 text-[10px] text-gray-400 flex items-center gap-1">
+                                        <div className="mt-2 text-[10px] text-gray-400 flex items-center gap-1 ml-13">
                                             <Clock className="w-3 h-3" />
                                             {kyc.createdAt ? new Date(kyc.createdAt).toLocaleDateString() : '—'}
                                         </div>
                                     </div>
                                 ))}
                                 {loading ? (
-                                    [1, 2, 3].map(i => <div key={i} className="h-24 bg-gray-50 animate-pulse m-4 rounded-lg"></div>)
+                                    [1, 2, 3].map(i => <div key={i} className="h-20 bg-gray-50 animate-pulse m-3 rounded-xl"></div>)
                                 ) : filteredKYC.length === 0 && (
-                                    <div className="p-8 text-center">
-                                        <p className="text-xs text-gray-400">Queue is empty</p>
+                                    <div className="p-10 text-center">
+                                        <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-gray-100">
+                                            <ShieldCheck className="w-6 h-6 text-gray-300" />
+                                        </div>
+                                        <p className="text-sm font-semibold text-gray-500">Queue is empty</p>
+                                        <p className="text-xs text-gray-400 mt-1">No pending verifications.</p>
                                     </div>
                                 )}
                             </div>
@@ -188,21 +218,24 @@ const AdminKYCPanel = () => {
                     {/* Detail View */}
                     <div className="lg:col-span-8 h-full">
                         {selectedKYC ? (
-                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm h-full flex flex-col overflow-hidden">
-                                <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm h-full flex flex-col overflow-hidden">
+                                {/* Detail Header */}
+                                <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
                                     <div className="flex items-center gap-4">
-                                        <div className="w-12 h-12 bg-[#29a08e]/20 rounded-lg flex items-center justify-center text-[#29a08e] font-bold text-xl">
+                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-sm ${selectedKYC.role === 'recruiter' ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-[#29a08e] to-[#228377]'}`}>
                                             {selectedKYC.fullName.charAt(0)}
                                         </div>
                                         <div>
-                                            <h2 className="text-xl font-bold text-gray-900">{selectedKYC.fullName}</h2>
-                                            <p className="text-xs text-gray-500">{selectedKYC.role} applicant • Pending</p>
+                                            <h2 className="text-xl font-black text-gray-900">{selectedKYC.fullName}</h2>
+                                            <p className="text-xs text-gray-400 font-medium mt-0.5">
+                                                <span className="capitalize">{selectedKYC.role}</span> applicant • <span className="text-amber-500 font-bold">Pending Review</span>
+                                            </p>
                                         </div>
                                     </div>
                                     <button
                                         disabled={processing}
                                         onClick={() => handleApprove(selectedKYC)}
-                                        className="px-6 py-2 bg-[#29a08e] text-white rounded-lg text-sm font-bold hover:bg-[#228377] transition-colors disabled:opacity-50 flex items-center gap-2"
+                                        className="px-6 py-2.5 bg-gradient-to-r from-[#29a08e] to-[#228377] text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-[#29a08e]/20 transition-all disabled:opacity-50 flex items-center gap-2 active:scale-[0.98]"
                                     >
                                         <Check className="w-4 h-4" />
                                         Approve
@@ -212,7 +245,10 @@ const AdminKYCPanel = () => {
                                 <div className="flex-1 overflow-y-auto p-6 space-y-8">
                                     <div className="grid grid-cols-2 gap-8">
                                         <div className="space-y-4">
-                                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Identity Details</h3>
+                                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                <User className="w-3.5 h-3.5 text-[#29a08e]" />
+                                                Identity Details
+                                            </h3>
                                             <div className="grid grid-cols-2 gap-4">
                                                 {[
                                                     { label: 'Type', value: selectedKYC.idType },
@@ -220,8 +256,8 @@ const AdminKYCPanel = () => {
                                                     { label: 'DOB', value: selectedKYC.dateOfBirth ? new Date(selectedKYC.dateOfBirth).toLocaleDateString() : '—' },
                                                     { label: 'Nationality', value: selectedKYC.nationality || '—' }
                                                 ].map((item, i) => (
-                                                    <div key={i}>
-                                                        <p className="text-[10px] text-gray-400 font-medium mb-0.5">{item.label}</p>
+                                                    <div key={i} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
+                                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">{item.label}</p>
                                                         <p className="text-sm font-semibold text-gray-900">{item.value}</p>
                                                     </div>
                                                 ))}
@@ -230,19 +266,22 @@ const AdminKYCPanel = () => {
 
                                         {selectedKYC.role === 'recruiter' && (
                                             <div className="space-y-4">
-                                                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Company Info</h3>
-                                                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100 space-y-3">
+                                                <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                                    <Building2 className="w-3.5 h-3.5 text-purple-500" />
+                                                    Company Info
+                                                </h3>
+                                                <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100 space-y-3">
                                                     <div>
-                                                        <p className="text-[10px] text-gray-400 font-medium">Company Name</p>
+                                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company Name</p>
                                                         <p className="text-sm font-semibold text-gray-900">{selectedKYC.companyName}</p>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <div>
-                                                            <p className="text-[10px] text-gray-400 font-medium">Reg No</p>
+                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Reg No</p>
                                                             <p className="text-xs font-semibold text-gray-900">{selectedKYC.registrationNumber}</p>
                                                         </div>
                                                         <div>
-                                                            <p className="text-[10px] text-gray-400 font-medium">Industry</p>
+                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Industry</p>
                                                             <p className="text-xs font-semibold text-gray-900">{selectedKYC.industry}</p>
                                                         </div>
                                                     </div>
@@ -252,7 +291,10 @@ const AdminKYCPanel = () => {
                                     </div>
 
                                     <div className="space-y-4">
-                                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Verification Proofs</h3>
+                                        <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                            <FileText className="w-3.5 h-3.5 text-[#29a08e]" />
+                                            Verification Proofs
+                                        </h3>
                                         <div className="grid grid-cols-3 gap-4">
                                             {[
                                                 { label: 'ID Front', path: selectedKYC.documentFront || selectedKYC.idFrontUrl },
@@ -263,17 +305,19 @@ const AdminKYCPanel = () => {
                                                 { label: 'Company Logo', path: selectedKYC.companyLogo }
                                             ].filter(p => p.path).map((img, i) => (
                                                 <div key={i} className="space-y-2">
-                                                    <div className="relative aspect-video rounded-lg overflow-hidden border border-gray-200 bg-gray-50 group">
+                                                    <div className="relative aspect-video rounded-xl overflow-hidden border border-gray-200 bg-gray-50 group shadow-sm hover:shadow-md transition-shadow">
                                                         <img
                                                             src={`${API_BASE}${img.path}`}
                                                             alt={img.label}
                                                             className="w-full h-full object-cover"
                                                         />
-                                                        <a href={`${API_BASE}${img.path}`} target="_blank" rel="noreferrer" className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <ExternalLink className="w-5 h-5 text-white" />
+                                                        <a href={`${API_BASE}${img.path}`} target="_blank" rel="noreferrer" className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/70 to-transparent flex items-end justify-center pb-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <span className="flex items-center gap-1.5 text-white text-xs font-bold">
+                                                                <ExternalLink className="w-3.5 h-3.5" /> View Full
+                                                            </span>
                                                         </a>
                                                     </div>
-                                                    <p className="text-[10px] font-medium text-gray-500 text-center">{img.label}</p>
+                                                    <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-wider">{img.label}</p>
                                                 </div>
                                             ))}
                                         </div>
@@ -281,40 +325,53 @@ const AdminKYCPanel = () => {
 
                                     {selectedKYC.rejectionHistory && selectedKYC.rejectionHistory.length > 0 && (
                                         <div className="space-y-4">
-                                            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Rejection History ({selectedKYC.resubmissionCount || 0}/3 used)</h3>
+                                            <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                                                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                                                Rejection History ({selectedKYC.resubmissionCount || 0}/3 used)
+                                            </h3>
                                             <div className="space-y-3">
                                                 {selectedKYC.rejectionHistory.map((hist, i) => (
-                                                    <div key={i} className="p-4 bg-orange-50 border border-orange-100 rounded-xl">
+                                                    <div key={i} className="p-4 bg-amber-50/50 border border-amber-100 rounded-xl">
                                                         <div className="flex justify-between items-center mb-1">
-                                                            <span className="text-[10px] font-bold uppercase text-orange-600">Attempt {i + 1} Rejected</span>
+                                                            <span className="text-[10px] font-bold uppercase text-amber-600 bg-amber-100 px-2 py-0.5 rounded-md">Attempt {i + 1} Rejected</span>
                                                             <span className="text-[10px] text-gray-400">{new Date(hist.rejectedAt).toLocaleString()}</span>
                                                         </div>
-                                                        <p className="text-sm text-gray-700 italic">"{hist.reason}"</p>
+                                                        <p className="text-sm text-gray-700 italic mt-2">"{hist.reason}"</p>
                                                     </div>
                                                 ))}
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="p-6 bg-red-50 rounded-xl border border-red-100">
-                                        <h3 className="text-sm font-bold text-red-900 mb-2">Reject Verification</h3>
-                                        <p className="text-xs text-red-700 mb-4 opacity-80">
+                                    <div className="p-6 bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl border border-red-100">
+                                        <h3 className="text-sm font-black text-red-900 mb-2 flex items-center gap-2">
+                                            <ShieldX className="w-4 h-4 text-red-500" />
+                                            Reject Verification
+                                        </h3>
+                                        <p className="text-sm font-medium text-red-800 mb-4">
                                             {selectedKYC.resubmissionCount >= 3 
                                                 ? "Note: User has reached max attempts and will be locked upon this rejection." 
                                                 : `User has used ${selectedKYC.resubmissionCount || 0}/3 allowed re-submissions.`}
                                         </p>
                                         <div className="space-y-4">
-                                            <textarea
-                                                value={rejectionReason}
-                                                onChange={(e) => setRejectionReason(e.target.value)}
-                                                className="w-full bg-white border border-red-200 rounded-lg p-3 text-sm outline-none focus:ring-1 focus:ring-red-500"
-                                                placeholder="Reason for rejection..."
-                                                rows="2"
-                                            />
+                                            <div>
+                                                <label htmlFor="rejection-reason" className="block text-sm font-bold text-gray-900 mb-2">
+                                                    Rejection Reason
+                                                </label>
+                                                <textarea
+                                                    id="rejection-reason"
+                                                    value={rejectionReason}
+                                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                                    className="w-full min-h-[100px] px-4 py-3 text-base text-gray-900 placeholder:text-gray-400 bg-white border-2 border-red-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-400 transition-all resize-y"
+                                                    placeholder="Provide a clear, specific reason for rejection..."
+                                                    rows="3"
+                                                    aria-required="true"
+                                                />
+                                            </div>
                                             <button
                                                 disabled={processing}
                                                 onClick={() => handleReject(selectedKYC)}
-                                                className="w-full bg-red-600 text-white font-bold py-2 rounded-lg hover:bg-red-700 transition-colors text-sm"
+                                                className="w-full bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold py-2.5 rounded-xl hover:shadow-lg hover:shadow-red-500/20 transition-all text-sm active:scale-[0.98] disabled:opacity-50"
                                             >
                                                 Reject KYC
                                             </button>
@@ -323,12 +380,12 @@ const AdminKYCPanel = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col items-center justify-center text-center p-12">
-                                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-200">
-                                    <ShieldQuestion className="w-8 h-8" />
+                            <div className="h-full bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center p-12">
+                                <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mb-4 border border-gray-100 text-gray-200">
+                                    <ShieldQuestion className="w-9 h-9" />
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-900">Selection Required</h3>
-                                <p className="text-sm text-gray-500 mt-1">Select an applicant from the list to view details.</p>
+                                <h3 className="text-lg font-black text-gray-900">Select an Applicant</h3>
+                                <p className="text-sm text-gray-400 mt-1 max-w-xs">Choose an applicant from the queue to view their verification details.</p>
                             </div>
                         )}
                     </div>

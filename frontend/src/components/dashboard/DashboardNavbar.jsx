@@ -88,7 +88,9 @@ const DashboardNavbar = () => {
             { label: 'Manage Users', path: '/admin/users' },
             { label: 'Manage Companies', path: '/admin/companies' },
             { label: 'Manage Jobs', path: '/admin/jobs' },
+            { label: 'Promoted Jobs', path: '/admin/promoted-jobs' },
             { label: 'KYC Panel', path: '/admin/kyc' },
+            { label: 'Contact Messages', path: '/admin/contact-messages' },
             { label: 'Manage Location', path: '/admin/location' },
         ],
         recruiter: [

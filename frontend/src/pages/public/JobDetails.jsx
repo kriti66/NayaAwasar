@@ -18,6 +18,7 @@ import {
     CheckCircle2,
     Sparkles
 } from 'lucide-react';
+import CompanyLogo from '../../components/common/CompanyLogo';
 
 const JobDetails = () => {
     const { id } = useParams();
@@ -29,16 +30,17 @@ const JobDetails = () => {
     const [applicationStatus, setApplicationStatus] = useState(null);
     const { savedJobIds, setSavedJobIds, toggleSaveJob } = useJobSaver();
 
-    // Fetch saved jobs on mount
+    // Fetch saved jobs from single source of truth
     useEffect(() => {
         const fetchSaved = async () => {
             try {
-                const res = await api.get('/users/profile');
-                if (res.data.savedJobs) {
-                    setSavedJobIds(res.data.savedJobs);
-                }
+                const res = await api.get('/jobs/saved');
+                const ids = res.data?.savedJobIds || [];
+                setSavedJobIds(Array.isArray(ids) ? ids.map(i => (i?.toString?.() || i)) : []);
             } catch (err) {
-                console.error("Failed to fetch saved jobs", err);
+                if (process.env.NODE_ENV === 'development') {
+                    console.warn("[JobDetails] Failed to fetch saved jobs:", err?.message);
+                }
             }
         };
         fetchSaved();
@@ -175,13 +177,7 @@ const JobDetails = () => {
 
                     <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                         <div className="flex items-start gap-6">
-                            <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl bg-white flex items-center justify-center p-2 shadow-xl shrink-0 border border-gray-800">
-                                {job.company_logo_url ? (
-                                    <img src={job.company_logo_url} className="w-full h-full object-contain rounded-xl" alt={job.company_name} />
-                                ) : (
-                                    <span className="text-3xl font-black text-[#29a08e]">{job.company_name?.charAt(0)}</span>
-                                )}
-                            </div>
+                            <CompanyLogo job={job} companyName={job.company_name} className="w-20 h-20 md:w-24 md:h-24 rounded-2xl p-2 shadow-xl border border-gray-800 bg-white" imgClassName="w-full h-full object-contain rounded-xl" fallbackClassName="text-3xl" />
                             <div>
                                 <div className="flex flex-wrap items-center gap-3 mb-2">
                                     <span className="px-3 py-1 bg-[#29a08e] text-white rounded-full text-xs font-black uppercase tracking-wider shadow-sm">
@@ -209,9 +205,9 @@ const JobDetails = () => {
                         <div className="flex items-center gap-3 mt-4 md:mt-0">
                             <button
                                 onClick={() => toggleSaveJob(id)}
-                                className={`p-3 rounded-xl flex items-center justify-center transition-all ${savedJobIds.includes(id) ? 'bg-[#29a08e]/20 text-[#29a08e] border border-[#29a08e]/30' : 'bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10 hover:text-white'}`}
+                                className={`p-3 rounded-xl flex items-center justify-center transition-all ${savedJobIds.some(sid => (sid?.toString?.() || sid) === (id?.toString?.() || id)) ? 'bg-[#29a08e]/20 text-[#29a08e] border border-[#29a08e]/30' : 'bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10 hover:text-white'}`}
                             >
-                                <Bookmark size={20} fill={savedJobIds.includes(id) ? "currentColor" : "none"} />
+                                <Bookmark size={20} fill={savedJobIds.some(sid => (sid?.toString?.() || sid) === (id?.toString?.() || id)) ? "currentColor" : "none"} />
                             </button>
                             <button className="p-3 bg-white/5 text-gray-300 hover:bg-white/10 border border-white/10 rounded-xl transition-all flex items-center justify-center hover:text-white">
                                 <Share2 size={20} />
@@ -247,7 +243,7 @@ const JobDetails = () => {
                                 </div>
                                 <div className="space-y-2">
                                     <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500 shadow-sm mb-4">
-                                        <DollarSign size={20} />
+                                        <span className="font-black tracking-tight text-lg">Rs</span>
                                     </div>
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Salary</p>
                                     <p className="text-sm font-bold text-gray-900">{job.salary_range || 'Negotiable'}</p>
@@ -345,9 +341,9 @@ const JobDetails = () => {
                                 <div className="grid grid-cols-2 gap-3 mt-4">
                                     <button
                                         onClick={() => toggleSaveJob(id)}
-                                        className={`py-3.5 border rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${savedJobIds.includes(id) ? 'bg-[#29a08e] text-white border-[#29a08e]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                        className={`py-3.5 border rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm ${savedJobIds.some(sid => (sid?.toString?.() || sid) === (id?.toString?.() || id)) ? 'bg-[#29a08e] text-white border-[#29a08e]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                                     >
-                                        {savedJobIds.includes(id) ? 'Saved' : 'Save Job'}
+                                        {savedJobIds.some(sid => (sid?.toString?.() || sid) === (id?.toString?.() || id)) ? 'Saved' : 'Save Job'}
                                     </button>
                                     <button className="py-3.5 bg-white border border-gray-200 text-gray-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-50 transition-all shadow-sm">
                                         Share
@@ -369,13 +365,7 @@ const JobDetails = () => {
                             <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 border-b border-gray-800 pb-4">Hiring Company</h4>
                             
                             <div className="flex items-center gap-4 mb-6 relative z-10">
-                                <div className="w-16 h-16 shrink-0 rounded-2xl bg-white flex items-center justify-center text-[#29a08e] font-black text-2xl shadow-xl">
-                                    {job.company_logo_url ? (
-                                       <img src={job.company_logo_url} className="w-full h-full object-contain p-1 rounded-xl" alt="" />
-                                    ) : (
-                                       job.company_name?.charAt(0)
-                                    )}
-                                </div>
+                                <CompanyLogo job={job} companyName={job.company_name} className="w-16 h-16 shrink-0 rounded-2xl bg-white shadow-xl" imgClassName="w-full h-full object-contain p-1 rounded-xl" fallbackClassName="text-2xl text-[#29a08e]" />
                                 <div>
                                     <p className="text-xl font-black text-white leading-tight mb-1">{job.company_name}</p>
                                     <p className="text-[10px] font-black text-[#29a08e] uppercase tracking-widest flex items-center gap-1.5">

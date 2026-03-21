@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import DashboardNavbar from '../../components/dashboard/DashboardNavbar';
 import api from '../../services/api';
 import { Link } from 'react-router-dom';
+import CompanyLogo from '../../components/common/CompanyLogo';
 
 const FindOpportunity = () => {
     const [jobs, setJobs] = useState([]);
@@ -56,13 +57,7 @@ const FindOpportunity = () => {
             {featured && <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>}
 
             <div className="flex justify-between items-start mb-6">
-                <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center overflow-hidden border border-slate-100">
-                    {job.company_logo ? (
-                        <img src={job.company_logo} className="w-full h-full object-cover" alt="" />
-                    ) : (
-                        <span className="text-xs font-bold text-slate-400">{job.company_name?.charAt(0)}</span>
-                    )}
-                </div>
+                <CompanyLogo job={job} companyName={job.company_name} className="w-12 h-12 rounded-xl" imgClassName="w-full h-full object-cover" fallbackClassName="text-xs" />
                 <button className="text-slate-300 hover:text-blue-500 transition-colors">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
                 </button>

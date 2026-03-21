@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { AlertCircle, Loader2, ArrowLeft } from 'lucide-react';
+import api from '../../services/api';
 
 const InterviewCall = () => {
     const { id } = useParams();
@@ -14,43 +15,27 @@ const InterviewCall = () => {
     useEffect(() => {
         const fetchToken = async () => {
             try {
-                // Get token from localStorage - check multiple potential keys
-                const token = localStorage.getItem('token') ||
-                    (JSON.parse(localStorage.getItem('user') || '{}')?.token);
-
+                const token = localStorage.getItem('token') || (JSON.parse(localStorage.getItem('user') || '{}')?.token);
                 if (!token) {
                     throw new Error('You must be logged in to join the interview.');
                 }
 
-                // API call to backend - MUST BE POST because backend route is router.post(...)
-                const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
-                const response = await fetch(`${apiUrl}/api/interviews/${id}/zego-token`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
+                // Fetch token from backend (POST /api/zego/token)
+                const { data } = await api.post('/zego/token', { roomID: id });
 
-                const responseText = await response.text();
-                let data;
-                try {
-                    data = JSON.parse(responseText);
-                } catch (e) {
-                    console.error("Failed to parse backend response:", responseText);
-                    throw new Error('Invalid server response. Please try again.');
+                if (!data?.token || !data?.appId || !data?.roomId || !data?.userId) {
+                    throw new Error('Invalid token response from server.');
                 }
 
-                if (!response.ok) {
-                    throw new Error(data.message || 'Failed to join interview');
+                if (import.meta.env?.DEV) {
+                    console.log('[InterviewCall] Token received – appId:', data.appId, 'roomId:', data.roomId, 'userId:', data.userId);
                 }
 
-                // If ZegoUIkit expects { appId, token, ... } at root, ensure data structure is correct.
-                // Our controller returns { appId, token, roomId, userId, userName } directly.
                 setTokenData(data);
             } catch (err) {
-                console.error("Failed to load interview token:", err);
-                setError(err.message || 'Failed to connect to interview service');
+                console.error('[InterviewCall] Token fetch failed:', err);
+                const msg = err.response?.data?.message || err.message || 'Failed to connect to interview service';
+                setError(msg);
             }
         };
 
@@ -58,45 +43,45 @@ const InterviewCall = () => {
     }, [id]);
 
     useEffect(() => {
-        if (tokenData && containerRef.current && !zpRef.current) {
-            const { appId, token, roomId, userId, userName } = tokenData;
+        if (!tokenData || !containerRef.current || zpRef.current) return;
 
-            console.log("[InterviewCall] Generating Kit Token with params:", {
-                appId: parseInt(appId),
-                roomId,
-                userId,
-                userName,
-                tokenLength: token ? token.length : 0
-            });
+        const { appId, token, roomId, userId, userName } = tokenData;
+        const appIdNum = typeof appId === 'number' ? appId : parseInt(appId, 10);
 
-            // Generate Kit Token using the server-generated token
-            // Note: appId must be a number
+        if (import.meta.env?.DEV) {
+            console.log('[InterviewCall] Joining room – appId:', appIdNum, 'roomId:', roomId, 'userId:', userId);
+        }
+
+        try {
             const kitToken = ZegoUIKitPrebuilt.generateKitTokenForProduction(
-                parseInt(appId),
+                appIdNum,
                 token,
                 roomId,
                 userId,
-                userName
+                userName || 'User'
             );
 
-            // Create instance
             const zp = ZegoUIKitPrebuilt.create(kitToken);
             zpRef.current = zp;
 
-            // Join room
             zp.joinRoom({
                 container: containerRef.current,
-                scenario: {
-                    mode: ZegoUIKitPrebuilt.OneONoneCall,
+                scenario: { mode: ZegoUIKitPrebuilt.OneONoneCall },
+                showPreJoinView: false,
+                onLeaveRoom: () => navigate(-1),
+                onJoinRoomSuccess: () => {
+                    if (import.meta.env?.DEV) console.log('[InterviewCall] Successfully joined room');
                 },
-                showPreJoinView: false, // Jump straight to call? Or true used better? User didn't specify. False is smoother.
-                onLeaveRoom: () => {
-                    navigate(-1); // Go back on leave
-                },
-                onUserLeave: () => {
-                    // Optional handling
+                onJoinRoomFailed: (err) => {
+                    console.error('[InterviewCall] Zego login/join failed:', err);
+                    setError(err?.message || 'Video call connection failed (code 20021). Please try again.');
+                    zpRef.current?.destroy();
+                    zpRef.current = null;
                 }
             });
+        } catch (err) {
+            console.error('[InterviewCall] Zego init error:', err);
+            setError(err?.message || 'Failed to initialize video call. Please try again.');
         }
 
         return () => {

@@ -84,6 +84,38 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const loginWithGoogle = async (token) => {
+        try {
+            const response = await api.post('/auth/google', { token });
+            const { token: jwtToken, user: loginUser } = response.data;
+            localStorage.setItem('token', jwtToken);
+            localStorage.setItem('user', JSON.stringify(loginUser));
+            setUser(loginUser);
+            await refreshUser();
+            return { success: true };
+        } catch (error) {
+            console.error("Google Login failed", error);
+            const message = error.response?.data?.message || 'Google Login failed';
+            return { success: false, message };
+        }
+    };
+
+    const loginWithFacebook = async (accessToken) => {
+        try {
+            const response = await api.post('/auth/facebook', { accessToken });
+            const { token: jwtToken, user: loginUser } = response.data;
+            localStorage.setItem('token', jwtToken);
+            localStorage.setItem('user', JSON.stringify(loginUser));
+            setUser(loginUser);
+            await refreshUser();
+            return { success: true };
+        } catch (error) {
+            console.error("Facebook Login failed", error);
+            const message = error.response?.data?.message || 'Facebook Login failed';
+            return { success: false, message };
+        }
+    };
+
     const logout = () => {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -120,6 +152,8 @@ export const AuthProvider = ({ children }) => {
         user,
         loading,
         login,
+        loginWithGoogle,
+        loginWithFacebook,
         logout,
         register,
         refreshUser

@@ -7,9 +7,13 @@ import KYC from '../models/KYC.js';
 import sendEmail from '../utils/sendEmail.js';
 import { requireAuth, getJwtSecret } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
-import { sendOtp, verifyOtp, resetPassword } from '../controllers/authController.js';
+import { sendOtp, verifyOtp, resetPassword, googleLogin, facebookLogin } from '../controllers/authController.js';
 
 const router = express.Router();
+
+// Social Login
+router.post('/google', googleLogin);
+router.post('/facebook', facebookLogin);
 
 
 /** Normalize role for User schema (enum: jobseeker | recruiter | admin) */

@@ -103,7 +103,9 @@ import activityRoutes from './routes/activity.js';
 import notificationRoutes from './routes/notifications.js';
 import analyticsRoutes from './routes/analytics.js';
 import interviewRoutes from './routes/interviewRoutes.js';
+import zegoRoutes from './routes/zegoRoutes.js';
 import recommendationRoutes from './routes/recommendations.js';
+import contactRoutes from './routes/contact.js';
 
 import aiRoutes from './routes/ai.js';
 
@@ -125,12 +127,14 @@ app.use('/api/profile', requireAuth, profileRoutes);
 app.use('/api/projects', requireAuth, projectRoutes);
 app.use('/api/activity', requireAuth, activityRoutes);
 app.use('/api/interviews', interviewRoutes);
+app.use('/api/zego', zegoRoutes);
 app.use('/api/notifications', requireAuth, notificationRoutes);
 
 app.use('/api/kyc', requireAuth, kycRoutes);
 app.use('/api/location', locationRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/recruiter', recruiterRoutes);
+app.use('/api/contact', contactRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

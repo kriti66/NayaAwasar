@@ -1,9 +1,10 @@
 import express from 'express';
 import Company from '../models/Company.js';
 import Job from '../models/Job.js';
-import RecruiterKyc from '../models/RecruiterKyc.js'; // Correct model
+import RecruiterKyc from '../models/RecruiterKyc.js';
 import Application from '../models/Application.js';
 import { requireAuth, requireRole, requireKycApproved, requireCompanyApproved, requireAdmin, getJwtSecret } from '../middleware/auth.js';
+import { hasMeaningfulChanges } from '../utils/companyVerificationUtils.js';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import path from 'path';
@@ -414,6 +415,72 @@ router.put('/:id/photos', requireAuth, upload.array('photos', 5), async (req, re
         res.json(company);
     } catch (error) {
         console.error("Error uploading photos:", error);
+        res.status(500).json({ message: 'Server error' });
+    }
+});
+
+// @route   POST /api/companies/:id/resubmit
+// @desc    Resubmit company for review after rejection (Recruiter, max 3 attempts)
+// @access  Private
+router.post('/:id/resubmit', requireAuth, requireRole('recruiter', 'admin'), requireKycApproved, async (req, res) => {
+    try {
+        const company = await Company.findById(req.params.id);
+        if (!company) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+
+        const isLinked = company.recruiters.some(rId => rId.toString() === req.user.id);
+        if (!isLinked && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Unauthorized to resubmit this company' });
+        }
+
+        if (company.status !== 'rejected') {
+            return res.status(400).json({ message: 'Only rejected companies can be resubmitted' });
+        }
+
+        if (company.isLockedAfterMaxAttempts) {
+            return res.status(400).json({ message: 'Maximum resubmission attempts exceeded. Please contact support.' });
+        }
+
+        if (company.reapplyCount >= 3) {
+            return res.status(400).json({ message: 'Maximum resubmission attempts exceeded. Please contact support.' });
+        }
+
+        if (!hasMeaningfulChanges(company, company.lastRejectedSnapshot)) {
+            return res.status(400).json({
+                message: 'No meaningful profile changes detected. Please edit your company profile before resubmitting.'
+            });
+        }
+
+        company.reapplyCount = (company.reapplyCount || 0) + 1;
+        company.status = 'pending';
+        company.verificationStatus = 'pending';
+        if (!company.adminFields) company.adminFields = {};
+        company.adminFields.moderationStatus = 'under_review';
+        if (!company.adminFields.verificationAuditLog) company.adminFields.verificationAuditLog = [];
+        company.adminFields.verificationAuditLog.push({
+            date: new Date(),
+            action: 'resubmitted',
+            adminId: req.user.id,
+            reapplyCount: company.reapplyCount,
+            metadata: { resubmissionNumber: company.reapplyCount }
+        });
+        company.adminFields.reviewHistory.push({
+            action: 'resubmitted',
+            adminId: req.user.id,
+            comment: `Resubmission #${company.reapplyCount} for review`
+        });
+
+        await company.save();
+
+        res.json({
+            success: true,
+            message: 'Company profile resubmitted for review.',
+            company,
+            remainingAttempts: Math.max(0, 3 - company.reapplyCount)
+        });
+    } catch (error) {
+        console.error('Company resubmit error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 });

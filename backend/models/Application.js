@@ -57,7 +57,8 @@ const applicationSchema = new mongoose.Schema({
         reason: { type: String, default: '' },
         preferredDate: Date,
         preferredTime: String,
-        reviewed: { type: Boolean, default: false }
+        reviewed: { type: Boolean, default: false },
+        rejectionReason: { type: String, default: '' }
     },
     // Offer details
     offer: {

@@ -1,10 +1,14 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Job from '../models/Job.js';
 import Application from '../models/Application.js';
 import Company from '../models/Company.js';
 import User from '../models/User.js';
 import { requireAuth, requireRole, requireKycApproved, requireAdmin, requireCompanyApproved, requireKycVerified, requireRecruiterKycApproved } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
+import { getPromotedJobs } from '../controllers/promotedJobController.js';
+import { getRecommendedJobs } from '../services/recommendationService.js';
+import { getValidSavedJobIds, cleanUserSavedJobs } from '../utils/savedJobsUtils.js';
 
 const router = express.Router();
 
@@ -186,6 +190,83 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
     }
 });
 
+// Get promoted jobs (Public)
+router.get('/promoted', getPromotedJobs);
+
+// Get merged jobs for jobseeker (deduplicated, with AI match scores)
+router.get('/for-seeker', requireAuth, requireRole('jobseeker', 'job_seeker'), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const jobs = await Job.find({
+            status: 'Active',
+            moderationStatus: 'Approved',
+            $or: [
+                { application_deadline: { $exists: false } },
+                { application_deadline: { $gte: new Date() } }
+            ]
+        })
+            .sort({ createdAt: -1 })
+            .populate('company_id', 'name logo location')
+            .lean();
+
+        const rec = await getRecommendedJobs(userId);
+        const recJobs = rec.jobs || [];
+        const recMap = new Map();
+        recJobs.forEach(rj => {
+            const id = (rj._id || rj.id)?.toString();
+            if (id) recMap.set(id, { matchScore: rj.matchScore, matchReason: rj.matchReason });
+        });
+
+        const merged = jobs.map(job => {
+            const id = (job._id || job.id)?.toString();
+            const recData = recMap.get(id);
+            return {
+                ...job,
+                matchScore: recData?.matchScore ?? null,
+                matchReason: recData?.matchReason ?? null,
+                isRecommended: !!recData
+            };
+        });
+
+        merged.sort((a, b) => (b.matchScore ?? -1) - (a.matchScore ?? -1));
+        res.json(merged);
+    } catch (error) {
+        console.error("Fetch jobs for seeker error:", error);
+        res.status(500).json({ message: 'Error fetching jobs' });
+    }
+});
+
+// Get saved jobs (single source of truth - valid, deduplicated)
+router.get('/saved', requireAuth, requireKycVerified, async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const validIds = await getValidSavedJobIds(userId);
+        // Background cleanup of duplicates/stale refs (no-await)
+        cleanUserSavedJobs(userId).catch(err => {
+            if (process.env.NODE_ENV !== 'test') {
+                console.warn("[savedJobs] Background cleanup failed:", err?.message);
+            }
+        });
+        if (validIds.length === 0) {
+            return res.json({ savedJobIds: [], jobs: [] });
+        }
+        const jobs = await Job.find({
+            _id: { $in: validIds },
+            status: 'Active',
+            moderationStatus: 'Approved'
+        })
+            .populate('company_id', 'name logo location')
+            .sort({ createdAt: -1 })
+            .lean();
+        const jobMap = new Map(jobs.map(j => [j._id.toString(), j]));
+        const orderedJobs = validIds.map(id => jobMap.get(id)).filter(Boolean);
+        res.json({ savedJobIds: validIds, jobs: orderedJobs });
+    } catch (error) {
+        console.error("[savedJobs] Error fetching saved jobs:", error?.message || error);
+        res.status(500).json({ message: 'Error fetching saved jobs' });
+    }
+});
+
 // Get specific job
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
@@ -193,7 +274,12 @@ router.get('/:id', async (req, res) => {
         // Populate company details including logo
         const job = await Job.findById(id).populate('company_id', 'name logo location website size industry');
         if (!job) return res.status(404).json({ message: 'Job not found' });
-        res.json(job);
+        const jobObj = job.toObject ? job.toObject() : job;
+        if (!jobObj.company_logo && jobObj.company_id?.logo) {
+            jobObj.company_logo = jobObj.company_id.logo;
+            jobObj.company_logo_url = jobObj.company_id.logo;
+        }
+        res.json(jobObj);
     } catch (error) {
         console.error("Fetch specific job error:", error);
         res.status(500).json({ message: 'Error fetching job' });
@@ -313,33 +399,65 @@ router.patch('/:id/status', requireAuth, requireKycApproved, requireCompanyAppro
     }
 });
 
+// Admin: Clean duplicate/stale saved jobs for all users
+router.post('/admin/clean-saved-jobs', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const users = await User.find({ savedJobs: { $exists: true, $ne: [] } }).select('_id').lean();
+        let totalRemoved = 0;
+        for (const u of users) {
+            const removed = await cleanUserSavedJobs(u._id.toString());
+            totalRemoved += removed;
+        }
+        res.json({ success: true, usersProcessed: users.length, recordsRemoved: totalRemoved });
+    } catch (error) {
+        console.error("[savedJobs] Admin cleanup error:", error?.message || error);
+        res.status(500).json({ message: 'Error cleaning saved jobs' });
+    }
+});
+
 // Toggle Save Job (Jobseeker only)
 router.post('/:id/save', requireAuth, requireKycVerified, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
     try {
+        const job = await Job.findById(id);
+        if (!job) {
+            return res.status(404).json({ message: 'Job not found' });
+        }
+        if (job.status !== 'Active' || job.moderationStatus !== 'Approved') {
+            return res.status(400).json({ message: 'This job is no longer available to save' });
+        }
+
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-        const jobIndex = user.savedJobs.indexOf(id);
-        let saved = false;
+        user.savedJobs = user.savedJobs || [];
+        const idStr = id.toString();
+        const existingIdx = user.savedJobs.findIndex(
+            sid => (sid?.toString?.() || String(sid)) === idStr
+        );
 
-        if (jobIndex === -1) {
-            // Add to saved
-            user.savedJobs.push(id);
+        let saved = false;
+        if (existingIdx === -1) {
+            user.savedJobs.push(job._id);
             saved = true;
         } else {
-            // Remove from saved
-            user.savedJobs.splice(jobIndex, 1);
-            saved = false;
+            user.savedJobs.splice(existingIdx, 1);
         }
 
+        const uniqueIds = [...new Set(user.savedJobs.map(sid => (sid?.toString?.() || String(sid))))];
+        user.savedJobs = uniqueIds.map(id => (typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id));
         await user.save();
-        res.json({ success: true, saved, savedJobs: user.savedJobs });
+
+        const validIds = await getValidSavedJobIds(userId);
+        if (process.env.NODE_ENV === 'development') {
+            console.log('[savedJobs] Toggle OK', { jobId: idStr, saved, validSavedCount: validIds.length });
+        }
+        res.json({ success: true, saved, savedJobs: validIds });
     } catch (error) {
-        console.error("Toggle save job error:", error);
-        res.status(500).json({ message: 'Error toggling saved job' });
+        console.error("[savedJobs] Toggle save error:", error?.message || error);
+        res.status(500).json({ message: 'Error updating saved jobs' });
     }
 });
 

@@ -8,14 +8,16 @@ const __dirname = path.dirname(__filename);
 
 // Helper to get Projects and Profile
 const getProfileAndProjects = async (userId) => {
-    const profile = await Profile.findOne({ user: userId }).populate('user', 'fullName email _id phoneNumber');
+    const profile = await Profile.findOne({ userId: userId }).populate('userId', 'fullName email _id phoneNumber profileImage');
     if (!profile) return null;
 
     const { default: Project } = await import('../models/Project.js');
-    const projects = await Project.find({ user: userId });
+    const projects = await Project.find({ userId: userId });
 
     const profileData = profile.toObject();
     profileData.projects = projects;
+    // Map userId to user for the cvGenerator template which expects profile.user
+    profileData.user = profileData.userId;
     return { profile, profileData };
 };
 
@@ -32,7 +34,7 @@ export const generateCV = async (req, res) => {
         // Update profile
         profile.resume = {
             fileUrl: fileRelPath,
-            fileName: `${profile.user.fullName.replace(/\s+/g, '_')}_CV.pdf`,
+            fileName: `${(profileData.user?.fullName || 'Jobseeker').replace(/\s+/g, '_')}_CV.pdf`,
             uploadedAt: new Date(),
             source: 'generated',
             lastGeneratedAt: new Date()
@@ -51,13 +53,16 @@ export const generateCV = async (req, res) => {
 export const viewCV = async (req, res) => {
     try {
         const userId = req.user.id;
-        const profile = await Profile.findOne({ user: userId });
+        const profile = await Profile.findOne({ userId: userId });
 
         if (!profile || !profile.resume || !profile.resume.fileUrl) {
             return res.status(404).json({ message: 'No CV found' });
         }
 
-        const filePath = path.join(__dirname, '..', profile.resume.fileUrl);
+        // Remove leading slash to ensure clean relative join on Windows
+        const normalizedFileUrl = profile.resume.fileUrl.startsWith('/') ? profile.resume.fileUrl.substring(1) : profile.resume.fileUrl;
+        const filePath = path.join(__dirname, '..', normalizedFileUrl);
+        
         if (fs.existsSync(filePath)) {
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `inline; filename="${profile.resume.fileName}"`);
@@ -76,13 +81,15 @@ export const viewCV = async (req, res) => {
 export const downloadCV = async (req, res) => {
     try {
         const userId = req.user.id;
-        const profile = await Profile.findOne({ user: userId });
+        const profile = await Profile.findOne({ userId: userId });
 
         if (!profile || !profile.resume || !profile.resume.fileUrl) {
             return res.status(404).json({ message: 'No CV found' });
         }
 
-        const filePath = path.join(__dirname, '..', profile.resume.fileUrl);
+        const normalizedFileUrl = profile.resume.fileUrl.startsWith('/') ? profile.resume.fileUrl.substring(1) : profile.resume.fileUrl;
+        const filePath = path.join(__dirname, '..', normalizedFileUrl);
+        
         if (fs.existsSync(filePath)) {
             res.download(filePath, profile.resume.fileName);
         } else {
@@ -98,7 +105,7 @@ export const downloadCV = async (req, res) => {
 export const autoRegenerateCV = async (userId) => {
     try {
         // Check if profile has generated CV
-        const profileCheck = await Profile.findOne({ user: userId });
+        const profileCheck = await Profile.findOne({ userId: userId });
         if (profileCheck && profileCheck.resume && profileCheck.resume.source === 'generated') {
             const data = await getProfileAndProjects(userId);
             if (data) {

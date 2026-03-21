@@ -1,26 +1,28 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
-import { Sparkles, MapPin, Briefcase, Bookmark, ChevronRight } from 'lucide-react';
+import { Sparkles, MapPin, Briefcase, Bookmark, ChevronRight, AlertCircle, ArrowUpRight, CheckCircle } from 'lucide-react';
 import useJobSaver from '../../hooks/useJobSaver';
+import CompanyLogo from '../common/CompanyLogo';
 
-const RecommendedJobsWidget = () => {
+const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, toggleSaveJob: propToggleSave }) => {
     const [jobs, setJobs] = useState([]);
-    const [isAIRecommended, setIsAIRecommended] = useState(false);
+    const [isCompleteProfile, setIsCompleteProfile] = useState(true);
     const [loading, setLoading] = useState(true);
-    const { savedJobIds, toggleSaveJob } = useJobSaver();
+    const hookSaver = useJobSaver();
+    const savedJobIds = propSavedIds ?? hookSaver.savedJobIds;
+    const toggleSaveJob = propToggleSave ?? hookSaver.toggleSaveJob;
 
     useEffect(() => {
         const fetchRecommendations = async () => {
             try {
                 const response = await api.get('/recommendations');
 
-                if (Array.isArray(response.data)) {
-                    setJobs(response.data);
-                    setIsAIRecommended(false);
-                } else if (response.data.jobs) {
+                if (response.data && response.data.jobs) {
                     setJobs(response.data.jobs);
-                    setIsAIRecommended(response.data.isAIRecommended);
+                    setIsCompleteProfile(response.data.isComplete !== false);
+                } else if (Array.isArray(response.data)) {
+                    setJobs(response.data);
                 }
             } catch (error) {
                 console.error("Failed to fetch recommendations:", error);
@@ -33,6 +35,7 @@ const RecommendedJobsWidget = () => {
     }, []);
 
     const timeAgo = (date) => {
+        if (!date) return 'Just now';
         const seconds = Math.floor((new Date() - new Date(date)) / 1000);
         let interval = seconds / 86400;
         if (interval > 1) return Math.floor(interval) + "d ago";
@@ -43,11 +46,14 @@ const RecommendedJobsWidget = () => {
 
     if (loading) {
         return (
-            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
-                <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 min-h-[400px]">
+                <div className="flex items-center justify-between mb-6 animate-pulse">
+                    <div className="h-6 bg-gray-200 rounded w-1/3"></div>
+                    <div className="h-4 bg-gray-100 rounded w-16"></div>
+                </div>
                 <div className="space-y-4">
-                    {[1, 2].map(i => (
-                        <div key={i} className="h-24 bg-gray-100 rounded-lg"></div>
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="h-32 bg-gray-50 rounded-xl animate-pulse"></div>
                     ))}
                 </div>
             </div>
@@ -56,108 +62,152 @@ const RecommendedJobsWidget = () => {
 
     if (jobs.length === 0) {
         return (
-            <div className="bg-white rounded-xl p-8 border border-gray-100 shadow-sm text-center relative overflow-hidden">
-                <div className="absolute right-0 top-0 w-32 h-32 opacity-10">
+            <div className="bg-white rounded-2xl p-10 border border-gray-100 shadow-sm text-center relative overflow-hidden flex flex-col items-center justify-center min-h-[400px]">
+                <div className="absolute right-0 top-0 w-64 h-64 opacity-5 pointer-events-none">
                     <svg viewBox="0 0 100 100" className="w-full h-full text-[#29a08e]" fill="currentColor">
                         <path d="M50 10 L60 40 L90 40 L65 60 L75 90 L50 75 L25 90 L35 60 L10 40 L40 40 Z" />
                     </svg>
                 </div>
-                <Sparkles className="w-12 h-12 text-[#29a08e] mx-auto mb-4 relative z-10" />
-                <h3 className="text-lg font-bold text-gray-900 mb-2 relative z-10">No matches yet</h3>
-                <p className="text-sm text-gray-600 mb-6 max-w-sm mx-auto relative z-10">Complete your profile and upload a CV to get personalized job picks.</p>
-                <Link to="/seeker/profile" className="inline-block px-5 py-2.5 bg-[#29a08e] text-white text-sm font-bold rounded-lg hover:bg-[#228377] transition-colors relative z-10">
-                    Update Profile
+                
+                <div className="w-20 h-20 bg-[#29a08e]/10 rounded-full flex items-center justify-center mb-5">
+                    <Sparkles className="w-10 h-10 text-[#29a08e]" />
+                </div>
+                
+                <h3 className="text-xl font-extrabold text-gray-900 mb-2 z-10">No suitable recommendations found yet.</h3>
+                <p className="text-sm text-gray-500 mb-8 max-w-sm mx-auto z-10 leading-relaxed">
+                    Improve your recommendations by adding more skills, experience, and updating your preferred job categories.
+                </p>
+                <Link to="/seeker/profile" className="px-6 py-3 bg-[#29a08e] text-white text-sm font-bold rounded-xl hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/20 hover:shadow-[#29a08e]/30 z-10">
+                    Complete Your Profile
                 </Link>
             </div>
         );
     }
 
     return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                        {isAIRecommended ? (
-                            <>
-                                <Sparkles className="w-5 h-5 text-[#29a08e] fill-[#29a08e]/20" />
-                                AI Recommended For You
-                            </>
-                        ) : (
-                            "Latest Jobs"
-                        )}
+                    <h3 className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+                        <div className="p-1.5 bg-[#29a08e]/10 rounded-lg">
+                            <Sparkles className="w-5 h-5 text-[#29a08e] fill-[#29a08e]/20" />
+                        </div>
+                        AI Recommended For You
                     </h3>
                     <p className="text-xs text-gray-500 font-medium mt-1">
-                        {isAIRecommended ? "AI-curated based on your profile & CV" : "Fresh opportunities just for you"}
+                        Curated matches based on your skills, experience, and location
                     </p>
                 </div>
-                {jobs.length > 5 && (
-                    <Link to="/seeker/jobs?filter=recommended" className="text-xs font-bold text-[#29a08e] hover:text-[#228377] flex items-center gap-1">
-                        View All <ChevronRight size={14} />
-                    </Link>
-                )}
+                <Link to="/seeker/jobs" className="text-xs font-bold text-[#29a08e] hover:text-[#228377] flex items-center gap-1 bg-[#29a08e]/5 hover:bg-[#29a08e]/10 px-3 py-1.5 rounded-lg transition-all line-clamp-1 truncate ml-2">
+                    View Match Board <ChevronRight size={14} />
+                </Link>
             </div>
 
-            <div className="divide-y divide-gray-50">
+            {/* Incomplete Profile Alert */}
+            {!isCompleteProfile && (
+                <div className="mx-6 mt-6 p-4 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                        <h4 className="text-sm font-bold text-gray-900">Improve your match quality</h4>
+                        <p className="text-xs text-gray-600 mt-1">Your profile is currently incomplete. Add more specific skills and preferences to get highly targeted recommendations.</p>
+                        <Link to="/seeker/profile" className="inline-block mt-2 text-xs font-bold text-[#29a08e] hover:underline">
+                            Update profile now →
+                        </Link>
+                    </div>
+                </div>
+            )}
+
+            {/* Job List */}
+            <div className={`p-6 space-y-4`}>
                 {jobs.slice(0, 5).map((job) => {
-                    const isSaved = savedJobIds.includes(job._id);
+                    const jobId = job._id?.toString?.() || job._id;
+                    const isSaved = savedJobIds.some(sid => (sid?.toString?.() || sid) === jobId);
+                    const hasApplied = appliedJobIds.includes(job._id);
+                    // Decide badge color based on matchScore
+                    const getMatchColor = (score) => {
+                        if (!score) return 'bg-gray-100 text-gray-600 border-gray-200';
+                        if (score >= 80) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                        if (score >= 50) return 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20';
+                        return 'bg-blue-50 text-blue-600 border-blue-200';
+                    };
+                    
+                    const matchColorClass = getMatchColor(job.matchScore);
+
                     return (
-                        <div key={job._id} className="p-5 hover:bg-gray-50 transition-colors group">
-                            <div className="flex justify-between items-start mb-2">
-                                <div className="flex items-start gap-3">
-                                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-sm border border-gray-200">
-                                        {job.company_name?.charAt(0) || 'C'}
-                                    </div>
+                        <div key={job._id} className="p-5 rounded-xl border border-gray-100 hover:border-[#29a08e]/30 bg-white hover:shadow-md transition-all group relative overflow-hidden">
+                            
+                            {/* Decorative background gradient on high match */}
+                            {job.matchScore >= 80 && (
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+                            )}
+
+                            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-4 relative z-10">
+                                {/* Title and Company */}
+                                <div className="flex gap-4">
+                                    <CompanyLogo job={job} className="w-12 h-12 rounded-xl border border-gray-100 shrink-0 shadow-sm" imgClassName="w-full h-full object-cover" fallbackClassName="text-lg" />
                                     <div>
-                                        <h4 className="text-sm font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors line-clamp-1">
-                                            {job.title}
-                                        </h4>
-                                        <p className="text-xs font-medium text-gray-500">{job.company_name}</p>
+                                        <Link to={`/seeker/jobs/${job._id}`} className="block">
+                                            <h4 className="text-base font-extrabold text-gray-900 group-hover:text-[#29a08e] transition-colors leading-tight mb-1">
+                                                {job.title}
+                                            </h4>
+                                        </Link>
+                                        <p className="text-sm font-semibold text-gray-500">{job.company_name}</p>
+                                        
+                                        <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold text-gray-400 mt-2">
+                                            <span className="flex items-center gap-1.5"><MapPin size={12} /> {job.location || 'Remote'}</span>
+                                            <span className="flex items-center gap-1.5"><Briefcase size={12} /> {job.type}</span>
+                                            {job.experience_level && (
+                                                <span className="flex items-center gap-1.5 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">{job.experience_level}</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="flex flex-col items-end gap-1">
-                                    {isAIRecommended ? (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-[#29a08e]/10 text-[#29a08e] border border-[#29a08e]/20">
-                                            {job.matchScore}% Match
-                                        </span>
+
+                                {/* Match Score */}
+                                <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-1.5 shrink-0">
+                                    {job.matchScore > 0 ? (
+                                        <div className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 ${matchColorClass}`}>
+                                            <Sparkles size={12} className={job.matchScore >= 80 ? 'text-emerald-500 fill-emerald-500/20' : ''} />
+                                            <span className="text-xs font-black">{job.matchScore}% Match</span>
+                                        </div>
                                     ) : (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-[#29a08e] border-emerald-100">
-                                            NEW
+                                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold bg-gray-100 text-gray-500">
+                                            PLATFORM RECOMMENDED
                                         </span>
                                     )}
                                 </div>
                             </div>
 
-                            {/* AI Reason */}
-                            {isAIRecommended && (
-                                <div className="mb-3 px-3 py-2 bg-[#29a08e]/5 rounded-lg border border-[#29a08e]/10">
-                                    <p className="text-[10px] text-gray-700 font-medium leading-relaxed flex gap-2">
-                                        <Sparkles size={12} className="shrink-0 mt-0.5 text-[#29a08e]" />
-                                        {job.matchReason}
-                                    </p>
+                            {/* AI Reason string */}
+                            {job.matchReason && (
+                                <div className="mb-4 text-xs font-medium text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                                    <span className="font-bold text-gray-800">Why this job?</span> {job.matchReason}
                                 </div>
                             )}
 
-                            <div className="flex items-center justify-between mt-3">
-                                <div className="flex items-center gap-2 text-[10px] text-gray-400 font-medium">
-                                    <span className="flex items-center gap-1"><MapPin size={10} /> {job.location || 'Remote'}</span>
-                                    <span>•</span>
-                                    <span className="flex items-center gap-1"><Briefcase size={10} /> {job.type}</span>
-                                    <span>•</span>
-                                    <span>{timeAgo(job.createdAt || job.posted_date)}</span>
-                                </div>
-                                <div className="flex gap-2">
+                            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{timeAgo(job.createdAt || job.posted_date)}</span>
+                                <div className="flex gap-2.5">
                                     <button
                                         onClick={() => toggleSaveJob(job._id)}
-                                        className={`p-1.5 rounded-md transition-colors ${isSaved ? 'bg-[#29a08e]/10 text-[#29a08e]' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                                        className={`p-2 rounded-xl transition-all border ${isSaved ? 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20' : 'bg-white text-gray-400 border-gray-200 hover:bg-gray-50 hover:text-gray-600'}`}
+                                        title={isSaved ? "Saved Job" : "Save Job"}
                                     >
-                                        <Bookmark size={14} fill={isSaved ? "currentColor" : "none"} />
+                                        <Bookmark size={16} fill={isSaved ? "currentColor" : "none"} />
                                     </button>
-                                    <Link
-                                        to={`/jobseeker/jobs/${job._id}`}
-                                        className="px-3 py-1.5 bg-[#29a08e] text-white text-[10px] font-bold rounded-lg hover:bg-[#228377] transition-colors"
-                                    >
-                                        Apply Now
-                                    </Link>
+                                    {hasApplied ? (
+                                        <span className="px-5 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5">
+                                            <CheckCircle size={14} /> Applied
+                                        </span>
+                                    ) : (
+                                        <Link
+                                            to={`/apply/${job._id}`}
+                                            className="px-5 py-2 bg-gradient-to-r from-gray-900 to-gray-800 text-white text-xs font-bold rounded-xl hover:from-[#29a08e] hover:to-[#228377] transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                                        >
+                                            Apply Now <ArrowUpRight size={14} />
+                                        </Link>
+                                    )}
                                 </div>
                             </div>
                         </div>

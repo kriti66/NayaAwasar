@@ -31,6 +31,12 @@ const interviewSchema = new mongoose.Schema({
         enum: ['Scheduled', 'Completed', 'Cancelled', 'Missed'],
         default: 'Scheduled'
     },
+    // Sub-status for dashboard/frontend: scheduled, reschedule_pending, confirmed
+    interviewStatus: {
+        type: String,
+        enum: ['scheduled', 'reschedule_pending', 'confirmed'],
+        default: 'scheduled'
+    },
     date: {
         type: Date,
         required: true
@@ -50,7 +56,27 @@ const interviewSchema = new mongoose.Schema({
     notes: String,
     timezone: String, // Added timezone as requested
     startTime: Date,
-    endTime: Date
+    endTime: Date,
+    // Rescheduling (recruiter-initiated proposals + jobseeker decisions)
+    rescheduleRequestedBy: {
+        type: String,
+        enum: ['jobseeker', 'recruiter'],
+        default: 'jobseeker'
+    },
+    proposedDate: Date,
+    proposedTime: String,
+    rescheduleReason: String,
+    rescheduleStatus: {
+        type: String,
+        enum: ['NONE', 'PENDING', 'PROPOSED', 'APPROVED', 'REJECTED'],
+        default: 'NONE'
+    },
+    // Jobseeker-initiated reschedule (single source of truth)
+    rescheduleRequestedAt: { type: Date },
+    requestedDate: { type: Date },
+    requestedTime: { type: String },
+    recruiterDecisionAt: { type: Date },
+    rescheduleRejectedReason: { type: String }
 }, { timestamps: true });
 
 // Auto-generate roomId before saving if Online

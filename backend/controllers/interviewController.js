@@ -1,9 +1,12 @@
 import Interview from '../models/Interview.js';
 import Application from '../models/Application.js';
 import User from '../models/User.js';
-import { generateToken04 } from '../utils/zegoToken.js';
+import { createRequire } from 'module';
 
-// Get token for interview call
+const require = createRequire(import.meta.url);
+const { generateToken04 } = require('../zego_server_assistant/token/nodejs/server/zegoServerAssistant.cjs');
+
+// Get token for interview call (legacy: POST /api/interviews/:id/zego-token)
 export const getZegoToken = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
@@ -54,7 +57,9 @@ export const getZegoToken = async (req, res) => {
         }
 
         if (serverSecret.length !== 32) {
-            console.warn(`[WARNING] Zego Server Secret length is ${serverSecret.length}, expected 32. Authentication might fail.`);
+            return res.status(500).json({
+                message: 'Zego server secret must be 32 characters. Check ZEGO_SERVER_SECRET in .env'
+            });
         }
 
         // --- Time Window Access Control ---
@@ -105,16 +110,21 @@ export const getZegoToken = async (req, res) => {
         };
         const payload = JSON.stringify(payloadObject);
 
+        const user = await User.findById(userId).select('fullName').lean();
+        const userName = user?.fullName || 'User';
+
         const token = generateToken04(appId, userIdString, serverSecret, effectiveTimeInSeconds, payload);
 
-        console.log(`[Zego Token Gen] Token generated successfully.`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`[Zego Token] appId: ${appId}, roomId: ${roomIdString}, userId: ${userIdString}`);
+        }
 
         res.json({
             appId,
             token,
             roomId: roomIdString,
             userId: userIdString,
-            userName: req.user.fullName || "User"
+            userName
         });
     } catch (error) {
         console.error("Token generation error:", error);

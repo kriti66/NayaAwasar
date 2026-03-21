@@ -4,7 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { toast } from 'react-hot-toast';
 import { Download, Search, Briefcase, ChevronDown, MapPin, AlertCircle, Users, FileText, Clock, PhoneIncoming, Star, Award, XCircle, Inbox, Eye, ChevronUp, Calendar, Percent } from 'lucide-react';
+import applicationService from '../../services/applicationService';
 import ScheduleInterviewModal from './ScheduleInterviewModal';
+import RecruiterRescheduleModal from './RecruiterRescheduleModal';
 
 const RecruiterApplicants = () => {
     const { user } = useAuth();
@@ -20,6 +22,10 @@ const RecruiterApplicants = () => {
     const [selectedApplicantId, setSelectedApplicantId] = useState(null);
     const [isScheduling, setIsScheduling] = useState(false);
     const [rescheduleModalData, setRescheduleModalData] = useState(null);
+    const [isRecruiterRescheduleModalOpen, setIsRecruiterRescheduleModalOpen] = useState(false);
+    const [recruiterRescheduleApplicationId, setRecruiterRescheduleApplicationId] = useState(null);
+    const [recruiterRescheduleInitialData, setRecruiterRescheduleInitialData] = useState(null);
+    const [isRecruiterRescheduleSubmitting, setIsRecruiterRescheduleSubmitting] = useState(false);
 
     const [stats, setStats] = useState({
         total: 0,
@@ -74,7 +80,6 @@ const RecruiterApplicants = () => {
                 console.log(`[RecruiterApplicants] Received ${res.data.length} applications:`, res.data);
                 setApplicants(res.data);
 
-                // Calc stats
                 const newStats = { total: res.data.length, applied: 0, inReview: 0, interview: 0, offered: 0, hired: 0, rejected: 0 };
                 res.data.forEach(app => {
                     let statusKey = app.status;
@@ -95,26 +100,23 @@ const RecruiterApplicants = () => {
     }, [selectedJobId]);
 
     const handleStatusChange = async (appId, newStatus) => {
-        // If status is interview, we need to collect details first
         if (newStatus === 'interview') {
             setSelectedApplicantId(appId);
-            setRescheduleModalData(null); // Explicitly clear any reschedule data
+            setRescheduleModalData(null);
             setIsInterviewModalOpen(true);
             return;
         }
 
-        // Offered Logic
         if (newStatus === 'offered') {
             const notes = window.prompt("Enter offer details or notes (Optional):");
-            if (notes === null) return; // Cancelled
+            if (notes === null) return;
             await updateApplicationStatus(appId, newStatus, { offerDetails: { notes } });
             return;
         }
 
-        // Rejected Logic
         if (newStatus === 'rejected') {
             const reason = window.prompt("Enter rejection reason (Required):");
-            if (reason === null) return; // Cancelled
+            if (reason === null) return;
             if (!reason.trim()) {
                 toast.error("Rejection reason is required.");
                 return;
@@ -123,7 +125,6 @@ const RecruiterApplicants = () => {
             return;
         }
 
-        // For other statuses, update immediately
         if (window.confirm(`Are you sure you want to change the status to ${newStatus.replace('-', ' ')}?`)) {
             await updateApplicationStatus(appId, newStatus);
         }
@@ -143,16 +144,16 @@ const RecruiterApplicants = () => {
     };
 
     const handleRejectReschedule = async (app) => {
-        if (!window.confirm("Are you sure you want to REJECT this reschedule request? The original interview time will stand.")) return;
+        const reason = window.prompt("Enter a reason for rejecting the reschedule request (Optional):");
+        if (reason === null) return; // User cancelled
 
         try {
             const appId = app._id || app.id;
             await api.put(`/applications/${appId}/reject-reschedule-request`, {
-                feedback: 'Time not suitable, sticking to original schedule.'
+                reason: reason || 'Declined'
             });
             toast.success("Reschedule request rejected.");
 
-            // Refresh
             const res = await api.get(`/applications/job/${selectedJobId}`);
             setApplicants(res.data);
         } catch (error) {
@@ -172,14 +173,11 @@ const RecruiterApplicants = () => {
 
             toast.success(`Application status updated to ${status.replace('-', ' ')}`);
 
-            // Fetch fresh data for consistency
             const res = await api.get(`/applications/job/${selectedJobId}`);
             setApplicants(res.data);
 
-            // Recalculate stats from fresh data
             const newStats = { total: res.data.length, applied: 0, inReview: 0, interview: 0, offered: 0, hired: 0, rejected: 0 };
             res.data.forEach(a => {
-                // Normalize for stats key
                 let statusKey = a.status;
                 if (statusKey === 'in-review' || statusKey === 'in_review') statusKey = 'inReview';
                 if (newStats[statusKey] !== undefined) newStats[statusKey]++;
@@ -196,15 +194,12 @@ const RecruiterApplicants = () => {
         setIsScheduling(true);
         try {
             if (rescheduleModalData) {
-                // We are approving a reschedule request
                 await api.put(`/applications/${selectedApplicantId}/approve-reschedule-request`, interviewData);
                 toast.success("Reschedule request APPROVED and interview updated.");
 
-                // Refresh list
                 const res = await api.get(`/applications/job/${selectedJobId}`);
                 setApplicants(res.data);
             } else {
-                // Normal scheduling
                 await updateApplicationStatus(selectedApplicantId, 'interview', { interviewDetails: interviewData });
             }
             setIsInterviewModalOpen(false);
@@ -217,11 +212,59 @@ const RecruiterApplicants = () => {
         }
     };
 
+    const handleRecruiterProposalClick = (app) => {
+        const appId = app._id || app.id;
+        const initialProposedDate = app.interview?.date
+            ? new Date(app.interview.date).toISOString().split('T')[0]
+            : '';
+
+        setRecruiterRescheduleApplicationId(appId);
+        setRecruiterRescheduleInitialData({
+            proposedDate: initialProposedDate,
+            proposedTime: app.interview?.time || '',
+            reason: ''
+        });
+        setIsRecruiterRescheduleModalOpen(true);
+    };
+
+    const handleRecruiterProposalSubmit = async (proposalForm) => {
+        setIsRecruiterRescheduleSubmitting(true);
+        try {
+            await applicationService.proposeRecruiterReschedule(recruiterRescheduleApplicationId, {
+                proposedDate: proposalForm.proposedDate,
+                proposedTime: proposalForm.proposedTime,
+                reason: proposalForm.reason
+            });
+
+            toast.success('Reschedule request sent');
+
+            setIsRecruiterRescheduleModalOpen(false);
+            setRecruiterRescheduleApplicationId(null);
+            setRecruiterRescheduleInitialData(null);
+
+            const res = await api.get(`/applications/job/${selectedJobId}`);
+            setApplicants(res.data);
+
+            const newStats = { total: res.data.length, applied: 0, inReview: 0, interview: 0, offered: 0, hired: 0, rejected: 0 };
+            res.data.forEach(a => {
+                let statusKey = a.status;
+                if (statusKey === 'in-review' || statusKey === 'in_review') statusKey = 'inReview';
+                if (newStats[statusKey] !== undefined) newStats[statusKey]++;
+            });
+            setStats(newStats);
+        } catch (error) {
+            console.error('[RecruiterApplicants] Recruiter proposal error:', error);
+            toast.error(error?.message || 'Failed to send reschedule request');
+        } finally {
+            setIsRecruiterRescheduleSubmitting(false);
+        }
+    };
+
     const getStatusLabel = (status) => {
         const labels = {
             applied: 'Applied',
-            'in-review': 'In Review', // Updated key
-            in_review: 'In Review', // Legacy key support
+            'in-review': 'In Review',
+            in_review: 'In Review',
             interview: 'Interview',
             offered: 'Offered',
             hired: 'Hired',
@@ -233,20 +276,20 @@ const RecruiterApplicants = () => {
 
     const getStatusColor = (status) => {
         switch (status) {
-            case 'applied': return 'bg-gray-100 text-gray-500 border-gray-200';
+            case 'applied': return 'bg-gray-100 text-gray-600 border-gray-200';
             case 'in_review':
-            case 'in-review': return 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20';
-            case 'interview': return 'bg-purple-50 text-purple-600 border-purple-100';
-            case 'offered': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+            case 'in-review': return 'bg-amber-50 text-amber-700 border-amber-200';
+            case 'interview': return 'bg-purple-50 text-purple-700 border-purple-200';
+            case 'offered': return 'bg-blue-50 text-blue-700 border-blue-200';
             case 'hired': return 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20';
-            case 'rejected': return 'bg-rose-50 text-rose-600 border-rose-100';
-            default: return 'bg-gray-100 text-gray-500';
+            case 'rejected': return 'bg-rose-50 text-rose-600 border-rose-200';
+            default: return 'bg-gray-100 text-gray-500 border-gray-200';
         }
     };
 
     const availableStatuses = [
         { value: 'applied', label: 'Applied' },
-        { value: 'in-review', label: 'In Review' }, // Updated value
+        { value: 'in-review', label: 'In Review' },
         { value: 'interview', label: 'Interview' },
         { value: 'offered', label: 'Offered' },
         { value: 'hired', label: 'Hired' },
@@ -258,56 +301,77 @@ const RecruiterApplicants = () => {
     };
 
     return (
-        <div className="bg-gray-50/50 min-h-[calc(100vh-4rem)] pb-20">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight mb-2">Applicants Manager</h1>
-                        <p className="text-sm font-medium text-gray-500">Track and manage candidates for your active job postings in real-time.</p>
-                    </div>
+        <div className="min-h-[calc(100vh-4rem)]">
+            {/* ─── Hero Header ─────────────────────────────── */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-[#0d2f2b] to-slate-900 pt-12 pb-28 px-4 sm:px-6 lg:px-8">
+                <div className="absolute inset-0 opacity-10">
+                    <div className="absolute top-20 left-10 w-72 h-72 bg-[#29a08e] rounded-full blur-3xl"></div>
+                    <div className="absolute bottom-10 right-10 w-96 h-96 bg-teal-400 rounded-full blur-3xl"></div>
+                </div>
+                <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)', backgroundSize: '32px 32px' }}></div>
 
-                    <div className="w-full md:w-72 relative">
-                        <Briefcase size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" />
-                        <select
-                            id="job-select"
-                            className="appearance-none block w-full pl-11 pr-10 py-3 bg-white border border-gray-200 rounded-xl shadow-sm text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#29a08e]/20 focus:border-[#29a08e] transition-shadow cursor-pointer"
-                            value={selectedJobId}
-                            onChange={(e) => setSelectedJobId(e.target.value)}
-                        >
-                            {jobs.map(job => (
-                                <option key={job._id || job.id} value={job._id || job.id}>{job.title}</option>
-                            ))}
-                        </select>
-                        <ChevronDown size={16} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <div className="relative max-w-7xl mx-auto">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+                        <div className="text-white animate-fade-in-up">
+                            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 rounded-full text-sm font-medium text-gray-200 backdrop-blur-sm mb-4">
+                                <Users size={14} />
+                                Talent Pipeline
+                            </div>
+                            <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-2">
+                                Applicants <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#29a08e] to-teal-300">Manager</span>
+                            </h1>
+                            <p className="text-gray-300 text-lg">Track and manage candidates for your active job postings in real-time.</p>
+                        </div>
+
+                        <div className="w-full md:w-72 relative">
+                            <Briefcase size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50 z-10" />
+                            <select
+                                id="job-select"
+                                className="appearance-none block w-full pl-11 pr-10 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl shadow-sm text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#29a08e]/30 focus:border-[#29a08e] transition-all cursor-pointer"
+                                value={selectedJobId}
+                                onChange={(e) => setSelectedJobId(e.target.value)}
+                            >
+                                {jobs.map(job => (
+                                    <option key={job._id || job.id} value={job._id || job.id} className="text-gray-900">{job.title}</option>
+                                ))}
+                            </select>
+                            <ChevronDown size={16} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white/50 pointer-events-none" />
+                        </div>
                     </div>
                 </div>
 
+
+            </div>
+
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-16 pb-20 relative z-10">
                 {/* Stats Summary */}
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-10">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-10">
                     {[
-                        { label: 'Total', count: stats.total, icon: Users, color: 'text-gray-600', bg: 'bg-gray-100' },
-                        { label: 'Applied', count: stats.applied, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
-                        { label: 'In Review', count: stats.inReview, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-                        { label: 'Interview', count: stats.interview, icon: PhoneIncoming, color: 'text-purple-600', bg: 'bg-purple-50' },
-                        { label: 'Offered', count: stats.offered, icon: Star, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                        { label: 'Hired', count: stats.hired, icon: Award, color: 'text-[#29a08e]', bg: 'bg-[#29a08e]/10' },
-                        { label: 'Lost', count: stats.rejected, icon: XCircle, color: 'text-rose-600', bg: 'bg-rose-50' },
+                        { label: 'Total', count: stats.total, icon: Users, color: 'text-gray-600', bg: 'bg-gray-100', gradient: 'from-gray-50 to-slate-50' },
+                        { label: 'Applied', count: stats.applied, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50', gradient: 'from-blue-50 to-indigo-50' },
+                        { label: 'In Review', count: stats.inReview, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', gradient: 'from-amber-50 to-yellow-50' },
+                        { label: 'Interview', count: stats.interview, icon: PhoneIncoming, color: 'text-purple-600', bg: 'bg-purple-50', gradient: 'from-purple-50 to-violet-50' },
+                        { label: 'Offered', count: stats.offered, icon: Star, color: 'text-emerald-600', bg: 'bg-emerald-50', gradient: 'from-emerald-50 to-green-50' },
+                        { label: 'Hired', count: stats.hired, icon: Award, color: 'text-[#29a08e]', bg: 'bg-[#29a08e]/10', gradient: 'from-[#29a08e]/5 to-teal-50' },
+                        { label: 'Lost', count: stats.rejected, icon: XCircle, color: 'text-rose-600', bg: 'bg-rose-50', gradient: 'from-rose-50 to-red-50' },
                     ].map((stat, i) => (
-                        <div key={i} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all relative overflow-hidden flex flex-col items-center justify-center group">
-                            <div className={`w-10 h-10 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
-                                <stat.icon size={20} strokeWidth={2.5} />
+                        <div key={i} className={`bg-gradient-to-br ${stat.gradient} p-4 rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#29a08e]/20 transition-all duration-300 hover:-translate-y-0.5 flex flex-col items-center justify-center group`}>
+                            <div className={`w-9 h-9 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform`}>
+                                <stat.icon size={18} strokeWidth={2.5} />
                             </div>
-                            <h3 className="text-2xl font-black text-gray-900 tracking-tight leading-none mb-1.5">{stat.count}</h3>
-                            <span className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">{stat.label}</span>
+                            <h3 className="text-2xl font-black text-gray-900 tracking-tight leading-none mb-1">{stat.count}</h3>
+                            <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</span>
                         </div>
                     ))}
                 </div>
 
                 {/* Applications List */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="px-6 py-5 border-b border-gray-100">
-                        <h3 className="text-lg font-bold text-gray-900">Active Pipeline</h3>
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-5 border-b border-gray-50 flex items-center justify-between">
+                        <div>
+                            <p className="text-[#29a08e] font-bold text-[10px] uppercase tracking-[0.2em] mb-1">Candidates</p>
+                            <h3 className="text-lg font-black text-gray-900 tracking-tight">Active Pipeline</h3>
+                        </div>
                     </div>
 
                     {loading ? (
@@ -316,17 +380,20 @@ const RecruiterApplicants = () => {
                             <p className="text-sm font-bold text-gray-400">Loading candidates...</p>
                         </div>
                     ) : applicants.length > 0 ? (
-                        <div className="divide-y divide-gray-100">
+                        <div className="divide-y divide-gray-50">
                             {applicants.map((app) => {
                                 const applicantName = app.personalInfo?.fullName || app.seeker_id?.fullName || 'Anonymous';
                                 const applicantEmail = app.personalInfo?.email || app.seeker_id?.email;
+                                const interviewDoc = app.interview?.interviewId;
+                                const recruiterProposalPending = interviewDoc?.rescheduleStatus === 'PENDING' && interviewDoc?.rescheduleRequestedBy === 'recruiter';
+                                const jobseekerReschedulePending = app.reschedule?.requested && !app.reschedule?.reviewed;
 
                                 return (
-                                    <div key={app._id || app.id} className="p-6 hover:bg-gray-50 transition-colors flex flex-col gap-6">
-                                        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
+                                    <div key={app._id || app.id} className="p-6 hover:bg-gray-50/50 transition-colors flex flex-col gap-5">
+                                        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-5">
                                             {/* Avatar & Name */}
                                             <div className="flex items-start gap-4 min-w-[250px]">
-                                                <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 font-black text-lg shadow-inner">
+                                                <div className="w-12 h-12 bg-gradient-to-br from-[#29a08e]/10 to-teal-50 rounded-xl flex items-center justify-center text-[#29a08e] font-black text-lg border border-[#29a08e]/10">
                                                     {applicantName.charAt(0)}
                                                 </div>
                                                 <div>
@@ -341,17 +408,17 @@ const RecruiterApplicants = () => {
 
                                             {/* Status Badge */}
                                             <div className="flex-1">
-                                                <div className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${getStatusColor(app.status)}`}>
+                                                <div className={`inline-flex px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${getStatusColor(app.status)}`}>
                                                     {getStatusLabel(app.status)}
                                                 </div>
                                             </div>
 
                                                 {/* Actions */}
-                                                <div className="flex items-center gap-4">
+                                                <div className="flex items-center gap-3">
                                                     {/* Expand Application Detail */}
                                                     <button
                                                         onClick={() => toggleExpand(app._id || app.id)}
-                                                        className={`p-2 rounded-lg transition-colors border ${expandedAppId === (app._id || app.id) ? 'bg-[#29a08e]/10 border-[#29a08e]/20 text-[#29a08e]' : 'border-transparent text-gray-400 hover:text-[#29a08e] hover:bg-emerald-50 hover:border-emerald-100'}`}
+                                                        className={`p-2.5 rounded-xl transition-colors border ${expandedAppId === (app._id || app.id) ? 'bg-[#29a08e]/10 border-[#29a08e]/20 text-[#29a08e]' : 'border-gray-200 text-gray-400 hover:text-[#29a08e] hover:bg-[#29a08e]/5 hover:border-[#29a08e]/20'}`}
                                                         title={expandedAppId === (app._id || app.id) ? "Hide Details" : "View Details"}
                                                     >
                                                         {expandedAppId === (app._id || app.id) ? <ChevronUp size={18} /> : <Eye size={18} />}
@@ -362,7 +429,7 @@ const RecruiterApplicants = () => {
                                                         app.interview?.roomId ? (
                                                             <Link
                                                                 to={`/interview/call/${app.interview.roomId}`}
-                                                                className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-[10px] font-black uppercase tracking-wider hover:bg-purple-700 transition-colors shadow-sm flex items-center gap-1.5"
+                                                                className="px-4 py-2.5 bg-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-purple-700 transition-colors shadow-lg shadow-purple-600/20 flex items-center gap-1.5"
                                                             >
                                                                 Start Interview
                                                             </Link>
@@ -370,16 +437,28 @@ const RecruiterApplicants = () => {
                                                             <span className="text-[10px] font-bold text-gray-400">Processing...</span>
                                                         )
                                                     )}
-                                                    {/* Resume Download Removed from Quick Actions */}
+
+                                                    {/* Recruiter Reschedule Proposal */}
+                                                    {app.status === 'interview' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRecruiterProposalClick(app)}
+                                                            disabled={recruiterProposalPending || jobseekerReschedulePending}
+                                                            title={recruiterProposalPending ? 'A reschedule proposal is already pending' : jobseekerReschedulePending ? 'Candidate reschedule request is already pending' : 'Propose a new interview date/time'}
+                                                            className={`px-4 py-2.5 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-amber-600 transition-colors shadow-lg shadow-amber-500/20 flex items-center gap-1.5 ${recruiterProposalPending || jobseekerReschedulePending ? 'opacity-50 cursor-not-allowed hover:bg-amber-500' : ''}`}
+                                                        >
+                                                            Reschedule
+                                                        </button>
+                                                    )}
                                                     {/* Status Selector */}
                                                 <div className="relative">
                                                     <select
                                                         value={app.status === 'withdrawn' ? '' : app.status}
                                                         onChange={(e) => handleStatusChange(app._id || app.id, e.target.value)}
                                                         disabled={app.status === 'withdrawn'}
-                                                        className={`appearance-none pl-4 pr-10 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all border ${app.status === 'withdrawn'
+                                                        className={`appearance-none pl-4 pr-10 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 transition-all border ${app.status === 'withdrawn'
                                                             ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                            : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300 focus:ring-gray-200'
+                                                            : 'bg-white border-gray-200 text-gray-700 hover:border-[#29a08e]/30 focus:ring-[#29a08e]/20'
                                                             }`}
                                                     >
                                                         {app.status === 'withdrawn' && <option value="">Withdrawn</option>}
@@ -396,18 +475,18 @@ const RecruiterApplicants = () => {
 
                                         {/* Reschedule Request Banner */}
                                         {app.reschedule?.requested && (
-                                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full animate-in fade-in slide-in-from-top-2">
+                                            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full animate-in fade-in slide-in-from-top-2">
                                                 <div className="flex gap-4">
-                                                    <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600 shrink-0">
-                                                        <AlertCircle size={24} />
+                                                    <div className="p-3 bg-amber-100 rounded-xl text-amber-600 shrink-0">
+                                                        <AlertCircle size={22} />
                                                     </div>
                                                     <div>
                                                         <h5 className="text-sm font-black text-amber-900 tracking-tight">Reschedule Requested</h5>
-                                                        <div className="mt-1.5 space-y-1">
+                                                        <div className="mt-1.5 space-y-1.5">
                                                             <p className="text-xs text-amber-800/80 leading-relaxed max-w-md">
-                                                                Candidate Reason: <span className="font-medium italic text-amber-900">"{app.reschedule.reason}"</span>
+                                                                Reason: <span className="font-bold italic text-amber-900">"{app.reschedule.reason}"</span>
                                                             </p>
-                                                            <div className="flex items-center gap-2 text-xs font-bold text-amber-900 bg-amber-100/50 px-2.5 py-1 rounded-md w-fit">
+                                                            <div className="flex items-center gap-2 text-[10px] font-black text-amber-900 bg-amber-100/50 px-3 py-1.5 rounded-lg w-fit uppercase tracking-wider">
                                                                 <span>Preferred:</span>
                                                                 <span>{app.reschedule.preferredDate ? new Date(app.reschedule.preferredDate).toLocaleDateString() : 'No date'}</span>
                                                                 <span className="opacity-50">•</span>
@@ -419,9 +498,9 @@ const RecruiterApplicants = () => {
                                                 <div className="flex items-center gap-3 w-full sm:w-auto pl-12 sm:pl-0">
                                                     <button
                                                         onClick={() => handleRejectReschedule(app)}
-                                                        className="flex-1 sm:flex-none px-4 py-2.5 bg-white border border-amber-200 text-amber-700 text-xs font-bold rounded-xl hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800 transition-all shadow-sm"
+                                                        className="flex-1 sm:flex-none px-4 py-2.5 bg-white border border-amber-200 text-amber-700 text-xs font-bold rounded-xl hover:bg-amber-50 hover:border-amber-300 transition-all shadow-sm"
                                                     >
-                                                        Reject Request
+                                                        Reject
                                                     </button>
                                                     <button
                                                         onClick={() => handleApproveReschedule(app)}
@@ -435,20 +514,20 @@ const RecruiterApplicants = () => {
 
                                         {/* Expanded Details Section */}
                                         {expandedAppId === (app._id || app.id) && (
-                                            <div className="mt-8 pt-8 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
-                                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                                    
-                                                    {/* Left Column: Details & Resume (1/3 width) */}
-                                                    <div className="space-y-6">
+                                            <div className="mt-4 pt-6 border-t border-gray-100 animate-in fade-in slide-in-from-top-2">
+                                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                                                    {/* Left Column: Details & Resume */}
+                                                    <div className="space-y-5">
                                                         {/* Candidacy Overview */}
-                                                        <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm relative overflow-hidden group hover:border-gray-200 transition-colors">
-                                                            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
-                                                                <div className="w-8 h-8 rounded-lg bg-gray-50 text-gray-500 flex items-center justify-center shrink-0">
+                                                        <div className="bg-gradient-to-br from-gray-50/50 to-white rounded-2xl p-6 border border-gray-100 shadow-sm relative overflow-hidden group hover:border-[#29a08e]/10 transition-colors">
+                                                            <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-50">
+                                                                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#29a08e]/10 to-teal-50 text-[#29a08e] flex items-center justify-center shrink-0">
                                                                     <Briefcase size={16} strokeWidth={2.5}/>
                                                                 </div>
                                                                 <div>
                                                                     <h5 className="text-sm font-black text-gray-900 tracking-tight">Application Details</h5>
-                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Overview</p>
+                                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Overview</p>
                                                                 </div>
                                                             </div>
                                                             <div className="space-y-4">
@@ -466,34 +545,34 @@ const RecruiterApplicants = () => {
                                                                     <span className="text-gray-500 font-medium flex items-center gap-2"><Briefcase size={14} className="text-gray-400"/> Experience</span>
                                                                     <span className="text-gray-900 font-bold max-w-[120px] text-right truncate">{app.applicantExperienceLevel || 'Not specified'}</span>
                                                                 </div>
-                                                                <div className="flex flex-col gap-2 pt-4 border-t border-gray-50 mt-2">
-                                                                    <span className="text-gray-500 font-medium flex items-center gap-2 text-sm mb-1"><PhoneIncoming size={14} className="text-gray-400"/> Contact Info</span>
-                                                                    <div className="bg-gray-50 rounded-lg p-3 w-full">
-                                                                        <div className="text-gray-900 font-bold text-sm tracking-wide">{app.personalInfo?.phone || 'No phone provided'}</div>
+                                                                <div className="flex flex-col gap-2 pt-3 border-t border-gray-50 mt-2">
+                                                                    <span className="text-gray-500 font-medium flex items-center gap-2 text-sm"><PhoneIncoming size={14} className="text-gray-400"/> Contact</span>
+                                                                    <div className="bg-white rounded-xl p-3 w-full border border-gray-100">
+                                                                        <div className="text-gray-900 font-bold text-sm">{app.personalInfo?.phone || 'No phone provided'}</div>
                                                                         <div className="text-xs text-gray-500 font-medium mt-1 truncate" title={app.personalInfo?.email}>{app.personalInfo?.email || 'No email provided'}</div>
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         </div>
 
-                                                        {/* Resume Attachment Card */}
-                                                        <div className="bg-gradient-to-br from-[#29a08e]/5 to-emerald-50/50 rounded-xl p-6 border border-[#29a08e]/10 shadow-sm relative overflow-hidden group">
+                                                        {/* Resume Card */}
+                                                        <div className="bg-gradient-to-br from-[#29a08e]/5 to-teal-50/50 rounded-2xl p-6 border border-[#29a08e]/10 shadow-sm relative overflow-hidden group">
                                                             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity transform group-hover:scale-110 group-hover:rotate-6 duration-500">
-                                                                <FileText size={100} className="text-[#29a08e]" strokeWidth={1} />
+                                                                <FileText size={80} className="text-[#29a08e]" strokeWidth={1} />
                                                             </div>
-                                                            <div className="relative z-10 flex items-center gap-3 mb-2">
+                                                            <div className="relative z-10 flex items-center gap-3 mb-4">
                                                                 <div className="w-10 h-10 rounded-xl bg-white text-[#29a08e] flex items-center justify-center shadow-sm border border-emerald-50">
-                                                                    <FileText size={20} strokeWidth={2.5}/>
+                                                                    <FileText size={18} strokeWidth={2.5}/>
                                                                 </div>
                                                                 <div>
                                                                     <h5 className="text-sm font-black text-gray-900 tracking-tight">Resume / CV</h5>
-                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Attachment</p>
+                                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Attachment</p>
                                                                 </div>
                                                             </div>
-                                                            <div className="relative z-10 mt-5">
-                                                                <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-white/60 w-fit px-3 py-1.5 rounded-lg mb-4">
-                                                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                                                    {app.resumeType === 'Generated' ? 'Platform Template' : 'Uploaded PDF Document'}
+                                                            <div className="relative z-10 mt-4">
+                                                                <div className="flex items-center gap-2 text-[10px] font-bold text-[#29a08e] bg-white/60 w-fit px-3 py-1.5 rounded-lg mb-4 border border-[#29a08e]/10">
+                                                                    <span className="w-2 h-2 rounded-full bg-[#29a08e] animate-pulse"></span>
+                                                                    {app.resumeType === 'Generated' ? 'Platform Template' : 'Uploaded PDF'}
                                                                 </div>
                                                                 {app.resumeUrl ? (
                                                                     <a
@@ -514,43 +593,43 @@ const RecruiterApplicants = () => {
                                                         </div>
                                                     </div>
 
-                                                    {/* Right Column: Cover Letter (2/3 width) */}
+                                                    {/* Right Column: Cover Letter */}
                                                     <div className="lg:col-span-2">
-                                                        <div className="bg-white rounded-xl p-6 sm:p-8 border border-gray-100 shadow-sm h-full flex flex-col group hover:border-[#29a08e]/30 transition-colors relative overflow-hidden">
-                                                            <div className="flex items-center gap-3 mb-8 pb-4 border-b border-gray-50 relative z-10">
-                                                                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 shadow-inner">
-                                                                    <FileText size={20} strokeWidth={2.5} />
+                                                        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-gray-100 shadow-sm h-full flex flex-col group hover:border-[#29a08e]/20 transition-colors relative overflow-hidden">
+                                                            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50 relative z-10">
+                                                                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                                                    <FileText size={18} strokeWidth={2.5} />
                                                                 </div>
                                                                 <div>
                                                                     <h5 className="text-base font-black text-gray-900 tracking-tight">Cover Letter</h5>
-                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Letter of Interest</p>
+                                                                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Letter of Interest</p>
                                                                 </div>
                                                             </div>
-                                                            
+
                                                             {app.coverLetter ? (
                                                                 <div className="relative flex-1">
                                                                     <div className="absolute -left-6 -top-6 text-gray-50/50 transform -rotate-12 pointer-events-none">
-                                                                        <svg width="120" height="120" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                                        <svg width="100" height="100" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                                                                             <path d="M14.017 21L16.439 12.019H12.019V3H21V12.019L18.471 21H14.017ZM4.017 21L6.439 12.019H2.019V3H11V12.019L8.471 21H4.017Z" />
                                                                         </svg>
                                                                     </div>
-                                                                    <div className="relative z-10 text-sm text-gray-600 leading-[1.8] font-medium whitespace-pre-wrap pl-6 sm:pl-8 border-l-2 border-[#29a08e]/30 py-2 min-h-[250px] bg-gradient-to-r from-gray-50/50 to-transparent">
-                                                                        <div className="absolute -left-2.5 top-0 w-5 h-5 bg-white border border-[#29a08e]/30 rounded-full flex items-center justify-center">
+                                                                    <div className="relative z-10 text-sm text-gray-600 leading-[1.8] font-medium whitespace-pre-wrap pl-6 sm:pl-8 border-l-2 border-[#29a08e]/20 py-2 min-h-[200px] bg-gradient-to-r from-gray-50/50 to-transparent rounded-r-xl">
+                                                                        <div className="absolute -left-2.5 top-0 w-5 h-5 bg-white border border-[#29a08e]/20 rounded-full flex items-center justify-center">
                                                                             <div className="w-1.5 h-1.5 bg-[#29a08e] rounded-full"></div>
                                                                         </div>
                                                                         {app.coverLetter}
-                                                                        <div className="absolute -left-2.5 bottom-0 w-5 h-5 bg-white border border-[#29a08e]/30 rounded-full flex items-center justify-center">
+                                                                        <div className="absolute -left-2.5 bottom-0 w-5 h-5 bg-white border border-[#29a08e]/20 rounded-full flex items-center justify-center">
                                                                             <div className="w-1.5 h-1.5 bg-[#29a08e] rounded-full"></div>
                                                                         </div>
                                                                     </div>
                                                                 </div>
                                                             ) : (
                                                                 <div className="flex-1 flex flex-col items-center justify-center py-12 text-center opacity-70">
-                                                                    <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-5 border-4 border-white shadow-sm">
-                                                                        <FileText size={32} className="text-gray-300" strokeWidth={1.5} />
+                                                                    <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-4 border border-gray-100">
+                                                                        <FileText size={28} className="text-gray-300" strokeWidth={1.5} />
                                                                     </div>
-                                                                    <p className="text-base font-black text-gray-900 tracking-tight mb-2">No Cover Letter Attached</p>
-                                                                    <p className="text-sm font-medium text-gray-500 max-w-sm">The applicant opted out of providing a cover letter for this application.</p>
+                                                                    <p className="text-sm font-black text-gray-900 tracking-tight mb-1">No Cover Letter Attached</p>
+                                                                    <p className="text-xs font-medium text-gray-500 max-w-sm">The applicant opted out of providing a cover letter.</p>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -564,10 +643,10 @@ const RecruiterApplicants = () => {
                             })}
                         </div>
                     ) : (
-                        <div className="py-24 px-6 text-center flex flex-col items-center justify-center bg-gray-50/30">
+                        <div className="py-24 px-6 text-center flex flex-col items-center justify-center bg-gradient-to-br from-gray-50/30 to-[#29a08e]/5 rounded-b-2xl">
                             <div className="relative mb-6">
-                                <div className="absolute inset-0 bg-[#29a08e]/20 rounded-full blur-xl xl opacity-60"></div>
-                                <div className="w-24 h-24 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-full flex items-center justify-center mx-auto border-4 border-white shadow-sm relative z-10">
+                                <div className="absolute inset-0 bg-[#29a08e]/20 rounded-full blur-xl opacity-60"></div>
+                                <div className="w-24 h-24 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-2xl flex items-center justify-center mx-auto border-4 border-white shadow-sm relative z-10">
                                     <Inbox size={40} className="text-[#29a08e]" strokeWidth={2} />
                                 </div>
                             </div>
@@ -584,6 +663,17 @@ const RecruiterApplicants = () => {
                 onSubmit={handleScheduleSubmit}
                 isSubmitting={isScheduling}
                 initialData={rescheduleModalData}
+            />
+            <RecruiterRescheduleModal
+                isOpen={isRecruiterRescheduleModalOpen}
+                onClose={() => {
+                    setIsRecruiterRescheduleModalOpen(false);
+                    setRecruiterRescheduleApplicationId(null);
+                    setRecruiterRescheduleInitialData(null);
+                }}
+                onSubmit={handleRecruiterProposalSubmit}
+                isSubmitting={isRecruiterRescheduleSubmitting}
+                initialData={recruiterRescheduleInitialData}
             />
         </div>
     );

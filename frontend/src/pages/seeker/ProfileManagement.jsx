@@ -119,12 +119,12 @@ const ProfileManagement = () => {
     const handleAutoGenerateCV = async () => {
         setIsGenerating(true);
         try {
-            toast.loading("Generating professional CV...", { id: "cv-gen" });
+            toast.loading("Syncing profile data to CV...", { id: "cv-gen" });
             const res = await profileService.generateCV();
             // Expected response: { success: true, resume: { ... } }
             if (res.success && res.resume) {
                 setProfile(prev => ({ ...prev, resume: res.resume }));
-                toast.success("CV generated successfully!", { id: "cv-gen" });
+                toast.success("CV synchronized with your latest profile changes!", { id: "cv-gen" });
             }
         } catch (error) {
             console.error("CV Gen error:", error);

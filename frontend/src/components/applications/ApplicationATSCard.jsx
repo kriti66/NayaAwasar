@@ -6,6 +6,7 @@ import {
     XSquare, ArrowRight, Info, Download, CheckCircle
 } from 'lucide-react';
 import api from '../../services/api';
+import CompanyLogo from '../common/CompanyLogo';
 import { toast } from 'react-hot-toast';
 
 const ApplicationATSCard = ({ application: initialApp }) => {
@@ -87,13 +88,7 @@ const ApplicationATSCard = ({ application: initialApp }) => {
             {/* Collapsed View */}
             <div className="p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="flex items-center gap-6 w-full md:w-auto">
-                    <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-100 shrink-0 group-hover:scale-105 transition-transform overflow-hidden shadow-inner">
-                        {job_id?.company_logo_url ? (
-                            <img src={job_id.company_logo_url} alt={job_id.company_name} className="w-full h-full object-cover" />
-                        ) : (
-                            <Building2 size={28} className="text-gray-400" />
-                        )}
-                    </div>
+                    <CompanyLogo job={job_id} companyName={job_id?.company_name} className="w-16 h-16 rounded-2xl border border-gray-100 shrink-0 group-hover:scale-105 transition-transform overflow-hidden shadow-inner" imgClassName="w-full h-full object-cover" fallbackClassName="text-xl font-bold text-gray-400" />
                     <div className="flex-1">
                         <Link to={`/jobseeker/jobs/${job_id?._id}`} className="text-xl font-bold text-gray-900 mb-1.5 hover:text-[#29a08e] transition-colors">{job_id?.title || 'Job Position'}</Link>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-gray-500 text-sm font-semibold">

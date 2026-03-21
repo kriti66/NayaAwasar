@@ -72,6 +72,34 @@ const applicationService = {
         } catch (error) {
             throw error.response?.data || { message: 'Failed to reject reschedule request' };
         }
+    },
+
+    // Recruiter-initiated reschedule proposal (jobseeker accepts/rejects)
+    proposeRecruiterReschedule: async (id, payload) => {
+        try {
+            const response = await api.put(`/applications/${id}/recruiter-propose-reschedule`, payload);
+            return response.data;
+        } catch (error) {
+            throw error.response?.data || { message: 'Failed to send reschedule request' };
+        }
+    },
+    acceptRecruiterReschedule: async (id) => {
+        try {
+            const response = await api.put(`/applications/${id}/recruiter-reschedule/accept`);
+            return response.data;
+        } catch (error) {
+            const data = error.response?.data;
+            throw data && typeof data === 'object' ? data : { message: data?.message || 'Failed to accept reschedule request' };
+        }
+    },
+    rejectRecruiterReschedule: async (id, payload = {}) => {
+        try {
+            const response = await api.put(`/applications/${id}/recruiter-reschedule/reject`, payload);
+            return response.data;
+        } catch (error) {
+            const data = error.response?.data;
+            throw data && typeof data === 'object' ? data : { message: data?.message || 'Failed to reject reschedule request' };
+        }
     }
 };
 
