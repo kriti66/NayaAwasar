@@ -13,10 +13,24 @@ const ResetPassword = () => {
     const navigate = useNavigate();
     const email = location.state?.email;
     const otp = location.state?.otp;
+    const hasRequiredState = Boolean(email && otp);
 
     useEffect(() => {
-        if (!email || !otp) navigate('/forgot-password');
+        if (!email || !otp) {
+            navigate('/forgot-password', { replace: true });
+        }
     }, [email, otp, navigate]);
+
+    if (!hasRequiredState) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-[#29a08e] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-gray-600 font-medium">Redirecting...</p>
+                </div>
+            </div>
+        );
+    }
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -30,7 +44,7 @@ const ResetPassword = () => {
         try {
             const res = await api.post('/auth/reset-password-otp', { email, otp, newPassword: password });
             setSuccessMessage(res.data.message);
-            setTimeout(() => navigate('/login'), 3000);
+            setTimeout(() => navigate('/login', { replace: true }), 3000);
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to reset password.');
         } finally {

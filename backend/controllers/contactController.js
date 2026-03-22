@@ -1,5 +1,6 @@
 import ContactMessage from '../models/ContactMessage.js';
 import sendEmail from '../utils/sendEmail.js';
+import { notifyAdmins } from './notificationController.js';
 
 /**
  * @desc    Submit a contact message (public route - no auth)
@@ -22,6 +23,15 @@ export const submitContactMessage = async (req, res) => {
             email: email.trim(),
             subject: subject.trim(),
             message: message.trim()
+        });
+
+        await notifyAdmins({
+            type: 'new_contact_message',
+            category: 'contact',
+            title: 'New Contact Message',
+            message: `${fullName.trim()} — ${subject.trim()}`,
+            link: '/admin/contact-messages',
+            metadata: { messageId: contactMsg._id }
         });
 
         // Send automatic confirmation email to user

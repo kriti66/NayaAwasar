@@ -1,4 +1,5 @@
 import Job from '../models/Job.js';
+import { expireOverduePromotions } from '../services/jobListingService.js';
 
 // @route   PATCH /api/admin/jobs/:id/promote
 // @desc    Promote a specific job (Admin only)
@@ -71,16 +72,18 @@ export const removePromotion = async (req, res) => {
 // @access  Public
 export const getPromotedJobs = async (req, res) => {
     try {
+        await expireOverduePromotions();
         const currentDate = new Date();
 
         const promotedJobs = await Job.find({
             status: 'Active',
+            moderationStatus: 'Approved',
             isPromoted: true,
             promotionStartDate: { $lte: currentDate },
             promotionEndDate: { $gt: currentDate }
         })
         .sort({ promotionPriority: -1, posted_date: -1 })
-        .populate('company', 'name logo')
+        .populate('company_id', 'name logo location')
         .lean();
 
         res.json(promotedJobs);

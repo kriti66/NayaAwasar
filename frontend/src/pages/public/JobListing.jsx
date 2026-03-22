@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import FeaturedJobs from '../../components/jobs/FeaturedJobs';
+import PromotionBadge from '../../components/jobs/PromotionBadge';
 
 const JobListing = () => {
+    const { user } = useAuth();
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [keyword, setKeyword] = useState('');
@@ -232,19 +235,29 @@ const JobListing = () => {
                         ) : currentJobs.length > 0 ? (
                             <div className="space-y-4">
                                 {currentJobs.map((job) => (
-                                    <div key={job._id} className="group bg-white rounded-2xl border border-gray-100 p-6 shadow-sm hover:shadow-lg hover:border-[#29a08e]/20 hover:-translate-y-0.5 transition-all duration-300">
+                                    <div
+                                        key={job._id}
+                                        className={`group rounded-2xl border p-6 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 ${
+                                            job.activePromotion
+                                                ? 'bg-gradient-to-br from-white to-[#29a08e]/[0.02] border-[#29a08e]/30 ring-1 ring-[#29a08e]/5'
+                                                : 'bg-white border-gray-100 hover:border-[#29a08e]/20'
+                                        }`}
+                                    >
                                         <div className="flex items-start gap-4">
                                             <div className="w-14 h-14 bg-[#29a08e]/10 rounded-xl flex items-center justify-center text-[#29a08e] font-black text-xl border border-[#29a08e]/20 shrink-0 group-hover:bg-[#29a08e]/15 transition-colors">
-                                                {job.company_name?.charAt(0) || 'N'}
+                                                {job.company_name?.charAt(0) || job.company_id?.name?.charAt(0) || 'N'}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex justify-between items-start gap-4">
                                                     <div className="min-w-0">
-                                                        <h3 className="font-black text-gray-900 text-lg group-hover:text-[#29a08e] transition-colors truncate">
-                                                            <Link to={`/jobs/${job._id}`}>{job.title}</Link>
-                                                        </h3>
+                                                        <div className="flex flex-wrap items-center gap-2 mb-1">
+                                                            <h3 className="font-black text-gray-900 text-lg group-hover:text-[#29a08e] transition-colors truncate">
+                                                                <Link to={`/jobs/${job._id}`}>{job.title}</Link>
+                                                            </h3>
+                                                            <PromotionBadge job={job} />
+                                                        </div>
                                                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                                                            <span className="text-sm font-semibold text-gray-600">{job.company_name}</span>
+                                                            <span className="text-sm font-semibold text-gray-600">{job.company_name || job.company_id?.name}</span>
                                                             <span className="text-gray-300">•</span>
                                                             <span className="text-sm text-gray-400 flex items-center gap-1">
                                                                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -285,7 +298,13 @@ const JobListing = () => {
                                                             View Details
                                                         </Link>
                                                         <Link
-                                                            to={`/register`}
+                                                            to={
+                                                                user?.role === 'jobseeker' || user?.role === 'job_seeker'
+                                                                    ? `/apply/${job._id}`
+                                                                    : user
+                                                                        ? `/jobs/${job._id}`
+                                                                        : `/login`
+                                                            }
                                                             className="px-5 py-2 bg-[#29a08e] text-white rounded-xl text-sm font-bold hover:bg-[#228377] transition-all shadow-sm shadow-[#29a08e]/20"
                                                         >
                                                             Apply Now

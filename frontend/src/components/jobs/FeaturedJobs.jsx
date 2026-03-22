@@ -1,12 +1,22 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import { useAuth } from '../../contexts/AuthContext';
 import { Star, MapPin, Briefcase, ArrowUpRight, TrendingUp } from 'lucide-react';
 import CompanyLogo from '../common/CompanyLogo';
 
 const FeaturedJobs = () => {
+    const { user } = useAuth();
     const [promotedJobs, setPromotedJobs] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    // For jobseekers: Fast-Track Apply links directly to apply flow; others go to job details
+    const getJobLink = (jobId) => {
+        if (user?.role === 'jobseeker' || user?.role === 'job_seeker') {
+            return `/apply/${jobId}`;
+        }
+        return `/jobs/${jobId}`;
+    };
 
     useEffect(() => {
         const fetchPromotedJobs = async () => {
@@ -76,7 +86,7 @@ const FeaturedJobs = () => {
                         return (
                             <Link
                                 key={job._id}
-                                to={`/jobs/${job._id}`}
+                                to={getJobLink(job._id)}
                                 className="group bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-amber-500/5 hover:-translate-y-1 hover:border-amber-200/50 transition-all duration-300 relative overflow-hidden flex flex-col"
                             >
                                 {/* Top color strip for ads */}

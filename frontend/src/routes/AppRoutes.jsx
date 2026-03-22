@@ -43,6 +43,7 @@ import PostJob from '../pages/recruiter/PostJob';
 import RecruiterJobs from '../pages/recruiter/RecruiterJobs';
 import EditJob from '../pages/recruiter/EditJob';
 import RecruiterApplicants from '../pages/recruiter/RecruiterApplicants';
+import RecruiterPromotions from '../pages/recruiter/RecruiterPromotions';
 import JobAnalytics from '../pages/recruiter/JobAnalytics';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminUsers from '../pages/admin/AdminUsers';
@@ -52,6 +53,7 @@ import AdminLocationManager from '../pages/admin/AdminLocationManager';
 import AdminJobs from '../pages/admin/AdminJobs';
 import AdminContactMessages from '../pages/admin/AdminContactMessages';
 import AdminPromotedJobs from '../pages/admin/AdminPromotedJobs';
+import AdminPromotionRequests from '../pages/admin/AdminPromotionRequests';
 import Notifications from '../pages/shared/Notifications';
 import InterviewCall from '../pages/shared/InterviewCall';
 
@@ -60,9 +62,11 @@ const AppRoutes = () => {
         <Routes>
             {/* 
               =========================================
-              GUEST ONLY ROUTES (Auth Pages & Landing)
+              GUEST ONLY ROUTES (Auth Pages & Marketing)
               =========================================
               Logged-in users are redirected to their dashboard.
+              NOTE: /jobs and /jobs/:id are NOT guest-only - they must be
+              accessible to logged-in jobseekers for Fast-Track Apply / Apply flow.
             */}
             <Route element={<GuestOnlyRoute />}>
                 <Route element={<PublicLayout />}>
@@ -71,15 +75,25 @@ const AppRoutes = () => {
                     <Route path="/register" element={<Register />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/verify-otp" element={<VerifyOtp />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
 
-                    {/* Marketing / Public Landing Pages (Only for Guests) */}
+                    {/* Marketing / Public Landing (Guests only - logged-in users go to dashboard) */}
                     <Route path="/" element={<Home />} />
                     <Route path="/about" element={<About />} />
                     <Route path="/contact" element={<Contact />} />
                     <Route path="/company/:id" element={<CompanyProfile />} />
-                    <Route path="/jobs" element={<JobListing />} />
-                    <Route path="/jobs/:id" element={<JobDetails />} />
                 </Route>
+            </Route>
+
+            {/* 
+              =========================================
+              PUBLIC JOB PAGES (Guests + Logged-in)
+              =========================================
+              Accessible to everyone so jobseekers can view jobs and use Fast-Track Apply.
+            */}
+            <Route element={<PublicLayout />}>
+                <Route path="/jobs" element={<JobListing />} />
+                <Route path="/jobs/:id" element={<JobDetails />} />
             </Route>
 
             {/* 
@@ -152,6 +166,7 @@ const AppRoutes = () => {
                         <Route path="/recruiter/jobs/:id/edit" element={<EditJob />} />
                         <Route path="/recruiter/applications" element={<RecruiterApplicants />} />
                         <Route path="/recruiter/jobs/:jobId/analytics" element={<JobAnalytics />} />
+                        <Route path="/recruiter/promotions" element={<RecruiterPromotions />} />
                         <Route path="/recruiter/notifications" element={<Notifications />} />
                     </Route>
                 </Route>
@@ -171,6 +186,7 @@ const AppRoutes = () => {
                         <Route path="/admin/location" element={<AdminLocationManager />} />
                         <Route path="/admin/jobs" element={<AdminJobs />} />
                         <Route path="/admin/promoted-jobs" element={<AdminPromotedJobs />} />
+                        <Route path="/admin/promotion-requests" element={<AdminPromotionRequests />} />
                         <Route path="/admin/notifications" element={<Notifications />} />
                         <Route path="/admin/contact-messages" element={<AdminContactMessages />} />
                     </Route>

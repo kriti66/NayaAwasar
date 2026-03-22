@@ -14,7 +14,8 @@ import {
     Filter,
     ChevronDown,
     Briefcase,
-    Plus
+    Plus,
+    Megaphone
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -213,6 +214,13 @@ const RecruiterJobs = () => {
                                 </div>
 
                                 <div className="mt-6 md:mt-0 flex flex-col items-end gap-2 justify-center pl-0 md:pl-6 md:border-l border-gray-100">
+                                    <Link
+                                        to={`/recruiter/promotions?jobId=${job.id || job._id}`}
+                                        className="w-full md:w-auto px-5 py-2.5 bg-amber-500 text-white text-xs font-bold rounded-xl hover:bg-amber-600 shadow-md flex items-center justify-center gap-2 transition-all hover:shadow-lg"
+                                    >
+                                        <Megaphone size={14} />
+                                        Promote
+                                    </Link>
                                     <button
                                         onClick={() => navigate(`/recruiter/jobs/${job.id || job._id}/analytics`)}
                                         className="w-full md:w-auto px-5 py-2.5 bg-[#29a08e] text-white text-xs font-bold rounded-xl hover:bg-[#228377] shadow-md shadow-[#29a08e]/20 flex items-center justify-center gap-2 transition-all hover:shadow-lg"

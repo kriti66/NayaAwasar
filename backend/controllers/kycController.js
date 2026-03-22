@@ -3,7 +3,7 @@ import User from '../models/User.js';
 import Company from '../models/Company.js';
 import { validateJobSeekerKYC, validateRecruiterKYC } from '../services/kycValidation.js';
 import { logActivity } from '../utils/activityLogger.js';
-import { createNotification } from './notificationController.js';
+import { createNotification, notifyAdmins } from './notificationController.js';
 
 /**
  * POST /api/kyc/submit
@@ -119,13 +119,21 @@ export const submitKYC = async (req, res) => {
             }
         }
 
-        // Log KYC submission activity
         await logActivity(
             userId,
             'KYC_SUBMITTED',
             `KYC application submitted by '${submittedRole}'.`,
             { role: submittedRole }
         );
+
+        await notifyAdmins({
+            type: submittedRole === 'recruiter' ? 'recruiter_kyc_submitted' : 'kyc_submitted',
+            category: submittedRole === 'recruiter' ? 'recruiter' : 'application',
+            title: 'New KYC Submission',
+            message: `A ${submittedRole} submitted verification. Review in KYC Panel.`,
+            link: '/admin/kyc',
+            metadata: { userId }
+        });
 
         return res.status(201).json({
             success: true,
@@ -252,12 +260,24 @@ export const approveKYCByUserId = async (req, res) => {
             sender: req.user.id
         });
 
-        // If recruiter, also advance Company status to 'pending' from 'waiting_for_recruiter_approval'
         if (approvedUser?.role === 'recruiter') {
-             await Company.updateMany(
+             const updated = await Company.updateMany(
                  { recruiters: userId, status: 'waiting_for_recruiter_approval' },
                  { $set: { status: 'pending', 'adminFields.moderationStatus': 'under_review' } }
              );
+             if (updated.modifiedCount > 0) {
+                 const company = await Company.findOne({ recruiters: userId }).lean();
+                 if (company) {
+                     await notifyAdmins({
+                         type: 'company_verification_submitted',
+                         category: 'company',
+                         title: 'Company Pending Review',
+                         message: `${company.name} is now pending verification. Review in Manage Companies.`,
+                         link: '/admin/companies',
+                         metadata: { companyId: company._id }
+                     });
+                 }
+             }
         }
 
         return res.json({ success: true, message: 'KYC approved successfully' });
@@ -331,10 +351,12 @@ export const rejectKYCByUserId = async (req, res) => {
 
         await createNotification({
             recipient: userId,
-            type: 'kyc_update',
+            type: 'kyc_rejected',
+            category: 'application',
             title: messageTitle,
             message: messageBody,
             link: '/kyc/status',
+            metadata: { userId },
             sender: req.user.id
         });
 

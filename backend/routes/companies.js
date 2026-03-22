@@ -473,6 +473,16 @@ router.post('/:id/resubmit', requireAuth, requireRole('recruiter', 'admin'), req
 
         await company.save();
 
+        const { notifyAdmins } = await import('../controllers/notificationController.js');
+        await notifyAdmins({
+            type: 'company_verification_submitted',
+            category: 'company',
+            title: 'Company Resubmitted',
+            message: `${company.name} resubmitted for verification. Review in Manage Companies.`,
+            link: '/admin/companies',
+            metadata: { companyId: company._id }
+        });
+
         res.json({
             success: true,
             message: 'Company profile resubmitted for review.',

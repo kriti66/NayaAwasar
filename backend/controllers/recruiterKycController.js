@@ -1,7 +1,7 @@
 import User from '../models/User.js';
 import RecruiterKyc from '../models/RecruiterKyc.js';
 import ActivityLog from '../models/ActivityLog.js';
-import { createNotification } from './notificationController.js';
+import { createNotification, notifyAdmins } from './notificationController.js';
 import { logActivity } from '../utils/activityLogger.js';
 
 // Submit Recruiter KYC
@@ -182,7 +182,8 @@ export const reviewRecruiterKyc = async (req, res) => {
 
         await createNotification({
             recipient: kyc.userId,
-            type: 'kyc_update',
+            type: finalDecision === 'approved' ? 'recruiter_approved' : 'recruiter_rejected',
+            category: 'recruiter',
             title: messageTitle,
             message: messageBody,
             link: '/kyc/recruiter',

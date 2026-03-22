@@ -24,7 +24,7 @@ const VerifyOtp = () => {
         setSuccessMessage('');
         try {
             const res = await api.post('/auth/verify-otp', { email, otp });
-            navigate('/reset-password', { state: { email, otp, message: res.data.message } });
+            navigate('/reset-password', { state: { email, otp, message: res.data.message }, replace: true });
         } catch (err) {
             setError(err.response?.data?.message || 'Invalid OTP. Please try again.');
         } finally {

@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import CompanyLogo from '../../components/common/CompanyLogo';
 import Pagination from '../../components/common/Pagination';
+import FeaturedJobs from '../../components/jobs/FeaturedJobs';
+import PromotionBadge from '../../components/jobs/PromotionBadge';
 
 const FindJobs = () => {
     const { user } = useAuth();
@@ -154,8 +156,15 @@ const FindJobs = () => {
     const JobCard = ({ job }) => {
         const matchLabel = getMatchBadgeLabel(job);
         const isRecommended = !!matchLabel;
+        const isPromoted = job?.activePromotion || (job?.isPromoted && job?.promotionType && job.promotionType !== 'NONE');
         return (
-        <div className={`group bg-white rounded-2xl border transition-all duration-300 hover:shadow-xl p-6 relative ${isRecommended ? 'border-[#29a08e]/20 ring-1 ring-[#29a08e]/10' : 'border-gray-100 shadow-sm hover:border-[#29a08e]/20'}`}>
+        <div className={`group rounded-2xl border transition-all duration-300 hover:shadow-xl p-6 relative ${
+            isPromoted
+                ? 'bg-gradient-to-br from-white to-amber-50/30 border-amber-200/50 ring-1 ring-amber-200/30 shadow-sm'
+                : isRecommended
+                    ? 'bg-white border-[#29a08e]/20 ring-1 ring-[#29a08e]/10'
+                    : 'bg-white border-gray-100 shadow-sm hover:border-[#29a08e]/20'
+        }`}>
             {matchLabel && (
                 <div className="absolute -top-3 right-6">
                     <span className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-[#29a08e] to-[#22877a] text-white rounded-full text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-[#29a08e]/20">
@@ -170,7 +179,10 @@ const FindJobs = () => {
                 <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-2">
                         <div>
-                            <h3 className="text-base font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors line-clamp-1 mb-0.5">{job.title}</h3>
+                            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                <h3 className="text-base font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors line-clamp-1">{job.title}</h3>
+                                <PromotionBadge job={job} />
+                            </div>
                             <p className="text-sm font-medium text-gray-500 flex items-center gap-1.5">
                                 <Building2 size={12} className="text-gray-400" />
                                 {job.company_name}
@@ -377,6 +389,9 @@ const FindJobs = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Featured Opportunities - same as public page, when not viewing saved only */}
+            {!showSavedOnly && <FeaturedJobs />}
 
             <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 -mt-10 relative z-10 pb-12">
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

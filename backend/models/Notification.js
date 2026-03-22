@@ -12,8 +12,13 @@ const notificationSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['job_post', 'application_update', 'offer', 'kyc_update', 'system'],
-        required: true
+        required: true,
+        index: true
+    },
+    category: {
+        type: String,
+        enum: ['promotion', 'payment', 'job', 'application', 'interview', 'company', 'recruiter', 'contact', 'system'],
+        default: 'system'
     },
     title: {
         type: String,
@@ -24,12 +29,20 @@ const notificationSchema = new mongoose.Schema({
         required: true
     },
     link: {
-        type: String, // URL or route to redirect to
+        type: String,
         default: ''
     },
     isRead: {
         type: Boolean,
         default: false
+    },
+    readAt: {
+        type: Date,
+        default: null
+    },
+    metadata: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
     },
     createdAt: {
         type: Date,
@@ -39,9 +52,9 @@ const notificationSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Index for faster queries
 notificationSchema.index({ recipient: 1, createdAt: -1 });
 notificationSchema.index({ recipient: 1, isRead: 1 });
+notificationSchema.index({ recipient: 1, category: 1 });
 
 const Notification = mongoose.model('Notification', notificationSchema);
 

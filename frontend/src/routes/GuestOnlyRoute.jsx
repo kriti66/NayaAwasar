@@ -13,7 +13,10 @@ const GuestOnlyRoute = () => {
     }
 
     if (user) {
-        // Redirect based on role if they try to access guest-only auth pages like /login while logged in
+        // Redirect based on role if they try to access guest-only auth pages (login, register, home, etc.)
+        if (import.meta.env?.DEV) {
+            console.debug('[GuestOnlyRoute] Redirecting logged-in user to dashboard:', user.role, '→', { admin: '/admin/dashboard', recruiter: '/recruiter/dashboard', jobseeker: '/seeker/dashboard' }[user.role] || '/seeker/dashboard');
+        }
         if (user.role === 'admin') return <Navigate to="/admin/dashboard" replace />;
         if (user.role === 'recruiter') return <Navigate to="/recruiter/dashboard" replace />;
         return <Navigate to="/seeker/dashboard" replace />;

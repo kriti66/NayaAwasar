@@ -19,15 +19,13 @@ router.get('/', getNotifications);
 // @access  Private
 router.get('/unread-count', getUnreadCount);
 
-// @route   PUT /api/notifications/read-all
-// @desc    Mark all notifications as read
-// @access  Private
+// @route   PUT/PATCH /api/notifications/read-all
 router.put('/read-all', markAllAsRead);
+router.patch('/read-all', markAllAsRead);
 
-// @route   PUT /api/notifications/:id/read
-// @desc    Mark single notification as read
-// @access  Private
+// @route   PUT/PATCH /api/notifications/:id/read
 router.put('/:id/read', markAsRead);
+router.patch('/:id/read', markAsRead);
 
 // @route   DELETE /api/notifications/:id
 // @desc    Delete a notification

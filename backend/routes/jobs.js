@@ -8,20 +8,15 @@ import { requireAuth, requireRole, requireKycApproved, requireAdmin, requireComp
 import { logActivity } from '../utils/activityLogger.js';
 import { getPromotedJobs } from '../controllers/promotedJobController.js';
 import { getRecommendedJobs } from '../services/recommendationService.js';
+import { getPublicJobsWithPromotionSort, getJobsForSeekerWithPromotion } from '../services/jobListingService.js';
 import { getValidSavedJobIds, cleanUserSavedJobs } from '../utils/savedJobsUtils.js';
 
 const router = express.Router();
 
-// Get all jobs (Public - only approved)
+// Get all jobs (Public - only approved, promotion-aware sort)
 router.get('/', async (req, res) => {
     try {
-        const jobs = await Job.find({
-            status: 'Active',
-            moderationStatus: 'Approved'
-        })
-            .sort({ createdAt: -1 })
-            .populate('company_id', 'name logo location'); // Populate company details
-
+        const jobs = await getPublicJobsWithPromotionSort();
         res.json(jobs);
     } catch (error) {
         console.error("Fetch jobs error:", error);
@@ -173,14 +168,23 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
         // Notify Seekers (Simplified: In a real app, optimize this to targeted users)
         // Here we just notify all active jobseekers for MVP or just log it.
         // For this task request: "if some company posted job then show in notification this company posted a job"
-        const { broadcastNotification } = await import('../controllers/notificationController.js');
+        const { broadcastNotification, notifyAdmins } = await import('../controllers/notificationController.js');
         await broadcastNotification({
             role: 'jobseeker',
-            type: 'job_post',
+            type: 'job_posted',
             title: 'New Job Posted',
             message: `${job.company_name} posted a new job: ${job.title}`,
             link: `/jobseeker/jobs/${job._id}`,
             sender: recruiter_id
+        });
+        await notifyAdmins({
+            type: 'job_posted',
+            category: 'job',
+            title: 'New Job Posted',
+            message: `${job.company_name} posted: ${job.title}. Review in Manage Jobs.`,
+            link: '/admin/jobs',
+            metadata: { jobId: job._id },
+            senderId: recruiter_id
         });
 
         res.status(201).json({ success: true, id: job._id });
@@ -193,43 +197,12 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
 // Get promoted jobs (Public)
 router.get('/promoted', getPromotedJobs);
 
-// Get merged jobs for jobseeker (deduplicated, with AI match scores)
+// Get merged jobs for jobseeker (promotion-aware, deduplicated, with AI match scores)
 router.get('/for-seeker', requireAuth, requireRole('jobseeker', 'job_seeker'), async (req, res) => {
     try {
         const userId = req.user.id;
-        const jobs = await Job.find({
-            status: 'Active',
-            moderationStatus: 'Approved',
-            $or: [
-                { application_deadline: { $exists: false } },
-                { application_deadline: { $gte: new Date() } }
-            ]
-        })
-            .sort({ createdAt: -1 })
-            .populate('company_id', 'name logo location')
-            .lean();
-
-        const rec = await getRecommendedJobs(userId);
-        const recJobs = rec.jobs || [];
-        const recMap = new Map();
-        recJobs.forEach(rj => {
-            const id = (rj._id || rj.id)?.toString();
-            if (id) recMap.set(id, { matchScore: rj.matchScore, matchReason: rj.matchReason });
-        });
-
-        const merged = jobs.map(job => {
-            const id = (job._id || job.id)?.toString();
-            const recData = recMap.get(id);
-            return {
-                ...job,
-                matchScore: recData?.matchScore ?? null,
-                matchReason: recData?.matchReason ?? null,
-                isRecommended: !!recData
-            };
-        });
-
-        merged.sort((a, b) => (b.matchScore ?? -1) - (a.matchScore ?? -1));
-        res.json(merged);
+        const jobs = await getJobsForSeekerWithPromotion(userId, getRecommendedJobs);
+        res.json(jobs);
     } catch (error) {
         console.error("Fetch jobs for seeker error:", error);
         res.status(500).json({ message: 'Error fetching jobs' });
@@ -360,11 +333,27 @@ router.patch('/:id/moderate', requireAuth, requireAdmin, async (req, res) => {
             flagReason,
             reviewDeadline,
             adminComments
-        }, { new: true });
+        }, { new: true }).populate('recruiter_id', '_id');
 
         if (!job) return res.status(404).json({ message: 'Job not found' });
 
-        // Log moderation activity
+        const { createNotification } = await import('../controllers/notificationController.js');
+        const recruiterId = job.recruiter_id?._id || job.recruiter_id;
+        if (recruiterId) {
+            await createNotification({
+                recipient: recruiterId,
+                type: moderationStatus === 'Approved' ? 'job_approved' : 'job_rejected',
+                category: 'job',
+                title: moderationStatus === 'Approved' ? 'Job Approved' : 'Job Rejected',
+                message: moderationStatus === 'Approved'
+                    ? `Your job "${job.title}" has been approved and is now visible.`
+                    : `Your job "${job.title}" was rejected. ${adminComments || ''}`.trim(),
+                link: '/recruiter/jobs',
+                metadata: { jobId: job._id },
+                sender: req.user.id
+            });
+        }
+
         const modAction = moderationStatus === 'Approved' ? 'JOB_APPROVED' : 'JOB_REJECTED';
         await logActivity(
             req.user.id,

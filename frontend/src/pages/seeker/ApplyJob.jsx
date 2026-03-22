@@ -61,8 +61,8 @@ const ApplyJob = () => {
                 setCoverLetter(`Dear Hiring Manager,\n\nI am writing to express my enthusiastic interest in the ${jobRes.data.title} position at ${jobRes.data.company_name}. With my background and skills, I am confident that I can contribute effectively to your team.`);
             } catch (error) {
                 console.error("Error fetching application data:", error);
-                toast.error("Failed to load job details.");
-                navigate('/seeker/dashboard');
+                toast.error("Failed to load job details. Please try again or browse other jobs.");
+                navigate('/seeker/jobs', { replace: true });
             } finally {
                 setLoading(false);
             }

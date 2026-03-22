@@ -17,7 +17,8 @@ const uploadDirs = [
     uploadBaseDir,
     path.join(uploadBaseDir, 'avatars'),
     path.join(uploadBaseDir, 'cvs'),
-    path.join(uploadBaseDir, 'kyc')
+    path.join(uploadBaseDir, 'kyc'),
+    path.join(uploadBaseDir, 'promotions')
 ];
 
 uploadDirs.forEach(dir => {

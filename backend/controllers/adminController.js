@@ -208,7 +208,23 @@ export const updateCompanyStatus = async (req, res) => {
 
         await company.save();
 
-        // Log Activity
+        const { createNotification } = await import('./notificationController.js');
+        const recruiterIds = company.recruiters || [];
+        for (const rid of recruiterIds) {
+            await createNotification({
+                recipient: rid,
+                type: status === 'approved' ? 'company_verification_approved' : 'company_verification_rejected',
+                category: 'company',
+                title: status === 'approved' ? 'Company Verified' : 'Company Rejected',
+                message: status === 'approved'
+                    ? `Your company "${company.name}" has been verified. You can now post jobs.`
+                    : `Your company "${company.name}" was rejected. ${comment || ''}`.trim(),
+                link: '/recruiter/company',
+                metadata: { companyId: company._id },
+                sender: req.user.id
+            });
+        }
+
         await logActivity(
             req.user.id,
             'COMPANY_STATUS_UPDATE',

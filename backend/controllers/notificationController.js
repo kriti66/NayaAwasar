@@ -1,44 +1,44 @@
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import { notify, notifyAdmins, notifyUser } from '../services/notificationService.js';
 
-// Internal Helper to create notification (not an API endpoint usually)
-export const createNotification = async ({ recipient, type, title, message, link, sender = null }) => {
+// Backward-compatible: create notification for a single recipient
+export const createNotification = async ({ recipient, type, title, message, link, sender = null, category, metadata = {} }) => {
     try {
-        await Notification.create({
-            recipient,
-            sender,
+        await notify({
+            recipientId: recipient?.toString?.(),
             type,
+            category: category || 'system',
             title,
             message,
-            link
+            link: link || '',
+            metadata,
+            senderId: sender?.toString?.()
         });
-        // In future: Socket.io emission here
     } catch (error) {
         console.error("Error creating notification:", error);
     }
 };
 
-// Internal Helper to broadcast notification to a role
+// Backward-compatible: broadcast to a role
 export const broadcastNotification = async ({ role, type, title, message, link, sender = null }) => {
     try {
-        const users = await User.find({ role }).select('_id');
-        if (!users.length) return;
-
-        const notifications = users.map(user => ({
-            recipient: user._id,
-            sender,
+        await notify({
+            recipientRole: role,
             type,
+            category: 'job',
             title,
             message,
-            link,
-            createdAt: new Date()
-        }));
-
-        await Notification.insertMany(notifications);
+            link: link || '',
+            senderId: sender?.toString?.()
+        });
     } catch (error) {
         console.error("Error broadcasting notification:", error);
     }
 };
+
+// Re-export for modules that want the new API
+export { notify, notifyAdmins, notifyUser } from '../services/notificationService.js';
 
 // API: Get user's notifications
 export const getNotifications = async (req, res) => {
@@ -51,16 +51,19 @@ export const getNotifications = async (req, res) => {
         if (req.query.filter && req.query.filter !== 'all') {
             if (req.query.filter === 'unread') {
                 filter.isRead = false;
+            } else if (['promotion', 'payment', 'job', 'application', 'interview', 'company', 'recruiter', 'contact', 'system'].includes(req.query.filter)) {
+                filter.category = req.query.filter;
             } else {
-                filter.type = req.query.filter; // e.g. 'offer', 'job_post'
+                filter.type = req.query.filter;
             }
         }
 
         const notifications = await Notification.find(filter)
-            .sort({ createdAt: -1 })
+            .sort({ isRead: 1, createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .populate('sender', 'fullName email');
+            .populate('sender', 'fullName email')
+            .lean();
 
         const total = await Notification.countDocuments(filter);
         const unreadCount = await Notification.countDocuments({ recipient: req.user.id, isRead: false });
@@ -94,7 +97,7 @@ export const markAsRead = async (req, res) => {
     try {
         const notification = await Notification.findOneAndUpdate(
             { _id: req.params.id, recipient: req.user.id },
-            { isRead: true },
+            { isRead: true, readAt: new Date() },
             { new: true }
         );
         if (!notification) return res.status(404).json({ message: 'Notification not found' });
@@ -110,7 +113,7 @@ export const markAllAsRead = async (req, res) => {
     try {
         await Notification.updateMany(
             { recipient: req.user.id, isRead: false },
-            { isRead: true }
+            { isRead: true, readAt: new Date() }
         );
         res.json({ message: 'All notifications marked as read' });
     } catch (error) {

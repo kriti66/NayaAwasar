@@ -106,6 +106,7 @@ import interviewRoutes from './routes/interviewRoutes.js';
 import zegoRoutes from './routes/zegoRoutes.js';
 import recommendationRoutes from './routes/recommendations.js';
 import contactRoutes from './routes/contact.js';
+import promotionRoutes from './routes/promotions.js';
 
 import aiRoutes from './routes/ai.js';
 
@@ -135,6 +136,7 @@ app.use('/api/location', locationRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/recruiter', recruiterRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/promotions', promotionRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

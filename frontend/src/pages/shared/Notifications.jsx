@@ -1,16 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-    Bell,
-    Check,
-    Trash2,
-    Clock,
-    CheckCircle,
-    Briefcase,
-    FileText,
-    Info,
-    AlertCircle
-} from 'lucide-react';
+import { Bell, CheckCircle, Trash2 } from 'lucide-react';
+import { getNotificationConfig } from '../../components/notifications/notificationConfig';
+import { formatNotificationTime } from '../../utils/formatTimestamp';
 import notificationService from '../../services/notificationService';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -76,7 +68,7 @@ const Notifications = () => {
         if (!notif.isRead) handleMarkRead(notif._id);
         if (notif.link) {
             let targetLink = notif.link;
-            if (targetLink.startsWith('/jobs/')) {
+            if (targetLink.startsWith('/jobs/') && (user?.role === 'jobseeker' || user?.role === 'job_seeker')) {
                 targetLink = `/jobseeker${targetLink}`;
             }
             navigate(targetLink);
@@ -86,27 +78,14 @@ const Notifications = () => {
     const categories = [
         { id: 'all', label: 'All' },
         { id: 'unread', label: 'Unread' },
-        { id: 'offer', label: 'Offers' },
-        { id: 'job_post', label: 'Jobs' },
+        { id: 'promotion', label: 'Promotion' },
+        { id: 'job', label: 'Jobs' },
+        { id: 'application', label: 'Applications' },
+        { id: 'company', label: 'Company' },
+        { id: 'contact', label: 'Contact' },
         { id: 'system', label: 'System' }
     ];
 
-    const getNotificationConfig = (type) => {
-        switch (type) {
-            case 'job_post':
-                return { icon: Briefcase, color: 'text-[#29a08e]', bg: 'bg-[#29a08e]/10' };
-            case 'application_update':
-                return { icon: FileText, color: 'text-orange-500', bg: 'bg-orange-50' };
-            case 'offer':
-                return { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50' };
-            case 'kyc_update':
-                return { icon: Info, color: 'text-teal-500', bg: 'bg-teal-50' };
-            case 'system':
-                return { icon: AlertCircle, color: 'text-gray-500', bg: 'bg-gray-50' };
-            default:
-                return { icon: Bell, color: 'text-[#29a08e]', bg: 'bg-[#29a08e]/10' };
-        }
-    };
 
     return (
         <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
@@ -173,7 +152,7 @@ const Notifications = () => {
                         ) : (
                             <div className="space-y-2">
                                 {notifications.map(notif => {
-                                    const config = getNotificationConfig(notif.type);
+                                    const config = getNotificationConfig(notif.type, notif.category);
                                     const Icon = config.icon;
 
                                     return (
@@ -197,7 +176,7 @@ const Notifications = () => {
                                                         {notif.title}
                                                     </h4>
                                                     <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap pl-2">
-                                                        {new Date(notif.createdAt).toLocaleDateString()}
+                                                        {formatNotificationTime(notif.createdAt)}
                                                     </span>
                                                 </div>
                                                 <p className={`text-sm leading-relaxed line-clamp-2 ${notif.isRead ? 'text-gray-500' : 'text-gray-700 font-medium'}`}>
