@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import DashboardNavbar from '../../components/dashboard/DashboardNavbar';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+import { API_BASE_URL } from '../../config/api';
 
 const SeekerProfile = () => {
     const { user } = useAuth();
@@ -166,7 +167,7 @@ const SeekerProfile = () => {
                                                 <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Resume / CV File</h4>
                                                 {profile.resume_url ? (
                                                     <a
-                                                        href={`http://localhost:5000${profile.resume_url}`}
+                                                        href={`${API_BASE_URL}${profile.resume_url}`}
                                                         target="_blank"
                                                         rel="noreferrer"
                                                         className="text-xs font-black text-[#29a08e] hover:text-[#228377] underline underline-offset-4 decoration-2 uppercase tracking-widest italic"

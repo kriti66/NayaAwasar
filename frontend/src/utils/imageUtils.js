@@ -1,9 +1,11 @@
+import { API_BASE_URL } from '../config/api';
+
 /**
  * Get the backend base URL for static assets (without /api).
  * Uploads are served at /uploads on the backend root.
  */
 const getBackendBaseUrl = () => {
-    const url = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+    const url = API_BASE_URL;
     return url.replace(/\/api\/?$/, '');
 };
 

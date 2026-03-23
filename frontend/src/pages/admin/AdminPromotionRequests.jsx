@@ -13,8 +13,9 @@ import {
     RefreshCw,
     ChevronDown
 } from 'lucide-react';
+import { API_BASE_URL } from '../../config/api';
 
-const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5001';
+const API_BASE = API_BASE_URL;
 
 const AdminPromotionRequests = () => {
     const [promotions, setPromotions] = useState([]);

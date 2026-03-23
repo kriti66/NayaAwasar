@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { X, Megaphone, CreditCard } from 'lucide-react';
 import { promotionService, PROMOTION_TYPE_LABELS, STATUS_COLORS } from '../../services/promotionService';
 import { toast } from 'react-hot-toast';
+import { API_BASE_URL } from '../../config/api';
 
 const DURATIONS = [7, 15, 30];
-const API_BASE = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://localhost:5001';
+const API_BASE = API_BASE_URL;
 
 const PromoteJobModal = ({ isOpen, onClose, jobs, preselectedJobId, onSuccess }) => {
     const [step, setStep] = useState(1);

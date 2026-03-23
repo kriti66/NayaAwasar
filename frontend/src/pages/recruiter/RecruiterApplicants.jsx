@@ -7,6 +7,7 @@ import { Download, Search, Briefcase, ChevronDown, MapPin, AlertCircle, Users, F
 import applicationService from '../../services/applicationService';
 import ScheduleInterviewModal from './ScheduleInterviewModal';
 import RecruiterRescheduleModal from './RecruiterRescheduleModal';
+import { API_BASE_URL } from '../../config/api';
 
 const RecruiterApplicants = () => {
     const { user } = useAuth();
@@ -576,7 +577,7 @@ const RecruiterApplicants = () => {
                                                                 </div>
                                                                 {app.resumeUrl ? (
                                                                     <a
-                                                                        href={`${import.meta.env.VITE_API_URL || 'http://localhost:5001'}${app.resumeUrl}`}
+                                                                        href={`${API_BASE_URL}${app.resumeUrl}`}
                                                                         target="_blank"
                                                                         rel="noreferrer"
                                                                         className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-white border-2 border-[#29a08e] text-[#29a08e] font-bold text-sm rounded-xl hover:bg-[#29a08e] hover:text-white hover:shadow-lg hover:shadow-[#29a08e]/20 transition-all active:scale-95 group/btn"

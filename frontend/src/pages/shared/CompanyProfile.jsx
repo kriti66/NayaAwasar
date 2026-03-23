@@ -8,6 +8,7 @@ import {
 import companyService from '../../services/companyService';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
+import { API_BASE_URL } from '../../config/api';
 
 const CompanyProfile = () => {
     const { id } = useParams(); // For public view / ADMIN view
@@ -32,7 +33,7 @@ const CompanyProfile = () => {
     const getImageUrl = (path) => {
         if (!path) return null;
         if (path.startsWith('http')) return path;
-        const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5001';
+        const baseUrl = API_BASE_URL;
         return `${baseUrl}${path}`;
     };
 
