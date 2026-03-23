@@ -4,7 +4,7 @@ import User from '../models/User.js';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
-const { generateToken04 } = require('../zego_server_assistant/token/nodejs/server/zegoServerAssistant.cjs');
+const { generateToken04 } = require('../utils/zegoServerAssistant.cjs');
 
 // Get token for interview call (legacy: POST /api/interviews/:id/zego-token)
 export const getZegoToken = async (req, res) => {
