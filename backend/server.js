@@ -45,29 +45,26 @@ const PORT = process.env.PORT || 5001; // Matches the .env PORT prefernece
 
 // Middleware
 const allowedOrigins = [
-    process.env.FRONTEND_URL,
     'http://localhost:5173',
-    'http://localhost:5174',
-    'http://localhost:5175',
-    'http://localhost:5176',
-    'http://localhost:5177',
-    'http://localhost:5178',
-    'http://localhost:5179',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:5178'
+    process.env.FRONTEND_URL,
 ].filter(Boolean);
 
-app.use(cors({
+const corsOptions = {
     origin: function (origin, callback) {
-        // allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
-            return callback(new Error('The CORS policy for this site does not allow access from the specified Origin.'), false);
+        const isVercelPreview = typeof origin === 'string' && origin.endsWith('.vercel.app');
+        if (!origin || allowedOrigins.includes(origin) || isVercelPreview) {
+            callback(null, true);
+        } else {
+            callback(new Error(`CORS not allowed for origin: ${origin}`));
         }
-        return callback(null, true);
     },
-    credentials: true
-}));
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Serving static files (uploaded CVs, etc.)
