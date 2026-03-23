@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
-import FacebookLogin from 'react-facebook-login/dist/facebook-login-render-props';
 
 const Login = () => {
     const [email, setEmail] = useState('');
@@ -10,7 +9,7 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const { login, loginWithGoogle, loginWithFacebook } = useAuth();
+    const { login, loginWithGoogle } = useAuth();
     const navigate = useNavigate();
 
     const handleSocialLoginSuccess = (result) => {
@@ -46,17 +45,6 @@ const Login = () => {
             setError('Google login failed.');
         }
     });
-
-    const responseFacebook = async (response) => {
-        if (response.accessToken) {
-            setLoading(true);
-            setError('');
-            const result = await loginWithFacebook(response.accessToken);
-            handleSocialLoginSuccess(result);
-        } else {
-            setError('Facebook login failed or was cancelled.');
-        }
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -226,24 +214,6 @@ const Login = () => {
                             </svg>
                             Continue with Google
                         </button>
-                        <FacebookLogin
-                            appId={import.meta.env.VITE_FACEBOOK_APP_ID || "your-facebook-app-id"}
-                            autoLoad={false}
-                            fields="name,email,picture"
-                            callback={responseFacebook}
-                            render={renderProps => (
-                                <button 
-                                    type="button"
-                                    onClick={renderProps.onClick}
-                                    className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 hover:border-gray-300 active:scale-[0.98] transition-all"
-                                >
-                                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">
-                                        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.469h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.469h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                                    </svg>
-                                    Continue with Facebook
-                                </button>
-                            )}
-                        />
                     </div>
                 </div>
 
