@@ -45,7 +45,29 @@ export const generateCV = async (req, res) => {
 
     } catch (error) {
         console.error("CV Generation Error:", error);
-        res.status(500).json({ message: 'Failed to generate CV' });
+        const errorMessage = error?.message || 'Failed to generate CV';
+        const details = (error?.stack || error?.toString?.());
+
+        // Dedicated log to understand the exact failing reason.
+        try {
+            const logPath = path.join(process.cwd(), 'cv_gen_debug.log');
+            const payload = {
+                timestamp: new Date().toISOString(),
+                userId: req?.user?.id,
+                message: errorMessage,
+                stack: error?.stack || error?.toString?.()
+            };
+            fs.appendFileSync(logPath, JSON.stringify(payload) + '\n', 'utf8');
+        } catch (logErr) {
+            console.error('Failed writing cv_gen_debug.log:', logErr);
+        }
+
+        res.status(500).json({
+            success: false,
+            message: errorMessage,
+            error: errorMessage,
+            details
+        });
     }
 };
 

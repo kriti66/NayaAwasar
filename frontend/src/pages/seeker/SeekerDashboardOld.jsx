@@ -4,6 +4,7 @@ import KycBanner from '../../components/KycBanner';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Link } from 'react-router-dom';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 const SeekerDashboard = () => {
     const { user } = useAuth();
@@ -58,7 +59,7 @@ const SeekerDashboard = () => {
                             </div>
                             <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm overflow-hidden bg-slate-100 ring-1 ring-slate-100 pointer-events-none">
                                 {user?.profileImage ? (
-                                    <img src={`${import.meta.env.VITE_API_URL}${user.profileImage}`} className="w-full h-full object-cover" alt="" />
+                                    <img src={resolveAssetUrl(user.profileImage)} className="w-full h-full object-cover" alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center font-bold text-slate-400 text-xs">UN</div>
                                 )}

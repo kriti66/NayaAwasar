@@ -4,7 +4,8 @@ import api from '../../services/api';
 import companyService from '../../services/companyService';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Building2, AlertTriangle, Briefcase, MapPin, DollarSign, FileText, List } from 'lucide-react';
+import { Building2, AlertTriangle, Briefcase, MapPin, DollarSign, FileText, List, Tag } from 'lucide-react';
+import { JOB_CATEGORIES } from '../../constants/jobCategories';
 
 const PostJob = () => {
     const { user } = useAuth();
@@ -14,11 +15,13 @@ const PostJob = () => {
     const [formData, setFormData] = useState({
         title: '',
         company_name: '',
+        category: '',
         type: 'Full-time',
         location: '',
         description: '',
         salary_range: '',
-        requirements: ''
+        requirements: '',
+        tags: ''
     });
 
     useEffect(() => {
@@ -174,6 +177,10 @@ const PostJob = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!formData.category) {
+            alert('Please select a job category.');
+            return;
+        }
         try {
             await api.post('/jobs', { ...formData, recruiter_id: user.id });
             alert('Job posted successfully!');
@@ -272,6 +279,25 @@ const PostJob = () => {
                             </div>
                             <div>
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
+                                    <Briefcase size={14} className="text-[#29a08e]" />
+                                    Category <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    name="category"
+                                    value={formData.category}
+                                    onChange={handleChange}
+                                    required
+                                    className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
+                                >
+                                    <option value="" disabled>Select category</option>
+                                    {JOB_CATEGORIES.map((c) => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                                <p className="mt-1 text-xs text-gray-500">Used for search and filters on Find Jobs.</p>
+                            </div>
+                            <div>
+                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                                     <List size={14} className="text-[#29a08e]" />
                                     Job Type
                                 </label>
@@ -329,6 +355,21 @@ const PostJob = () => {
                                     placeholder="List the required skills and qualifications..."
                                     className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
                                 ></textarea>
+                            </div>
+                            <div className="col-span-2">
+                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
+                                    <Tag size={14} className="text-[#29a08e]" />
+                                    Tags <span className="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    name="tags"
+                                    value={formData.tags}
+                                    onChange={handleChange}
+                                    placeholder="e.g. nurse, icu, bilingual — comma separated"
+                                    className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
+                                />
+                                <p className="mt-1 text-xs text-gray-500">Stored lowercase; improves keyword search.</p>
                             </div>
                         </div>
                         <div className="pt-6 border-t border-gray-100 flex justify-end">

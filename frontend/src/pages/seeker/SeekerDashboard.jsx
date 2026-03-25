@@ -7,6 +7,7 @@ import RecentActivityWidget from '../../components/dashboard/RecentActivityWidge
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import ActionRequiredBanner from '../../components/dashboard/ActionRequiredBanner';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 import {
     Search,
     MapPin,
@@ -33,7 +34,7 @@ import {
 const SeekerDashboard = () => {
     const { user } = useAuth();
     const { savedJobIds, setSavedJobIds, toggleSaveJob } = useJobSaver();
-    const [stats, setStats] = useState({ applied: 0, saved: 0, interviews: 0 });
+    const [stats, setStats] = useState({ applied: 0, saved: 0, interviews: 0, profileViews: 0 });
     const [appliedJobIds, setAppliedJobIds] = useState([]);
     const [upcomingInterviews, setUpcomingInterviews] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -44,7 +45,7 @@ const SeekerDashboard = () => {
         try {
             setLoading(true);
             const [statsRes, savedRes, appsRes, interviewsRes] = await Promise.all([
-                api.get('/dashboard/seeker/stats').catch(() => ({ data: { applied: 0, saved: 0, interviews: 0 } })),
+                api.get('/dashboard/seeker/stats').catch(() => ({ data: { applied: 0, saved: 0, interviews: 0, profileViews: 0 } })),
                 api.get('/jobs/saved').catch(() => ({ data: { savedJobIds: [], jobs: [] } })),
                 api.get('/applications/my').catch(() => ({ data: [] })),
                 api.get('/applications/my-interviews').catch(() => ({ data: [] }))
@@ -353,12 +354,12 @@ const SeekerDashboard = () => {
                         <div>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Profile Views</p>
                             <div className="flex items-end gap-2">
-                                <h3 className="text-3xl font-extrabold text-gray-900">24</h3>
+                                <h3 className="text-3xl font-extrabold text-gray-900">{stats.profileViews || 0}</h3>
                                 <span className="text-[#29a08e] text-xs font-bold mb-1 flex items-center gap-0.5">
-                                    <TrendingUp size={12} /> +12%
+                                    <TrendingUp size={12} /> +0%
                                 </span>
                             </div>
-                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">last 30 days</p>
+                            <p className="text-[10px] text-gray-400 font-medium mt-0.5">total recruiter views</p>
                         </div>
                         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm">
                             <Eye size={24} />
@@ -436,7 +437,7 @@ const SeekerDashboard = () => {
                                     <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center overflow-hidden border-2 border-gray-200 shadow-inner">
                                         {user?.profileImage ? (
                                             <img
-                                                src={user.profileImage.startsWith('http') ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`}
+                                                src={resolveAssetUrl(user.profileImage)}
                                                 alt=""
                                                 className="w-full h-full object-cover"
                                                 onError={(e) => { e.target.style.display = 'none'; }}

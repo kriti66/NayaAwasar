@@ -256,7 +256,7 @@ export const approveKYCByUserId = async (req, res) => {
             type: 'kyc_update',
             title: 'KYC Approved',
             message: 'Your personal KYC application has been approved.',
-            link: '/dashboard', 
+            link: '/kyc/status',
             sender: req.user.id
         });
 

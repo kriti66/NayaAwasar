@@ -3,7 +3,8 @@ import DashboardNavbar from '../../components/dashboard/DashboardNavbar';
 import api from '../../services/api';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { Briefcase, Building2, MapPin, DollarSign, FileText, List, Edit } from 'lucide-react';
+import { Briefcase, Building2, MapPin, DollarSign, FileText, List, Edit, Tag } from 'lucide-react';
+import { JOB_CATEGORIES } from '../../constants/jobCategories';
 
 const EditJob = () => {
     const { id } = useParams();
@@ -32,7 +33,9 @@ const EditJob = () => {
                     location: job.location || '',
                     description: job.description || '',
                     salary_range: job.salary_range || '',
-                    requirements: job.requirements || ''
+                    requirements: job.requirements || '',
+                    category: job.category && JOB_CATEGORIES.includes(job.category) ? job.category : '',
+                    tags: Array.isArray(job.tags) ? job.tags.join(', ') : (job.tags || '')
                 });
             } catch (error) {
                 console.error("Error fetching job", error);
@@ -50,6 +53,10 @@ const EditJob = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!formData.category) {
+            alert('Please select a category.');
+            return;
+        }
         try {
             await api.put(`/jobs/${id}`, formData);
             alert('Job updated successfully!');
@@ -158,6 +165,24 @@ const EditJob = () => {
                             </div>
                             <div>
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
+                                    <Briefcase size={14} className="text-[#29a08e]" />
+                                    Category <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    name="category"
+                                    value={formData.category}
+                                    onChange={handleChange}
+                                    required
+                                    className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
+                                >
+                                    <option value="" disabled>Select category</option>
+                                    {JOB_CATEGORIES.map((c) => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
                                     <List size={14} className="text-[#29a08e]" />
                                     Type
                                 </label>
@@ -212,6 +237,20 @@ const EditJob = () => {
                                     rows="5"
                                     className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
                                 ></textarea>
+                            </div>
+                            <div className="col-span-2">
+                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
+                                    <Tag size={14} className="text-[#29a08e]" />
+                                    Tags <span className="text-gray-400 font-normal">(optional)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    name="tags"
+                                    value={formData.tags}
+                                    onChange={handleChange}
+                                    placeholder="Comma-separated keywords"
+                                    className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
+                                />
                             </div>
                         </div>
                         <div className="pt-6 border-t border-gray-100 flex justify-end gap-3">

@@ -20,6 +20,23 @@ import {
 } from 'lucide-react';
 import CompanyLogo from '../../components/common/CompanyLogo';
 
+const normalizeSalaryValue = (value, fallbackLabel) => {
+    if (value == null) return fallbackLabel;
+    const raw = String(value).trim();
+    if (!raw) return fallbackLabel;
+
+    // Keep non-numeric labels as-is (e.g., Negotiable)
+    if (!/\d/.test(raw)) return raw;
+
+    // Backend may store "$ 50000-80000" — remove $ and Rs/Nrs prefixes.
+    return raw
+        .replace(/\$/g, '')
+        .replace(/\bUSD\b/gi, '')
+        .replace(/\bdollar\b/gi, '')
+        .replace(/^\s*(Rs\.?|Nrs\.?)\s*/i, '')
+        .trim();
+};
+
 const JobDetails = () => {
     const { id } = useParams();
     const { user } = useAuth();
@@ -246,7 +263,7 @@ const JobDetails = () => {
                                         <span className="font-black tracking-tight text-lg">Rs</span>
                                     </div>
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Salary</p>
-                                    <p className="text-sm font-bold text-gray-900">{job.salary_range || 'Negotiable'}</p>
+                                    <p className="text-sm font-bold text-gray-900">{normalizeSalaryValue(job.salary_range || 'Negotiable', 'Negotiable')}</p>
                                 </div>
                                 <div className="space-y-2">
                                     <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-500 shadow-sm mb-4">

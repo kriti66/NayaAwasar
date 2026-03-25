@@ -78,15 +78,48 @@ const RecommendedJobs = () => {
                                             {job.company_name} • {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : (job.posted_date ? new Date(job.posted_date).toLocaleDateString() : 'Just now')}
                                         </p>
                                     </div>
-                                    <div className="px-3 py-1 bg-green-50 text-[#29a08e] rounded-lg text-xs font-bold border border-green-100/50">
-                                        {job.matchScore ? `${job.matchScore}% Match` : 'NEW'}
-                                    </div>
+                                        {(() => {
+                                            const type = job.recommendationType || (job.matchReason?.includes('platform trends') ? 'trending' : 'ai_match');
+                                            const confidence = job.recommendationConfidence || 'low';
+                                            const score = typeof job.matchScore === 'number' ? job.matchScore : Number(job.matchScore);
+                                            const showScoreBadge = type === 'ai_match' && confidence !== 'low' && Number.isFinite(score) && score >= 20;
+
+                                            if (type === 'ai_match') {
+                                                if (showScoreBadge) {
+                                                    return (
+                                                        <div className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200">
+                                                            {score}% Match
+                                                        </div>
+                                                    );
+                                                }
+                                                return (
+                                                    <div className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-200">
+                                                        AI Match (Low confidence)
+                                                    </div>
+                                                );
+                                            }
+                                            if (type === 'trending') {
+                                                return (
+                                                    <div className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-200">
+                                                        Trending Near You
+                                                    </div>
+                                                );
+                                            }
+                                            return (
+                                                <div className="px-3 py-1 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold border border-gray-200">
+                                                    Recommendation
+                                                </div>
+                                            );
+                                        })()}
                                 </div>
 
                                 {job.matchReason && (
-                                    <p className="text-xs text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                        <span className="font-bold text-[#29a08e]">Why this role?</span> {job.matchReason}
-                                    </p>
+                                        <p className="text-xs text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                            <span className="font-bold text-[#29a08e]">
+                                                {(job.recommendationType || '').toLowerCase() === 'ai_match' ? 'Why this role?' : 'Why recommended?'}
+                                            </span>{' '}
+                                            {job.matchReason}
+                                        </p>
                                 )}
 
                                 <div className="flex flex-wrap gap-2 mb-6">

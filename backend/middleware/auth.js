@@ -118,7 +118,9 @@ export const requireCompanyApproved = async (req, res, next) => {
  */
 export const requireKycVerified = async (req, res, next) => {
     try {
-        const user = await User.findById(req.user.id).select('isKycVerified kycStatus').lean();
+        const user = await User.findById(req.user.id)
+            .select('isKycVerified isKycSubmitted kycStatus kycRejectionReason role')
+            .lean();
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
@@ -128,9 +130,47 @@ export const requireKycVerified = async (req, res, next) => {
             return next();
         }
 
+        const kycStatus = user.kycStatus || 'not_submitted';
+        const statusMap = {
+            not_submitted: {
+                code: 'KYC_REQUIRED',
+                message: 'You need to complete your KYC verification before applying for jobs.',
+                nextStep: 'Complete KYC',
+                redirectPath: user.role === 'jobseeker' ? '/kyc/job-seeker' : '/kyc/status'
+            },
+            pending: {
+                code: 'KYC_PENDING',
+                message: 'Your KYC verification is still under review. You can apply after admin approval.',
+                nextStep: 'View KYC Status',
+                redirectPath: '/kyc/status'
+            },
+            rejected: {
+                code: 'KYC_REJECTED',
+                message: user.kycRejectionReason
+                    ? `Your KYC verification was rejected: ${user.kycRejectionReason}. Please update your details and resubmit.`
+                    : 'Your KYC verification was rejected. Please review your details and resubmit before applying.',
+                nextStep: 'Update KYC',
+                redirectPath: user.role === 'jobseeker' ? '/kyc/job-seeker' : '/kyc/status'
+            },
+            resubmission_locked: {
+                code: 'KYC_NOT_APPROVED',
+                message: 'Your KYC verification is currently locked. Please contact support or check your KYC status.',
+                nextStep: 'View KYC Status',
+                redirectPath: '/kyc/status'
+            }
+        };
+
+        const payload = statusMap[kycStatus] || {
+            code: 'KYC_NOT_APPROVED',
+            message: 'Job application is available only for verified jobseekers.',
+            nextStep: 'View KYC Status',
+            redirectPath: '/kyc/status'
+        };
+
         return res.status(403).json({
-            code: 'KYC_REQUIRED',
-            message: 'Your account must be KYC verified to perform this action.'
+            success: false,
+            ...payload,
+            kycStatus
         });
     } catch (error) {
         console.error('requireKycVerified error:', error);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
-import { Sparkles, MapPin, Briefcase, Bookmark, ChevronRight, AlertCircle, ArrowUpRight, CheckCircle } from 'lucide-react';
+import { Sparkles, Star, MapPin, Briefcase, Bookmark, ChevronRight, AlertCircle, ArrowUpRight, CheckCircle } from 'lucide-react';
 import useJobSaver from '../../hooks/useJobSaver';
 import CompanyLogo from '../common/CompanyLogo';
 
@@ -124,6 +124,10 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                     const jobId = job._id?.toString?.() || job._id;
                     const isSaved = savedJobIds.some(sid => (sid?.toString?.() || sid) === jobId);
                     const hasApplied = appliedJobIds.includes(job._id);
+                    const recommendationType = job.recommendationType || (job.matchReason?.includes('platform trends') ? 'trending' : 'ai_match');
+                    const recommendationConfidence = job.recommendationConfidence || 'low';
+                    const matchScore = typeof job.matchScore === 'number' ? job.matchScore : Number(job.matchScore);
+                    const showPercentBadge = recommendationType === 'ai_match' && recommendationConfidence !== 'low' && matchScore >= 20;
                     // Decide badge color based on matchScore
                     const getMatchColor = (score) => {
                         if (!score) return 'bg-gray-100 text-gray-600 border-gray-200';
@@ -133,6 +137,19 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                     };
                     
                     const matchColorClass = getMatchColor(job.matchScore);
+                    const typeBadge = (() => {
+                        if (isSaved) return { label: 'Similar to Saved Jobs', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+                        if (recommendationType === 'ai_match') {
+                            return {
+                                label: recommendationConfidence === 'low' ? 'AI Match (Low confidence)' : 'AI Match',
+                                className: matchColorClass
+                            };
+                        }
+                        if (recommendationType === 'trending') {
+                            return { label: 'Trending Near You', className: 'bg-blue-50 text-blue-600 border-blue-200' };
+                        }
+                        return { label: 'Fallback Recommendation', className: 'bg-gray-50 text-gray-600 border-gray-200' };
+                    })();
 
                     return (
                         <div key={job._id} className="p-5 rounded-xl border border-gray-100 hover:border-[#29a08e]/30 bg-white hover:shadow-md transition-all group relative overflow-hidden">
@@ -166,23 +183,33 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
 
                                 {/* Match Score */}
                                 <div className="flex items-center gap-3 sm:flex-col sm:items-end sm:gap-1.5 shrink-0">
-                                    {job.matchScore > 0 ? (
-                                        <div className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 ${matchColorClass}`}>
-                                            <Sparkles size={12} className={job.matchScore >= 80 ? 'text-emerald-500 fill-emerald-500/20' : ''} />
-                                            <span className="text-xs font-black">{job.matchScore}% Match</span>
-                                        </div>
-                                    ) : (
-                                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold bg-gray-100 text-gray-500">
-                                            PLATFORM RECOMMENDED
-                                        </span>
-                                    )}
+                                    <div
+                                        className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 ${typeBadge.className}`}
+                                        aria-label={`Recommendation: ${typeBadge.label}`}
+                                    >
+                                        {recommendationType === 'ai_match' ? <Sparkles size={12} className="text-[#29a08e]" /> : <Star size={12} className="text-blue-500" />}
+                                        {showPercentBadge && (
+                                            <span className="text-xs font-black">{matchScore}% Match</span>
+                                        )}
+                                        {!showPercentBadge && (
+                                            <span className="text-xs font-black">{typeBadge.label}</span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* AI Reason string */}
+                            {/* Recommendation reason */}
                             {job.matchReason && (
                                 <div className="mb-4 text-xs font-medium text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                                    <span className="font-bold text-gray-800">Why this job?</span> {job.matchReason}
+                                    <span className="font-bold text-gray-800">
+                                        {recommendationType === 'ai_match' ? 'Why this job?' : 'Why recommended?'}
+                                    </span>{' '}
+                                    {isSaved && (
+                                        <span className="font-bold text-[#29a08e]">
+                                            Similar to what you saved.{' '}
+                                        </span>
+                                    )}
+                                    {job.matchReason}
                                 </div>
                             )}
 

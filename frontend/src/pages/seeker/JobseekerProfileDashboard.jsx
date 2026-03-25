@@ -11,6 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import profileService from '../../services/profileService';
 import projectService from '../../services/projectService';
 import activityService from '../../services/activityService';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 const JobseekerProfileDashboard = () => {
 
@@ -22,6 +23,7 @@ const JobseekerProfileDashboard = () => {
     const [fetchError, setFetchError] = useState(null);
     const [modal, setModal] = useState(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [avatarFailed, setAvatarFailed] = useState(false);
 
     // Fetch Data
     const fetchData = async () => {
@@ -62,6 +64,10 @@ const JobseekerProfileDashboard = () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    useEffect(() => {
+        setAvatarFailed(false);
+    }, [profile?.user?.profileImage]);
 
     // --- HANDLERS ---
     const toggleVisibility = async () => {
@@ -120,7 +126,16 @@ const JobseekerProfileDashboard = () => {
             refreshProfile();
         } catch (err) {
             console.error(err);
-            toast.error("Failed to generate CV", { id: toastId });
+            const payload = err?.response?.data;
+            const backendMessage = payload?.error || payload?.message || err?.message || "Failed to generate CV";
+            const details = payload?.details;
+            const detailsShort =
+                typeof details === 'string'
+                    ? details.slice(0, 240)
+                    : details
+                        ? JSON.stringify(details).slice(0, 240)
+                        : '';
+            toast.error(detailsShort ? `${backendMessage}: ${detailsShort}` : backendMessage, { id: toastId });
         } finally {
             setIsGenerating(false);
         }
@@ -195,12 +210,12 @@ const JobseekerProfileDashboard = () => {
                         {/* Avatar */}
                         <div className="shrink-0 w-24 h-24 md:w-28 md:h-28 rounded-2xl bg-gradient-to-br from-[#29a08e] to-teal-700 p-1 flex items-center justify-center shadow-xl shadow-[#29a08e]/20 relative group border-2 border-white/20">
                             <div className="w-full h-full rounded-xl overflow-hidden bg-white flex items-center justify-center relative">
-                                {profile.user?.profileImage ? (
+                                {profile.user?.profileImage && !avatarFailed ? (
                                     <img
-                                        src={profile.user.profileImage.startsWith('http') ? profile.user.profileImage : `${import.meta.env.VITE_API_URL}${profile.user.profileImage}`}
+                                        src={resolveAssetUrl(profile.user.profileImage)}
                                         alt={profile.user?.fullName}
                                         className="w-full h-full object-cover"
-                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                        onError={() => setAvatarFailed(true)}
                                     />
                                 ) : (
                                     <span className="text-[#29a08e] text-3xl font-black">{profile.user?.fullName?.[0] || 'U'}</span>
@@ -707,7 +722,7 @@ const ModalForm = ({ type, initialData, onClose, onSuccess }) => {
     const { refreshUser } = useAuth();
     const [formData, setFormData] = useState(initialData || {});
     const [imageFile, setImageFile] = useState(null);
-    const [previewImage, setPreviewImage] = useState(initialData?.profileImage ? `${import.meta.env.VITE_API_URL}${initialData.profileImage}` : null);
+    const [previewImage, setPreviewImage] = useState(initialData?.profileImage ? resolveAssetUrl(initialData.profileImage) : null);
 
     const handleImageChange = (e) => {
         const file = e.target.files[0];
@@ -809,7 +824,12 @@ const ModalForm = ({ type, initialData, onClose, onSuccess }) => {
                         <div className="relative group cursor-pointer w-20 h-20">
                             <div className="w-full h-full rounded-xl overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-100 group-hover:border-[#29a08e]/30 transition-colors">
                                 {previewImage ? (
-                                    <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
+                                    <img
+                                        src={previewImage}
+                                        alt="Preview"
+                                        className="w-full h-full object-cover"
+                                        onError={() => setPreviewImage(null)}
+                                    />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-gray-400 bg-gray-50">
                                         <User size={28} />

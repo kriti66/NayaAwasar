@@ -20,15 +20,51 @@ const InterviewCall = () => {
                     throw new Error('You must be logged in to join the interview.');
                 }
 
-                // Fetch token from backend (POST /api/zego/token)
-                const { data } = await api.post('/zego/token', { roomID: id });
+                const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+                const userIdFromStorage = String(
+                    storedUser?.id ||
+                    storedUser?._id ||
+                    storedUser?.userId ||
+                    ''
+                ).trim();
+                const requestedRoomId = String(id || '').trim();
+
+                if (import.meta.env?.DEV) {
+                    console.log('[InterviewCall] Pre-token check:', {
+                        routeParamId: id,
+                        resolvedRoomId: requestedRoomId,
+                        resolvedUserId: userIdFromStorage,
+                        hasAuthToken: Boolean(token)
+                    });
+                }
+
+                if (!userIdFromStorage || !requestedRoomId) {
+                    throw new Error('Missing interview room or user information. Please re-open interview from the schedule page.');
+                }
+
+                // Fetch token from backend (POST /api/zego/token) freshly before join.
+                const { data } = await api.post('/zego/token', {
+                    roomID: requestedRoomId,
+                    userId: userIdFromStorage
+                });
 
                 if (!data?.token || !data?.appId || !data?.roomId || !data?.userId) {
                     throw new Error('Invalid token response from server.');
                 }
 
                 if (import.meta.env?.DEV) {
-                    console.log('[InterviewCall] Token received – appId:', data.appId, 'roomId:', data.roomId, 'userId:', data.userId);
+                    console.log(
+                        '[InterviewCall] Token received – appId:',
+                        data.appId,
+                        'requestedRoomId:',
+                        requestedRoomId,
+                        'resolvedRoomId:',
+                        data.roomId,
+                        'userId:',
+                        data.userId,
+                        'tokenLen:',
+                        data.token?.length
+                    );
                 }
 
                 setTokenData(data);
@@ -47,17 +83,19 @@ const InterviewCall = () => {
 
         const { appId, token, roomId, userId, userName } = tokenData;
         const appIdNum = typeof appId === 'number' ? appId : parseInt(appId, 10);
+        const roomIdString = String(roomId || '').trim();
+        const userIdString = String(userId || '').trim();
 
         if (import.meta.env?.DEV) {
-            console.log('[InterviewCall] Joining room – appId:', appIdNum, 'roomId:', roomId, 'userId:', userId);
+            console.log('[InterviewCall] Joining room – appId:', appIdNum, 'roomId:', roomIdString, 'userId:', userIdString);
         }
 
         try {
             const kitToken = ZegoUIKitPrebuilt.generateKitTokenForProduction(
                 appIdNum,
                 token,
-                roomId,
-                userId,
+                roomIdString,
+                userIdString,
                 userName || 'User'
             );
 
@@ -74,7 +112,8 @@ const InterviewCall = () => {
                 },
                 onJoinRoomFailed: (err) => {
                     console.error('[InterviewCall] Zego login/join failed:', err);
-                    setError(err?.message || 'Video call connection failed (code 20021). Please try again.');
+                    const code = err?.code ? ` (code ${err.code})` : ' (code 20021)';
+                    setError((err?.message || 'Video call connection failed') + code + '. Please try again.');
                     zpRef.current?.destroy();
                     zpRef.current = null;
                 }

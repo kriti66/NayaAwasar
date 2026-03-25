@@ -3,6 +3,7 @@ import Application from '../models/Application.js';
 import Interview from '../models/Interview.js';
 import Job from '../models/Job.js';
 import User from '../models/User.js';
+import Activity from '../models/Activity.js';
 import { getValidSavedJobIds } from '../utils/savedJobsUtils.js';
 import KYC from '../models/KYC.js';
 import Company from '../models/Company.js';
@@ -222,13 +223,25 @@ router.get('/seeker/stats', async (req, res) => {
     if (!seekerId) return res.status(401).json({ message: 'Unauthorized' });
 
     try {
-        const [appliedCount, interviewCount, validSavedIds] = await Promise.all([
+        const [appliedCount, interviewCount, validSavedIds, profileViews] = await Promise.all([
             Application.countDocuments({ seeker_id: seekerId }),
             Application.countDocuments({ seeker_id: seekerId, status: 'interview' }),
-            getValidSavedJobIds(seekerId)
+            getValidSavedJobIds(seekerId),
+            // Count only recruiter profile-view activities for this seeker.
+            // Excludes accidental self-view logs if any were ever inserted.
+            Activity.countDocuments({
+                userId: seekerId,
+                type: 'RECRUITER_VIEW',
+                'meta.recruiterId': { $ne: seekerId }
+            })
         ]);
 
-        res.json({ applied: appliedCount, saved: validSavedIds?.length || 0, interviews: interviewCount });
+        res.json({
+            applied: appliedCount,
+            saved: validSavedIds?.length || 0,
+            interviews: interviewCount,
+            profileViews: profileViews || 0
+        });
     } catch (error) {
         console.error("Seeker stats error:", error);
         res.status(500).json({ message: 'Error fetching stats' });

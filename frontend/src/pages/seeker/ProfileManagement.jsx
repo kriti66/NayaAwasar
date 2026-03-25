@@ -128,7 +128,16 @@ const ProfileManagement = () => {
             }
         } catch (error) {
             console.error("CV Gen error:", error);
-            toast.error("Failed to generate CV", { id: "cv-gen" });
+            const payload = error?.response?.data;
+            const backendMessage = payload?.error || payload?.message || error?.message || "Failed to generate CV";
+            const details = payload?.details;
+            const detailsShort =
+                typeof details === 'string'
+                    ? details.slice(0, 240)
+                    : details
+                        ? JSON.stringify(details).slice(0, 240)
+                        : '';
+            toast.error(detailsShort ? `${backendMessage}: ${detailsShort}` : backendMessage, { id: "cv-gen" });
         } finally {
             setIsGenerating(false);
         }

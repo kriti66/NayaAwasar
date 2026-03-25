@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../../services/api';
+import { API_BASE_URL } from '../../config/api';
 import {
     ShieldCheck,
     ShieldX,
@@ -19,7 +20,68 @@ import {
     ShieldQuestion
 } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const resolveAssetUrl = (path) => {
+    if (!path || typeof path !== 'string') return '';
+    const trimmed = path.trim();
+    if (!trimmed) return '';
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    if (trimmed.startsWith('/')) return `${API_BASE_URL}${trimmed}`;
+    return `${API_BASE_URL}/${trimmed}`;
+};
+
+const KycImagePreview = ({ label, path }) => {
+    const [failed, setFailed] = useState(false);
+    const url = resolveAssetUrl(path);
+    const showImage = !!url && !failed;
+
+    return (
+        <div className="space-y-2">
+            <div className="relative aspect-video rounded-xl overflow-hidden border border-gray-200 bg-gray-50 group shadow-sm hover:shadow-md transition-shadow">
+                {showImage ? (
+                    <>
+                        <img
+                            src={url}
+                            alt={label}
+                            className="w-full h-full object-cover"
+                            onError={() => setFailed(true)}
+                        />
+                        <a href={url} target="_blank" rel="noreferrer" className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/70 to-transparent flex items-end justify-center pb-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="flex items-center gap-1.5 text-white text-xs font-bold">
+                                <ExternalLink className="w-3.5 h-3.5" /> View Full
+                            </span>
+                        </a>
+                    </>
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center px-3 text-center">
+                        <p className="text-[11px] font-semibold text-gray-400">No image uploaded</p>
+                    </div>
+                )}
+            </div>
+            <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-wider">{label}</p>
+        </div>
+    );
+};
+
+function getProofCardsByRole(kyc) {
+    const role = kyc?.role === 'recruiter' ? 'recruiter' : 'jobseeker';
+
+    if (role === 'recruiter') {
+        return [
+            { label: 'ID Front', path: kyc.documentFront || kyc.idFront || kyc.idFrontUrl },
+            { label: 'ID Back', path: kyc.documentBack || kyc.idBack || kyc.idBackUrl },
+            { label: 'Company Reg', path: kyc.registrationDocument || kyc.registrationDocUrl },
+            { label: 'Tax Doc', path: kyc.taxDocument || kyc.taxDocUrl },
+            { label: 'Company Logo', path: kyc.companyLogo },
+            { label: 'Selfie', path: kyc.selfieWithId || kyc.selfie }
+        ];
+    }
+
+    return [
+        { label: 'ID Front', path: kyc.documentFront || kyc.idFront },
+        { label: 'ID Back', path: kyc.documentBack || kyc.idBack },
+        { label: 'Selfie', path: kyc.selfieWithId || kyc.selfie }
+    ];
+}
 
 const AdminKYCPanel = () => {
     const [pendingKYC, setPendingKYC] = useState([]);
@@ -296,29 +358,8 @@ const AdminKYCPanel = () => {
                                             Verification Proofs
                                         </h3>
                                         <div className="grid grid-cols-3 gap-4">
-                                            {[
-                                                { label: 'ID Front', path: selectedKYC.documentFront || selectedKYC.idFrontUrl },
-                                                { label: 'ID Back', path: selectedKYC.documentBack || selectedKYC.idBackUrl },
-                                                { label: 'Selfie', path: selectedKYC.selfieWithId },
-                                                { label: 'Company Reg', path: selectedKYC.registrationDocument || selectedKYC.registrationDocUrl },
-                                                { label: 'Tax Doc', path: selectedKYC.taxDocument || selectedKYC.taxDocUrl },
-                                                { label: 'Company Logo', path: selectedKYC.companyLogo }
-                                            ].filter(p => p.path).map((img, i) => (
-                                                <div key={i} className="space-y-2">
-                                                    <div className="relative aspect-video rounded-xl overflow-hidden border border-gray-200 bg-gray-50 group shadow-sm hover:shadow-md transition-shadow">
-                                                        <img
-                                                            src={`${API_BASE}${img.path}`}
-                                                            alt={img.label}
-                                                            className="w-full h-full object-cover"
-                                                        />
-                                                        <a href={`${API_BASE}${img.path}`} target="_blank" rel="noreferrer" className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/70 to-transparent flex items-end justify-center pb-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <span className="flex items-center gap-1.5 text-white text-xs font-bold">
-                                                                <ExternalLink className="w-3.5 h-3.5" /> View Full
-                                                            </span>
-                                                        </a>
-                                                    </div>
-                                                    <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-wider">{img.label}</p>
-                                                </div>
+                                            {getProofCardsByRole(selectedKYC).map((img, i) => (
+                                                <KycImagePreview key={i} label={img.label} path={img.path} />
                                             ))}
                                         </div>
                                     </div>

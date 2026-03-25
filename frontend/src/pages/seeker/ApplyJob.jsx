@@ -16,8 +16,44 @@ import {
     MapPin,
     Building2,
     Sparkles,
-    ArrowLeft
+    ArrowLeft,
+    AlertTriangle
 } from 'lucide-react';
+
+const KYC_ERROR_MESSAGES = {
+    KYC_REQUIRED: 'You need to complete your KYC verification before applying for jobs.',
+    KYC_PENDING: 'Your KYC verification is still under review. You can apply after admin approval.',
+    KYC_REJECTED: 'Your KYC verification was rejected. Please update your details and resubmit before applying.',
+    KYC_NOT_APPROVED: 'Job application is available only for verified jobseekers.'
+};
+
+function getKycGuidance(kycStatus) {
+    switch (kycStatus) {
+        case 'pending':
+            return {
+                code: 'KYC_PENDING',
+                message: KYC_ERROR_MESSAGES.KYC_PENDING,
+                ctaLabel: 'View KYC Status',
+                path: '/kyc/status'
+            };
+        case 'rejected':
+            return {
+                code: 'KYC_REJECTED',
+                message: KYC_ERROR_MESSAGES.KYC_REJECTED,
+                ctaLabel: 'Update KYC',
+                path: '/kyc/job-seeker'
+            };
+        case 'approved':
+            return null;
+        default:
+            return {
+                code: 'KYC_REQUIRED',
+                message: KYC_ERROR_MESSAGES.KYC_REQUIRED,
+                ctaLabel: 'Complete KYC',
+                path: '/kyc/job-seeker'
+            };
+    }
+}
 
 const ApplyJob = () => {
     const { jobId } = useParams();
@@ -33,6 +69,9 @@ const ApplyJob = () => {
     const [coverLetter, setCoverLetter] = useState('');
     const [resumeType, setResumeType] = useState('Generated'); // 'Generated' or 'Uploaded'
     const [resumeFile, setResumeFile] = useState(null);
+    const [submitError, setSubmitError] = useState(null);
+
+    const localKycBlock = getKycGuidance(user?.kycStatus);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -96,6 +135,7 @@ const ApplyJob = () => {
     };
 
     const handleSubmit = async () => {
+        setSubmitError(null);
         if (resumeType === 'Uploaded' && !resumeFile && !profile?.resume?.fileUrl) {
             toast.error("Please upload a resume or select generated CV.");
             return;
@@ -103,6 +143,12 @@ const ApplyJob = () => {
 
         if (step !== 3) {
             toast.error("Please complete all steps before submitting.");
+            return;
+        }
+
+        if (localKycBlock && user?.isKycVerified !== true) {
+            setSubmitError(localKycBlock);
+            toast.error(localKycBlock.message);
             return;
         }
 
@@ -126,12 +172,25 @@ const ApplyJob = () => {
         } catch (error) {
             console.error("Submission error:", error);
             if (error.response) {
+                const payload = error.response.data || {};
+                const code = payload.code;
+                if (error.response.status === 403 && code?.startsWith?.('KYC')) {
+                    const kycError = {
+                        code,
+                        message: payload.message || KYC_ERROR_MESSAGES[code] || KYC_ERROR_MESSAGES.KYC_NOT_APPROVED,
+                        ctaLabel: payload.nextStep || 'View KYC Status',
+                        path: payload.redirectPath || (code === 'KYC_PENDING' ? '/kyc/status' : '/kyc/job-seeker')
+                    };
+                    setSubmitError(kycError);
+                    toast.error(kycError.message);
+                    return;
+                }
                 if (error.response.status === 409) {
                     toast.error("You have already applied for this job.");
                 } else if (error.response.status === 400) {
-                    toast.error(error.response.data.message || "Invalid application data.");
+                    toast.error(payload.message || "Invalid application data.");
                 } else {
-                    toast.error("Failed to submit application. Please try again.");
+                    toast.error(payload.message || "Failed to submit application. Please try again.");
                 }
             } else if (error.request) {
                 toast.error("Network error. Please check your connection or try again later.");
@@ -368,6 +427,28 @@ const ApplyJob = () => {
                 </div>
 
                 {/* Footer Actions */}
+                {submitError?.code?.startsWith?.('KYC') && (
+                    <div className="mb-5 p-4 rounded-xl border border-amber-200 bg-amber-50 flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                                <AlertTriangle size={16} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-black text-amber-800 uppercase tracking-wider mb-1">
+                                    Application blocked
+                                </p>
+                                <p className="text-sm font-medium text-amber-900">{submitError.message}</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => navigate(submitError.path || '/kyc/status')}
+                            className="px-4 py-2 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition-colors shrink-0"
+                        >
+                            {submitError.ctaLabel || 'View KYC Status'}
+                        </button>
+                    </div>
+                )}
                 <div className="flex items-center justify-between">
                     {step > 1 ? (
                         <button

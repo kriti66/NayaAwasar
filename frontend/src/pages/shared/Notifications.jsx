@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCircle, Trash2 } from 'lucide-react';
 import { getNotificationConfig } from '../../components/notifications/notificationConfig';
 import { formatNotificationTime } from '../../utils/formatTimestamp';
+import { resolveNotificationPath } from '../../utils/notificationRouting';
 import notificationService from '../../services/notificationService';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -66,13 +67,7 @@ const Notifications = () => {
 
     const cardClick = (notif) => {
         if (!notif.isRead) handleMarkRead(notif._id);
-        if (notif.link) {
-            let targetLink = notif.link;
-            if (targetLink.startsWith('/jobs/') && (user?.role === 'jobseeker' || user?.role === 'job_seeker')) {
-                targetLink = `/jobseeker${targetLink}`;
-            }
-            navigate(targetLink);
-        }
+        navigate(resolveNotificationPath(notif, user?.role));
     };
 
     const categories = [

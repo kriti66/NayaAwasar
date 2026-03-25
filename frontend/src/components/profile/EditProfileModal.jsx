@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Camera, Save, Loader } from 'lucide-react';
 import api from '../../services/api';
 import { toast } from 'react-hot-toast';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
     const [formData, setFormData] = useState({
@@ -22,7 +23,7 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
                 location: user.location || '',
                 professionalHeadline: user.professionalHeadline || ''
             });
-            setPreviewImage(user.profileImage ? (user.profileImage.startsWith('http') ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`) : null);
+            setPreviewImage(user.profileImage ? resolveAssetUrl(user.profileImage) : null);
         }
     }, [user]);
 
@@ -84,7 +85,12 @@ const EditProfileModal = ({ isOpen, onClose, user, onUpdate }) => {
                         <div className="relative group cursor-pointer">
                             <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-gray-100">
                                 {previewImage ? (
-                                    <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
+                                    <img
+                                        src={previewImage}
+                                        alt="Preview"
+                                        className="w-full h-full object-cover"
+                                        onError={() => setPreviewImage(null)}
+                                    />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-gray-400">
                                         <Camera size={32} />

@@ -89,13 +89,13 @@ const Footer = () => {
                         <h3 className="text-xs font-bold text-white uppercase tracking-widest">For Job Seekers</h3>
                         <ul className="space-y-2.5">
                             {[
-                                { label: 'Browse Jobs', path: '/jobs' },
-                                { label: 'Create Profile', path: '/register?role=jobseeker' },
-                                { label: 'My Dashboard', path: '/seeker/dashboard' },
-                                { label: 'Job Alerts', path: '/seeker/dashboard' },
-                                { label: 'Career Resources', path: '/about' },
+                                { id: 'browse-jobs', label: 'Browse Jobs', path: '/jobs' },
+                                { id: 'create-profile', label: 'Create Profile', path: '/register?role=jobseeker' },
+                                { id: 'my-dashboard', label: 'My Dashboard', path: '/seeker/dashboard' },
+                                { id: 'job-alerts', label: 'Job Alerts', path: '/seeker/dashboard' },
+                                { id: 'career-resources', label: 'Career Resources', path: '/about' },
                             ].map((l) => (
-                                <li key={l.path}>
+                                <li key={l.id || l.path}>
                                     <Link to={l.path} className="text-sm text-gray-400 hover:text-[#29a08e] transition-colors flex items-center gap-1.5 group">
                                         <span className="w-1 h-1 bg-gray-700 group-hover:bg-[#29a08e] rounded-full transition-colors"></span>
                                         {l.label}

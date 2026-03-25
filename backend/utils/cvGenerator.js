@@ -29,10 +29,34 @@ export const generateCV_PDF = async (profile) => {
         }
 
         const browser = await puppeteer.launch({
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36" },
+            headless: true,
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+            },
             args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
         });
         const page = await browser.newPage();
+
+        // Compute avatar src safely; template rendering is inside a single string,
+        // so any runtime type error here will fail the whole PDF generation.
+        const user = profile?.user || {};
+        const fullNameForAvatar = typeof user?.fullName === 'string' ? user.fullName : '';
+        const avatarInitial = fullNameForAvatar ? fullNameForAvatar.charAt(0) : 'J';
+        let avatarSrc = getDefaultAvatarSvg(avatarInitial);
+
+        const profileImage = user?.profileImage;
+        if (typeof profileImage === 'string') {
+            const trimmed = profileImage.trim();
+            if (trimmed) {
+                if (/^https?:\/\//i.test(trimmed)) {
+                    avatarSrc = trimmed;
+                } else {
+                    const baseUrl = getBaseUrl();
+                    const normalized = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+                    avatarSrc = `${baseUrl}${normalized}`;
+                }
+            }
+        }
 
         // Template HTML (Professional, Clean, Printable)
         const htmlContent = `
@@ -162,9 +186,7 @@ export const generateCV_PDF = async (profile) => {
             <div class="header">
                 <img
                     class="header-avatar"
-                    src="${(profile.user?.profileImage && profile.user.profileImage.trim())
-                        ? (profile.user.profileImage.startsWith('http') ? profile.user.profileImage : getBaseUrl() + (profile.user.profileImage.startsWith('/') ? '' : '/') + profile.user.profileImage)
-                        : getDefaultAvatarSvg(profile.user?.fullName?.charAt(0))}"
+                    src="${avatarSrc}"
                     alt="${profile.user?.fullName || 'Profile'} photo"
                 />
                 <div class="header-content">
@@ -183,14 +205,14 @@ export const generateCV_PDF = async (profile) => {
             </div>
             ` : ''}
 
-            ${profile.skills && profile.skills.length > 0 ? `
+            ${Array.isArray(profile.skills) && profile.skills.length > 0 ? `
             <div class="section-title">Core Skills</div>
             <div class="content-block skills-container">
                 ${profile.skills.map(skill => `<span class="skill-tag">${skill}</span>`).join('')}
             </div>
             ` : ''}
 
-            ${profile.experience && profile.experience.length > 0 ? `
+            ${Array.isArray(profile.experience) && profile.experience.length > 0 ? `
             <div class="section-title">Work Experience</div>
             ${profile.experience.map(exp => `
                 <div class="content-block">
@@ -204,7 +226,7 @@ export const generateCV_PDF = async (profile) => {
             `).join('')}
             ` : ''}
 
-            ${profile.education && profile.education.length > 0 ? `
+            ${Array.isArray(profile.education) && profile.education.length > 0 ? `
             <div class="section-title">Education</div>
             ${profile.education.map(edu => `
                 <div class="content-block education-item">
@@ -217,7 +239,7 @@ export const generateCV_PDF = async (profile) => {
             `).join('')}
             ` : ''}
 
-            ${profile.projects && profile.projects.length > 0 ? `
+            ${Array.isArray(profile.projects) && profile.projects.length > 0 ? `
             <div class="section-title">Key Projects</div>
             ${profile.projects.map(proj => `
                 <div class="content-block project-item">
@@ -225,7 +247,7 @@ export const generateCV_PDF = async (profile) => {
                         ${proj.liveDemoUrl ? `<a href="${proj.liveDemoUrl}" class="project-link" target="_blank">[View Live]</a>` : ''}
                     </div>
                     ${proj.description ? `<div class="job-desc">${proj.description}</div>` : ''}
-                    ${proj.techStack && proj.techStack.length > 0 ? `
+                    ${Array.isArray(proj.techStack) && proj.techStack.length > 0 ? `
                         <div style="font-size:11px; color:#6b7280; margin-top:2px;">Tech: ${proj.techStack.join(', ')}</div>
                     ` : ''}
                 </div>
@@ -236,7 +258,14 @@ export const generateCV_PDF = async (profile) => {
         </html>
         `;
 
-        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        // Load HTML before printing. Prefer `networkidle0`, but fall back
+        // to `domcontentloaded` if Chromium can't reach the idle state.
+        try {
+            await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        } catch (e) {
+            await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
         const fileName = `resume_${profile.user?._id}_${Date.now()}.pdf`;
         const filePath = path.join(uploadDir, fileName);
@@ -254,6 +283,7 @@ export const generateCV_PDF = async (profile) => {
 
     } catch (error) {
         console.error("PDF Generation Error:", error);
-        throw error;
+        const msg = error?.message || error?.toString?.() || 'Unknown PDF generation failure';
+        throw new Error(`PDF_GENERATION_FAILED: ${msg}`);
     }
 };

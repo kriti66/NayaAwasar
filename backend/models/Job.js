@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { JOB_CATEGORIES } from '../constants/jobCategories.js';
 
 const jobSchema = new mongoose.Schema({
     recruiter_id: {
@@ -26,6 +27,17 @@ const jobSchema = new mongoose.Schema({
     title: {
         type: String,
         required: true
+    },
+    /** Profession / industry bucket for search and filters */
+    category: {
+        type: String,
+        enum: JOB_CATEGORIES,
+        required: true
+    },
+    /** Normalized lowercase keywords (e.g. nurse, react) for search */
+    tags: {
+        type: [String],
+        default: []
     },
     job_title: { // Added per prompt
         type: String

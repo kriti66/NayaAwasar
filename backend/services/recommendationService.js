@@ -2,6 +2,7 @@ import Job from '../models/Job.js';
 import Profile from '../models/Profile.js';
 import Application from '../models/Application.js';
 import { preprocessText, computeTF, computeIDF, computeTFIDF, cosineSimilarity } from '../utils/recommendationEngine.js';
+import { inferCategoriesFromSearch } from './jobSearchFilter.js';
 
 export const getRecommendedJobs = async (userId) => {
     try {
@@ -51,6 +52,7 @@ export const getRecommendedJobs = async (userId) => {
         const userSkills = (userProfile.skills || []).map(s => s.toLowerCase());
         const userPreferredLocation = (userProfile.location || userProfile.jobPreferences?.preferredLocation || '').toLowerCase();
         const userExperienceLevel = (userProfile.jobPreferences?.seniority || '').toLowerCase();
+        const preferredCategories = inferCategoriesFromSearch(userTextContent).map((c) => c.toLowerCase());
 
         // 5. Build corpus and TF-IDF vectors
         // Job document texts
@@ -126,20 +128,38 @@ export const getRecommendedJobs = async (userId) => {
             }
 
             // Calculate final probability (0 to 100 final percentage scale)
-            const finalScoreRaw = contentScore + skillsScore + locationScore + experienceScore;
+            const jobCategory = (job.category || '').toLowerCase();
+            const categoryMatched = !!jobCategory && preferredCategories.includes(jobCategory);
+            const categoryScore = categoryMatched ? 0.08 : 0; // small nudge for belief in relevance
+
+            const finalScoreRaw = contentScore + skillsScore + locationScore + experienceScore + categoryScore;
             const finalPercentage = Math.round(finalScoreRaw * 100);
 
-            // Generate an explanation/reason for Viva clarity
-            let explanation = '';
-            if (matchedSkills.length > 0) {
-                explanation = `Matches your skills: ${matchedSkills.slice(0, 3).join(', ')}. `;
-            } else if (textSimScore > 0.1) {
-                explanation = `Content matches your profile summary. `;
-            } else {
-                explanation = `Recommended based on platform trends. `;
-            }
+            // Generate a factor-based explanation so the UI feels trustworthy.
+            const explanationParts = [];
+            const showLocation = locationScore > 0;
+            const showExperience = experienceScore > 0;
 
-            if (locationScore > 0) explanation += `Matched your preferred location.`;
+            if (matchedSkills.length > 0) {
+                explanationParts.push(`Matched your skills: ${matchedSkills.slice(0, 3).join(', ')}`);
+            } else if (textSimScore > 0.1) {
+                explanationParts.push(`This role's content matches your profile summary`);
+            }
+            if (categoryMatched) explanationParts.push(`Fits your preferred category: ${job.category}`);
+            if (showLocation) explanationParts.push(`Matches your preferred location`);
+            if (showExperience) explanationParts.push(`Matches your experience level preference`);
+
+            const explanation =
+                explanationParts.length > 0
+                    ? explanationParts.join('. ') + '.'
+                    : userTokens.length < 5
+                        ? 'Recommended from platform trends. Add more skills and preferences to unlock stronger AI matches.'
+                        : 'Recommended from platform trends. This is a lower-confidence match based on limited profile signals.';
+
+            const recommendationType =
+                explanationParts.length > 0 ? 'ai_match' : (finalPercentage > 0 ? 'trending' : 'fallback');
+            const recommendationConfidence =
+                finalPercentage >= 30 ? 'high' : finalPercentage >= 15 ? 'medium' : 'low';
 
             // Only recommend if the score is somewhat decent (e.g. at least 5% match or 0% but user profile is extremely empty)
             if (finalPercentage > 0 || userTokens.length < 5) {
@@ -148,7 +168,9 @@ export const getRecommendedJobs = async (userId) => {
                     matchScore: finalPercentage > 100 ? 100 : finalPercentage,
                     matchReason: explanation.trim(),
                     matchedSkills: matchedSkills,
-                    missingSkills: missingSkills
+                    missingSkills: missingSkills,
+                    recommendationType,
+                    recommendationConfidence
                 });
             }
         });

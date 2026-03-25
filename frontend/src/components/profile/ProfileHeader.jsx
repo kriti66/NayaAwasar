@@ -1,7 +1,16 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { MapPin, Globe, Edit2 } from 'lucide-react';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 const ProfileHeader = ({ profile, onEdit }) => {
+    const [imageError, setImageError] = useState(false);
+    const resolvedImageUrl = profile?.profileImage ? resolveAssetUrl(profile.profileImage) : '';
+
+    useEffect(() => {
+        // Reset error state if the image source changes
+        setImageError(false);
+    }, [profile?.profileImage]);
+
     const completion = profile?.profileCompletion || 0;
 
     return (
@@ -14,11 +23,12 @@ const ProfileHeader = ({ profile, onEdit }) => {
                     {/* Avatar */}
                     <div className="relative group">
                         <div className="w-32 h-32 rounded-[2rem] bg-white p-1.5 shadow-xl border border-gray-100 overflow-hidden">
-                            {profile?.profileImage ? (
+                            {resolvedImageUrl && !imageError ? (
                                 <img
-                                    src={profile.profileImage}
+                                    src={resolvedImageUrl}
                                     className="w-full h-full object-cover rounded-[1.75rem]"
                                     alt={profile.fullName}
+                                    onError={() => setImageError(true)}
                                 />
                             ) : (
                                 <div className="w-full h-full bg-gray-50 flex items-center justify-center text-4xl font-bold text-gray-300 rounded-[1.75rem]">

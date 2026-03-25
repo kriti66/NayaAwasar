@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, ChevronRight } from 'lucide-react';
 import NotificationItem from './NotificationItem';
 import { getNotificationGroup } from '../../utils/formatTimestamp';
+import { getRoleNotificationsPath, resolveNotificationPath } from '../../utils/notificationRouting';
 
 export default function NotificationDropdown({
     isOpen,
@@ -11,18 +12,16 @@ export default function NotificationDropdown({
     loading = false,
     markRead,
     markAllRead,
-    viewAllLink = '/notifications',
-    transformLink,
+    viewAllLink,
+    role,
 }) {
     const navigate = useNavigate();
+    const safeViewAllLink = viewAllLink || getRoleNotificationsPath(role);
 
     const handleItemClick = (notification) => {
         if (!notification.isRead) markRead(notification._id);
         onClose();
-        if (notification.link) {
-            const target = transformLink ? transformLink(notification.link) : notification.link;
-            navigate(target);
-        }
+        navigate(resolveNotificationPath(notification, role));
     };
 
     if (!isOpen) return null;
@@ -118,11 +117,11 @@ export default function NotificationDropdown({
             {/* Footer */}
             <div className="border-t border-slate-100 bg-slate-50/50">
                 <a
-                    href={viewAllLink}
+                    href={safeViewAllLink}
                     onClick={(e) => {
                         e.preventDefault();
                         onClose();
-                        navigate(viewAllLink);
+                        navigate(safeViewAllLink);
                     }}
                     className="flex items-center justify-center gap-1.5 py-3 text-sm font-medium text-[#29a08e] hover:bg-slate-100/80 transition-colors"
                 >

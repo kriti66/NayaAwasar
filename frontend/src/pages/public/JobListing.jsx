@@ -1,38 +1,117 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../../services/api';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import FeaturedJobs from '../../components/jobs/FeaturedJobs';
 import PromotionBadge from '../../components/jobs/PromotionBadge';
+import { JOB_CATEGORIES } from '../../constants/jobCategories';
+
+/** Public UI labels → Job schema experience_level */
+const PUBLIC_EXP_TO_API = {
+    'Entry-level': 'Entry Level',
+    'Mid-level': 'Associate',
+    'Senior': 'Mid-Senior Level',
+    'Executive': 'Executive'
+};
+
+const initialCategories = () =>
+    Object.fromEntries(JOB_CATEGORIES.map((c) => [c, false]));
+
+const ListRowSkeleton = () => (
+    <div className="bg-white rounded-2xl border border-gray-100 p-6 animate-pulse">
+        <div className="flex gap-4">
+            <div className="w-14 h-14 bg-gray-100 rounded-xl shrink-0" />
+            <div className="flex-1 space-y-3">
+                <div className="h-4 bg-gray-100 rounded w-1/3" />
+                <div className="h-3 bg-gray-100 rounded w-1/4" />
+                <div className="flex gap-2">
+                    <div className="h-6 bg-gray-100 rounded-full w-20" />
+                    <div className="h-6 bg-gray-100 rounded-full w-20" />
+                </div>
+            </div>
+        </div>
+    </div>
+);
+
+const normalizeSalaryRangeValue = (value, fallbackLabel) => {
+    if (value == null) return fallbackLabel;
+    const raw = String(value).trim();
+    if (!raw) return fallbackLabel;
+
+    // If it's a label (e.g., Competitive/Negotiable) keep it.
+    if (!/\d/.test(raw)) return raw;
+
+    // Strip any currency symbols/prefixes coming from backend (e.g. "$ 30000-40000")
+    const cleaned = raw
+        .replace(/\$/g, '')
+        .replace(/\bUSD\b/gi, '')
+        .replace(/\bdollar\b/gi, '')
+        .replace(/^\s*(Rs\.?|Nrs\.?)\s*/i, '')
+        .trim();
+
+    return cleaned ? `Nrs ${cleaned}` : fallbackLabel;
+};
 
 const JobListing = () => {
     const { user } = useAuth();
     const [jobs, setJobs] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [listLoading, setListLoading] = useState(true);
+    const listFetchGen = useRef(0);
     const [keyword, setKeyword] = useState('');
     const [location, setLocation] = useState('');
     const [jobTypes, setJobTypes] = useState({ 'Full-time': false, 'Part-time': false, 'Contract': false, 'Internship': false });
     const [experienceLevels, setExperienceLevels] = useState({ 'Entry-level': false, 'Mid-level': false, 'Senior': false, 'Executive': false });
+    const [jobCategories, setJobCategories] = useState(() => initialCategories());
     const [currentPage, setCurrentPage] = useState(1);
     const jobsPerPage = 8;
 
     useEffect(() => {
-        const fetchJobs = async () => {
+        const gen = ++listFetchGen.current;
+        const ctrl = new AbortController();
+        const q = keyword.trim();
+        const debounceMs = q ? 380 : 0;
+        const t = setTimeout(async () => {
             try {
-                const res = await api.get('/jobs');
-                setJobs(res.data);
+                setListLoading(true);
+                const params = {};
+                if (q) params.q = q;
+                const loc = location.trim();
+                if (loc) params.location = loc;
+                const types = Object.keys(jobTypes).filter((k) => jobTypes[k]);
+                if (types.length) params.jobType = types.join(',');
+                const cats = JOB_CATEGORIES.filter((c) => jobCategories[c]);
+                if (cats.length) params.category = cats.join(',');
+                const levels = Object.keys(experienceLevels)
+                    .filter((k) => experienceLevels[k])
+                    .map((k) => PUBLIC_EXP_TO_API[k])
+                    .filter(Boolean);
+                if (levels.length) params.experienceLevel = [...new Set(levels)].join(',');
+                const res = await api.get('/jobs', { params, signal: ctrl.signal });
+                if (ctrl.signal.aborted || gen !== listFetchGen.current) return;
+                setJobs(Array.isArray(res.data) ? res.data : []);
             } catch (error) {
+                if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return;
                 console.error('Error fetching jobs:', error);
+                if (gen === listFetchGen.current) setJobs([]);
             } finally {
-                setLoading(false);
+                if (!ctrl.signal.aborted && gen === listFetchGen.current) setListLoading(false);
             }
+        }, debounceMs);
+        return () => {
+            clearTimeout(t);
+            ctrl.abort();
         };
-        fetchJobs();
-    }, []);
+    }, [keyword, location, jobTypes, experienceLevels, jobCategories]);
 
     const handleCheckboxChange = (category, value) => {
         if (category === 'type') setJobTypes(prev => ({ ...prev, [value]: !prev[value] }));
         else if (category === 'level') setExperienceLevels(prev => ({ ...prev, [value]: !prev[value] }));
+        setCurrentPage(1);
+    };
+
+    const toggleJobCategory = (cat) => {
+        setJobCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
+        setCurrentPage(1);
     };
 
     const clearFilters = () => {
@@ -40,23 +119,16 @@ const JobListing = () => {
         setLocation('');
         setJobTypes({ 'Full-time': false, 'Part-time': false, 'Contract': false, 'Internship': false });
         setExperienceLevels({ 'Entry-level': false, 'Mid-level': false, 'Senior': false, 'Executive': false });
+        setJobCategories(initialCategories());
         setCurrentPage(1);
     };
 
-    const filteredJobs = jobs.filter(job => {
-        const matchesKeyword = job.title?.toLowerCase().includes(keyword.toLowerCase()) ||
-            job.company_name?.toLowerCase().includes(keyword.toLowerCase());
-        const matchesLocation = !location || job.location?.toLowerCase().includes(location.toLowerCase());
-        const activeJobTypes = Object.keys(jobTypes).filter(t => jobTypes[t]);
-        const matchesType = activeJobTypes.length === 0 || activeJobTypes.includes(job.type);
-        return matchesKeyword && matchesLocation && matchesType;
-    });
-
-    const totalPages = Math.ceil(filteredJobs.length / jobsPerPage);
-    const currentJobs = filteredJobs.slice((currentPage - 1) * jobsPerPage, currentPage * jobsPerPage);
+    const totalPages = Math.ceil(jobs.length / jobsPerPage);
+    const currentJobs = jobs.slice((currentPage - 1) * jobsPerPage, currentPage * jobsPerPage);
 
     const activeFilterCount = Object.values(jobTypes).filter(Boolean).length +
         Object.values(experienceLevels).filter(Boolean).length +
+        Object.values(jobCategories).filter(Boolean).length +
         (keyword ? 1 : 0) + (location ? 1 : 0);
 
     const typeColors = {
@@ -79,7 +151,8 @@ const JobListing = () => {
 
                 <div className="relative max-w-5xl mx-auto text-center">
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#29a08e]/20 border border-[#29a08e]/30 rounded-full text-sm font-medium text-[#29a08e] mb-4">
-                        💼 {filteredJobs.length}+ Opportunities Available
+                        💼{' '}
+                        {listLoading && jobs.length === 0 ? '…' : `${jobs.length}+`} Opportunities Available
                     </div>
                     <h1 className="text-4xl sm:text-5xl font-black text-white mb-4 tracking-tight">
                         Explore <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#29a08e] to-teal-300">Jobs</span> in Nepal
@@ -94,7 +167,7 @@ const JobListing = () => {
                             </svg>
                             <input
                                 type="text"
-                                placeholder="Job title, company..."
+                                placeholder="Job title, profession, keywords..."
                                 value={keyword}
                                 onChange={(e) => { setKeyword(e.target.value); setCurrentPage(1); }}
                                 className="w-full py-3 bg-transparent outline-none text-gray-700 text-sm font-medium placeholder-gray-400"
@@ -120,7 +193,8 @@ const JobListing = () => {
                 </div>
             </div>
 
-            <FeaturedJobs />
+            {/* Promoted jobs are unfiltered; hide while any list filter is active */}
+            {activeFilterCount === 0 && <FeaturedJobs />}
 
             {/* Main Content */}
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -143,6 +217,30 @@ const JobListing = () => {
                                         Clear All
                                     </button>
                                 )}
+                            </div>
+
+                            {/* Profession / Category */}
+                            <div className="mb-6">
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Profession / Category</h4>
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                                    {JOB_CATEGORIES.map((cat) => (
+                                        <label
+                                            key={cat}
+                                            className="flex items-center gap-3 cursor-pointer group"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                toggleJobCategory(cat);
+                                            }}
+                                        >
+                                            <div
+                                                className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all ${jobCategories[cat] ? 'bg-[#29a08e] border-[#29a08e]' : 'border-gray-300 group-hover:border-[#29a08e]'}`}
+                                            >
+                                                {jobCategories[cat] && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                                            </div>
+                                            <span className={`text-sm font-medium transition-colors ${jobCategories[cat] ? 'text-[#29a08e]' : 'text-gray-600 group-hover:text-gray-900'}`}>{cat}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
 
                             {/* Job Type */}
@@ -195,12 +293,17 @@ const JobListing = () => {
                     </aside>
 
                     {/* Jobs List */}
-                    <div className="flex-1">
+                    <div className="flex-1 relative">
                         {/* Results header */}
                         <div className="flex items-center justify-between mb-5 bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-3.5">
-                            <div>
-                                <span className="font-black text-[#29a08e] text-lg">{filteredJobs.length}</span>
-                                <span className="text-gray-500 text-sm font-medium ml-1">jobs found</span>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-black text-[#29a08e] text-lg">
+                                    {listLoading ? '…' : jobs.length}
+                                </span>
+                                <span className="text-gray-500 text-sm font-medium">jobs found</span>
+                                {listLoading && (
+                                    <span className="inline-flex h-4 w-4 border-2 border-[#29a08e]/30 border-t-[#29a08e] rounded-full animate-spin" aria-hidden />
+                                )}
                                 {activeFilterCount > 0 && (
                                     <span className="text-gray-400 text-sm ml-1">with {activeFilterCount} filter{activeFilterCount > 1 ? 's' : ''}</span>
                                 )}
@@ -214,26 +317,15 @@ const JobListing = () => {
                             </div>
                         </div>
 
-                        {loading ? (
+                        {listLoading && jobs.length === 0 && (
                             <div className="space-y-4">
                                 {[...Array(4)].map((_, i) => (
-                                    <div key={i} className="bg-white rounded-2xl border border-gray-100 p-6 animate-pulse">
-                                        <div className="flex gap-4">
-                                            <div className="w-14 h-14 bg-gray-100 rounded-xl shrink-0"></div>
-                                            <div className="flex-1 space-y-3">
-                                                <div className="h-4 bg-gray-100 rounded w-1/3"></div>
-                                                <div className="h-3 bg-gray-100 rounded w-1/4"></div>
-                                                <div className="flex gap-2">
-                                                    <div className="h-6 bg-gray-100 rounded-full w-20"></div>
-                                                    <div className="h-6 bg-gray-100 rounded-full w-20"></div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <ListRowSkeleton key={`sk-${i}`} />
                                 ))}
                             </div>
-                        ) : currentJobs.length > 0 ? (
-                            <div className="space-y-4">
+                        )}
+                        {currentJobs.length > 0 && (
+                            <div className={`space-y-4 ${listLoading ? 'relative min-h-[120px]' : ''}`}>
                                 {currentJobs.map((job) => (
                                     <div
                                         key={job._id}
@@ -267,7 +359,7 @@ const JobListing = () => {
                                                             </span>
                                                         </div>
                                                     </div>
-                                                    <button className="p-2 text-gray-300 hover:text-[#29a08e] hover:bg-[#29a08e]/5 rounded-lg transition-all shrink-0">
+                                                    <button type="button" className="p-2 text-gray-300 hover:text-[#29a08e] hover:bg-[#29a08e]/5 rounded-lg transition-all shrink-0">
                                                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
                                                         </svg>
@@ -281,8 +373,13 @@ const JobListing = () => {
                                                                 {job.type}
                                                             </span>
                                                         )}
+                                                        {job.category && (
+                                                            <span className="px-3 py-1 text-xs font-bold rounded-full border border-slate-200 bg-slate-50 text-slate-700">
+                                                                {job.category}
+                                                            </span>
+                                                        )}
                                                         <span className="px-3 py-1 text-xs font-bold bg-gray-50 text-gray-600 rounded-full border border-gray-100">
-                                                            {job.salary_range || 'Competitive'}
+                                                            {normalizeSalaryRangeValue(job.salary_range, 'Competitive')}
                                                         </span>
                                                         {job.experience_level && (
                                                             <span className="px-3 py-1 text-xs font-bold bg-gray-50 text-gray-600 rounded-full border border-gray-100">
@@ -315,8 +412,20 @@ const JobListing = () => {
                                         </div>
                                     </div>
                                 ))}
+                                {listLoading && (
+                                    <div
+                                        className="absolute inset-0 rounded-2xl bg-white/55 backdrop-blur-[1px] flex items-start justify-center pt-16 z-10 pointer-events-none"
+                                        aria-busy="true"
+                                    >
+                                        <div className="pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full bg-white/90 border border-gray-100 shadow-md text-xs font-bold text-gray-600">
+                                            <span className="inline-flex h-4 w-4 border-2 border-[#29a08e]/30 border-t-[#29a08e] rounded-full animate-spin" />
+                                            Updating results…
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        ) : (
+                        )}
+                        {!listLoading && currentJobs.length === 0 && (
                             <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
                                 <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-4xl">🔍</div>
                                 <h3 className="text-lg font-black text-gray-900 mb-2">No jobs found</h3>

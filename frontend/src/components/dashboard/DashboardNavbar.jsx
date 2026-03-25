@@ -6,6 +6,7 @@ import api from '../../services/api';
 import { useNotifications } from '../../hooks/useNotifications';
 import NotificationBell from '../notifications/NotificationBell';
 import NotificationDropdown from '../notifications/NotificationDropdown';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 const RecruiterNavLinks = [
     { label: 'Dashboard', path: '/recruiter/dashboard' },
@@ -121,6 +122,7 @@ const DashboardNavbar = () => {
                                     markRead={markRead}
                                     markAllRead={markAllRead}
                                     viewAllLink="/recruiter/notifications"
+                                    role={user?.role}
                                 />
                             </div>
 
@@ -132,7 +134,7 @@ const DashboardNavbar = () => {
                                     <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden">
                                         {user?.profileImage ? (
                                             <img
-                                                src={user.profileImage.startsWith('http') ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`}
+                                                src={resolveAssetUrl(user.profileImage)}
                                                 alt=""
                                                 className="w-full h-full object-cover"
                                                 onError={(e) => { e.target.style.display = 'none'; }}
@@ -280,7 +282,7 @@ const DashboardNavbar = () => {
                                 markRead={markRead}
                                 markAllRead={markAllRead}
                                 viewAllLink="/seeker/notifications"
-                                transformLink={(link) => (link.startsWith('/jobs/') ? `/jobseeker${link}` : link)}
+                                role={user?.role}
                             />
                         </div>
 
@@ -292,7 +294,7 @@ const DashboardNavbar = () => {
                                 <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden">
                                     {user?.profileImage ? (
                                         <img
-                                            src={user.profileImage.startsWith('http') ? user.profileImage : `${import.meta.env.VITE_API_URL}${user.profileImage}`}
+                                            src={resolveAssetUrl(user.profileImage)}
                                             alt=""
                                             className="w-full h-full object-cover"
                                             onError={(e) => { e.target.style.display = 'none'; }}

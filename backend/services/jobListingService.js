@@ -6,6 +6,7 @@ import Job from '../models/Job.js';
 import Promotion from '../models/Promotion.js';
 import { PROMOTION_STATUSES } from '../constants/promotionConfig.js';
 import * as promotionService from './promotionService.js';
+import { mergeWithBaseFilter } from './jobSearchFilter.js';
 
 /** Maps Job promotionType to display label */
 export const PROMOTION_LABELS = {
@@ -78,12 +79,14 @@ export const BASE_VISIBLE_FILTER = {
 /**
  * Fetch jobs with promotion-aware sorting for public page.
  * Sorts: promoted first (by promotionPriority desc), then by date.
+ * @param {Record<string, string>} query - Express req.query (q, category, location, jobType, experienceLevel, tags)
  */
-export async function getPublicJobsWithPromotionSort() {
+export async function getPublicJobsWithPromotionSort(query = {}) {
     await expireOverduePromotions();
     const now = new Date();
 
-    const jobs = await Job.find(BASE_VISIBLE_FILTER)
+    const filter = mergeWithBaseFilter(BASE_VISIBLE_FILTER, query);
+    const jobs = await Job.find(filter)
         .sort({ promotionPriority: -1, createdAt: -1 })
         .populate('company_id', 'name logo location')
         .lean();
@@ -96,12 +99,13 @@ export async function getPublicJobsWithPromotionSort() {
  * Merges with recommendation scores.
  * Sort: promoted first (by promotionPriority), then by matchScore, then by date.
  */
-export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn) {
+export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn, query = {}) {
     await expireOverduePromotions();
     const now = new Date();
 
+    const filter = mergeWithBaseFilter(BASE_VISIBLE_FILTER, query);
     const [jobsRaw, recResult] = await Promise.all([
-        Job.find(BASE_VISIBLE_FILTER)
+        Job.find(filter)
             .sort({ promotionPriority: -1, createdAt: -1 })
             .populate('company_id', 'name logo location')
             .lean(),

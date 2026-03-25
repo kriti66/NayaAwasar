@@ -9,6 +9,8 @@ import { logActivity } from '../utils/activityLogger.js';
 import { getPromotedJobs } from '../controllers/promotedJobController.js';
 import { getRecommendedJobs } from '../services/recommendationService.js';
 import { getPublicJobsWithPromotionSort, getJobsForSeekerWithPromotion } from '../services/jobListingService.js';
+import { normalizeTagsInput } from '../services/jobSearchFilter.js';
+import { JOB_CATEGORIES } from '../constants/jobCategories.js';
 import { getValidSavedJobIds, cleanUserSavedJobs } from '../utils/savedJobsUtils.js';
 
 const router = express.Router();
@@ -16,7 +18,7 @@ const router = express.Router();
 // Get all jobs (Public - only approved, promotion-aware sort)
 router.get('/', async (req, res) => {
     try {
-        const jobs = await getPublicJobsWithPromotionSort();
+        const jobs = await getPublicJobsWithPromotionSort(req.query);
         res.json(jobs);
     } catch (error) {
         console.error("Fetch jobs error:", error);
@@ -124,7 +126,8 @@ router.get('/recommended', async (req, res) => {
 router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruiterKycApproved, requireCompanyApproved, async (req, res) => {
     const {
         title, company_name, type, description, location,
-        salary_range, requirements, experience_level
+        salary_range, requirements, experience_level,
+        category, tags
     } = req.body;
     const recruiter_id = req.user.id;
 
@@ -135,6 +138,11 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
         if (!company && req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Approved company profile required to post jobs' });
         }
+
+        if (!category || !JOB_CATEGORIES.includes(category)) {
+            return res.status(400).json({ message: 'Valid category is required' });
+        }
+        const tagList = normalizeTagsInput(tags);
 
         const job = new Job({
             recruiter_id,
@@ -147,6 +155,8 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
             salary_range,
             requirements,
             experience_level,
+            category,
+            tags: tagList,
             company_logo: company?.logo || req.body.company_logo || '',
             status: 'Active'
         });
@@ -201,7 +211,7 @@ router.get('/promoted', getPromotedJobs);
 router.get('/for-seeker', requireAuth, requireRole('jobseeker', 'job_seeker'), async (req, res) => {
     try {
         const userId = req.user.id;
-        const jobs = await getJobsForSeekerWithPromotion(userId, getRecommendedJobs);
+        const jobs = await getJobsForSeekerWithPromotion(userId, getRecommendedJobs, req.query);
         res.json(jobs);
     } catch (error) {
         console.error("Fetch jobs for seeker error:", error);
@@ -285,7 +295,10 @@ router.delete('/:id', requireAuth, requireKycApproved, requireCompanyApproved, a
 // Update specific job (KYC-approved recruiters only)
 router.put('/:id', requireAuth, requireKycApproved, requireCompanyApproved, async (req, res) => {
     const { id } = req.params;
-    const { title, company_name, type, description, location, salary_range, requirements, status, experience_level } = req.body;
+    const {
+        title, company_name, type, description, location, salary_range, requirements, status, experience_level,
+        category, tags
+    } = req.body;
 
     try {
         const existingJob = await Job.findById(id);
@@ -307,6 +320,15 @@ router.put('/:id', requireAuth, requireKycApproved, requireCompanyApproved, asyn
             status,
             experience_level
         };
+        if (category !== undefined) {
+            if (!JOB_CATEGORIES.includes(category)) {
+                return res.status(400).json({ message: 'Invalid category' });
+            }
+            updateData.category = category;
+        }
+        if (tags !== undefined) {
+            updateData.tags = normalizeTagsInput(tags);
+        }
 
         // If job was flagged/hidden, update to 'Under Review' on edit
         if (existingJob.moderationStatus === 'Flagged' || existingJob.moderationStatus === 'Hidden') {

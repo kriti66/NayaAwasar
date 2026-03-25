@@ -90,7 +90,14 @@ export const getMyApplications = async (req, res) => {
 
     try {
         const applications = await Application.find({ seeker_id: seekerId })
-            .populate('job_id', 'title company_name location')
+            .populate({
+                path: 'job_id',
+                select: 'title company_name location company_logo company_id',
+                populate: {
+                    path: 'company_id',
+                    select: 'name logo'
+                }
+            })
             .sort({ updatedAt: -1 });
         res.json(applications);
     } catch (error) {
