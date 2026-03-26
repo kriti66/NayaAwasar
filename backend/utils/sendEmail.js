@@ -10,10 +10,27 @@ const transporter = nodemailer.createTransport({
         user: process.env.EMAIL_USER,
         pass: emailPass,
     },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 20000,
+    connectionTimeout: 20000,
+    greetingTimeout: 15000,
+    socketTimeout: 30000,
 });
+
+let hasVerifiedTransporter = false;
+const verifyTransporter = async () => {
+    if (hasVerifiedTransporter) return;
+    try {
+        await transporter.verify();
+        hasVerifiedTransporter = true;
+        console.log('✅ SMTP transporter verified successfully');
+    } catch (error) {
+        console.error('❌ SMTP transporter verification failed:', {
+            message: error?.message,
+            code: error?.code,
+            command: error?.command
+        });
+        throw error;
+    }
+};
 
 const sendEmail = async (options) => {
     try {
@@ -23,6 +40,7 @@ const sendEmail = async (options) => {
         if (!process.env.EMAIL_USER || !emailPass) {
             throw new Error("Missing EMAIL_USER or EMAIL_PASS in environment variables");
         }
+        await verifyTransporter();
 
         const mailOptions = {
             from: `"Naya Awasar" <${process.env.EMAIL_USER}>`,
