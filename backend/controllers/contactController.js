@@ -172,60 +172,64 @@ export const replyToContactMessage = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Contact message not found.' });
         }
 
-        // Send the reply email to the user
-        await sendEmail({
-            to: contactMsg.email,
-            subject: `Reply: ${contactMsg.subject}`,
-            html: `
-                <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0;">
-                    <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px 24px; border-radius: 12px 12px 0 0;">
-                        <h1 style="color: #29a08e; margin: 0; font-size: 24px;">Naya Awasar</h1>
-                        <p style="color: #94a3b8; margin-top: 4px; font-size: 14px;">Support Reply</p>
-                    </div>
-                    <div style="background: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none;">
-                        <p style="color: #334155; font-size: 15px; line-height: 1.6;">Hi <strong>${contactMsg.fullName}</strong>,</p>
-                        <p style="color: #475569; font-size: 14px; line-height: 1.7;">
-                            Thank you for contacting us. Here is our response to your inquiry:
-                        </p>
-                        <div style="background: #f0fdf9; border-left: 3px solid #29a08e; padding: 16px; margin: 20px 0; border-radius: 0 8px 8px 0;">
-                            <p style="color: #1e293b; font-size: 14px; margin: 0; line-height: 1.7; white-space: pre-line;">${reply.trim()}</p>
-                        </div>
-                        <div style="background: #f8fafc; padding: 12px 16px; margin: 20px 0; border-radius: 8px; border: 1px solid #e2e8f0;">
-                            <p style="color: #64748b; font-size: 12px; margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.5px;">Your Original Message</p>
-                            <p style="color: #64748b; font-size: 13px; margin: 0; font-style: italic;">"${contactMsg.message}"</p>
-                        </div>
-                        <p style="color: #475569; font-size: 14px; line-height: 1.7;">
-                            If you need further assistance, please don't hesitate to reach out again.
-                        </p>
-                    </div>
-                    <div style="background: #f8fafc; padding: 20px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; text-align: center;">
-                        <p style="color: #94a3b8; font-size: 12px; margin: 0;">Warm regards,<br/><strong style="color: #29a08e;">Naya Awasar Team</strong></p>
-                    </div>
-                </div>
-            `
-        });
-
-        // Update the contact message
+        // Persist admin action first so UI doesn't fail if SMTP is slow.
         contactMsg.adminReply = reply.trim();
         contactMsg.repliedAt = new Date();
         contactMsg.repliedBy = req.user.id;
         contactMsg.status = 'REPLIED';
         await contactMsg.save();
 
+        let emailWarning = null;
+        try {
+            await sendEmail({
+                to: contactMsg.email,
+                subject: `Reply: ${contactMsg.subject}`,
+                html: `
+                    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0;">
+                        <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px 24px; border-radius: 12px 12px 0 0;">
+                            <h1 style="color: #29a08e; margin: 0; font-size: 24px;">Naya Awasar</h1>
+                            <p style="color: #94a3b8; margin-top: 4px; font-size: 14px;">Support Reply</p>
+                        </div>
+                        <div style="background: #ffffff; padding: 32px 24px; border: 1px solid #e2e8f0; border-top: none;">
+                            <p style="color: #334155; font-size: 15px; line-height: 1.6;">Hi <strong>${contactMsg.fullName}</strong>,</p>
+                            <p style="color: #475569; font-size: 14px; line-height: 1.7;">
+                                Thank you for contacting us. Here is our response to your inquiry:
+                            </p>
+                            <div style="background: #f0fdf9; border-left: 3px solid #29a08e; padding: 16px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+                                <p style="color: #1e293b; font-size: 14px; margin: 0; line-height: 1.7; white-space: pre-line;">${reply.trim()}</p>
+                            </div>
+                            <div style="background: #f8fafc; padding: 12px 16px; margin: 20px 0; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                <p style="color: #64748b; font-size: 12px; margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0.5px;">Your Original Message</p>
+                                <p style="color: #64748b; font-size: 13px; margin: 0; font-style: italic;">"${contactMsg.message}"</p>
+                            </div>
+                            <p style="color: #475569; font-size: 14px; line-height: 1.7;">
+                                If you need further assistance, please don't hesitate to reach out again.
+                            </p>
+                        </div>
+                        <div style="background: #f8fafc; padding: 20px 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; text-align: center;">
+                            <p style="color: #94a3b8; font-size: 12px; margin: 0;">Warm regards,<br/><strong style="color: #29a08e;">Naya Awasar Team</strong></p>
+                        </div>
+                    </div>
+                `
+            });
+        } catch (mailErr) {
+            console.error('Reply email send failed:', mailErr);
+            emailWarning = 'Reply saved, but email delivery failed. Please verify EMAIL_USER/EMAIL_PASS (Gmail App Password) and retry if needed.';
+        }
+
         const populated = await ContactMessage.findById(contactMsg._id)
             .populate('repliedBy', 'fullName')
             .lean();
 
-        res.json({ success: true, message: 'Reply sent successfully.', contact: populated });
+        res.json({
+            success: true,
+            message: emailWarning ? 'Reply saved with email delivery warning.' : 'Reply sent successfully.',
+            contact: populated,
+            emailWarning
+        });
 
     } catch (error) {
         console.error('Reply error:', error);
-        if (error.code === 'EAUTH' || error.code === 'ECONNREFUSED') {
-            return res.status(502).json({ success: false, message: 'Email service error. Please check email configuration.' });
-        }
-        if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKET') {
-            return res.status(504).json({ success: false, message: 'Email service timeout. Please try again.' });
-        }
         res.status(500).json({ success: false, message: 'Failed to send reply. Please try again.' });
     }
 };

@@ -83,7 +83,11 @@ const AdminContactMessages = () => {
         setReplying(true);
         try {
             const res = await api.post(`/contact/${selectedMessage._id}/reply`, { reply: replyText }, { timeout: 20000 });
-            toast.success('Reply sent successfully!');
+            if (res.data?.emailWarning) {
+                toast.error(res.data.emailWarning);
+            } else {
+                toast.success('Reply sent successfully!');
+            }
             setMessages(prev => prev.map(m => m._id === selectedMessage._id ? res.data.contact : m));
             setShowReplyModal(false);
             setReplyText('');
