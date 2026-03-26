@@ -70,10 +70,13 @@ const allowedOriginRegex = parseCsv(process.env.CORS_ORIGIN_REGEX)
 
 const corsOptions = {
     origin: function (origin, callback) {
+        const isVercelDomain =
+            typeof origin === 'string' &&
+            /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i.test(origin);
         const isAllowedByRegex =
             typeof origin === 'string' && allowedOriginRegex.some((re) => re.test(origin));
 
-        if (!origin || allowedOrigins.has(origin) || isAllowedByRegex) {
+        if (!origin || allowedOrigins.has(origin) || isVercelDomain || isAllowedByRegex) {
             callback(null, true);
         } else {
             callback(new Error(`CORS not allowed for origin: ${origin}`));
