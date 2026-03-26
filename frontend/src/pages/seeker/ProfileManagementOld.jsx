@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { API_BASE_URL } from '../../config/api';
 
 const ProfileManagement = () => {
     const { user: authUser } = useAuth();
@@ -169,7 +170,7 @@ const ProfileManagement = () => {
                             </div>
                             <div className="w-9 h-9 rounded-full border border-slate-100 shadow-sm overflow-hidden bg-slate-50 ring-2 ring-blue-500/10">
                                 {profile?.profileImage ? (
-                                    <img src={`${import.meta.env.VITE_API_URL}${profile.profileImage}`} className="w-full h-full object-cover" alt="" />
+                                    <img src={`${API_BASE_URL}${profile.profileImage}`} className="w-full h-full object-cover" alt="" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white font-black text-xs">
                                         {profile?.fullName?.charAt(0) || 'U'}
@@ -496,7 +497,7 @@ const ProfileManagement = () => {
 
                                         {profile.resume_url ? (
                                             <button
-                                                onClick={() => window.open(`${import.meta.env.VITE_API_URL}${profile.resume_url}`)}
+                                                onClick={() => window.open(`${API_BASE_URL}${profile.resume_url}`)}
                                                 className="w-full py-3.5 px-4 bg-white border border-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 transition-all border-slate-100 shadow-sm"
                                             >
                                                 <FileText className="w-3.5 h-3.5" />

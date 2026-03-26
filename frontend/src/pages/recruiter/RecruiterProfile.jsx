@@ -5,6 +5,7 @@ import api from '../../services/api';
 import { Mail, MapPin, Phone, Building, Calendar, User, CheckCircle, Shield, Edit3, Lock } from 'lucide-react';
 import EditProfileModal from '../../components/profile/EditProfileModal';
 import ChangePasswordModal from '../../components/profile/ChangePasswordModal';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 const RecruiterProfile = () => {
     const { user: authUser } = useAuth();
@@ -43,8 +44,7 @@ const RecruiterProfile = () => {
 
     const getImageUrl = (path) => {
         if (!path) return null;
-        if (path.startsWith('http')) return path;
-        return `${import.meta.env.VITE_API_URL}${path}`;
+        return resolveAssetUrl(path);
     };
 
     if (loading) return (

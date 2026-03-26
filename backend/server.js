@@ -44,15 +44,36 @@ const app = express();
 const PORT = process.env.PORT || 5001; // Matches the .env PORT prefernece
 
 // Middleware
-const allowedOrigins = [
+const parseCsv = (value) =>
+    String(value || '')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
+
+const allowedOrigins = new Set([
     'http://localhost:5173',
-    process.env.FRONTEND_URL,
-].filter(Boolean);
+    'http://127.0.0.1:5173',
+    ...parseCsv(process.env.FRONTEND_URL),
+    ...parseCsv(process.env.FRONTEND_URLS),
+]);
+
+const allowedOriginRegex = parseCsv(process.env.CORS_ORIGIN_REGEX)
+    .map((pattern) => {
+        try {
+            return new RegExp(pattern);
+        } catch {
+            console.warn(`Invalid CORS_ORIGIN_REGEX pattern ignored: ${pattern}`);
+            return null;
+        }
+    })
+    .filter(Boolean);
 
 const corsOptions = {
     origin: function (origin, callback) {
-        const isVercelPreview = typeof origin === 'string' && origin.endsWith('.vercel.app');
-        if (!origin || allowedOrigins.includes(origin) || isVercelPreview) {
+        const isAllowedByRegex =
+            typeof origin === 'string' && allowedOriginRegex.some((re) => re.test(origin));
+
+        if (!origin || allowedOrigins.has(origin) || isAllowedByRegex) {
             callback(null, true);
         } else {
             callback(new Error(`CORS not allowed for origin: ${origin}`));

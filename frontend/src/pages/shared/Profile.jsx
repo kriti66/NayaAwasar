@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import DashboardNavbar from '../../components/dashboard/DashboardNavbar';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
+import { resolveAssetUrl } from '../../utils/assetUrl';
 
 const Profile = () => {
     const { user, refreshUser } = useAuth();
@@ -124,7 +125,7 @@ const Profile = () => {
                     </div>
                     <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white shadow-sm overflow-hidden">
-                            {profile.profileImage && <img src={profile.profileImage.startsWith('http') ? profile.profileImage : `${import.meta.env.VITE_API_URL}${profile.profileImage}`} className="w-full h-full object-cover" />}
+                            {profile.profileImage && <img src={resolveAssetUrl(profile.profileImage)} className="w-full h-full object-cover" />}
                         </div>
                     </div>
                 </header>
