@@ -7,6 +7,10 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { autoRegenerateCV } from '../controllers/cvController.js';
 import { logActivity } from '../utils/activityLogger.js';
+import {
+    computeSeekerProfileMetrics,
+    syncSeekerProfileScoresToUser
+} from '../utils/seekerProfileScoring.js';
 
 const router = express.Router();
 
@@ -38,29 +42,18 @@ const upload = multer({
     }
 });
 
-// Helper: Calculate Completion %
-const calculateCompletion = (user) => {
-    let score = 0;
-    if (user.fullName) score += 10;
-    if (user.email) score += 10;
-    if (user.phoneNumber) score += 10;
-    if (user.location) score += 10;
-    if (user.bio) score += 10;
-    if (user.profileImage) score += 10;
-    if (user.professionalHeadline) score += 10;
-    if (user.linkedinUrl || user.portfolioUrl) score += 10;
-    if (user.workExperience && user.workExperience.length > 0) score += 10;
-    if (user.education && user.education.length > 0) score += 10;
-
-    return Math.min(score, 100);
-};
-
 // 1. GET PROFILE (GET /profile)
 router.get('/profile', async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select('-password');
+        const user = await User.findById(req.user.id).select('-password').lean();
         if (!user) return res.status(404).json({ message: 'User not found' });
-        res.json(user);
+        const metrics = computeSeekerProfileMetrics(user);
+        res.json({
+            ...user,
+            profileCompletion: metrics.profileCompletionPercent,
+            profileStrength: metrics.overallStrength,
+            profileMetrics: metrics
+        });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -95,15 +88,13 @@ router.put('/profile', async (req, res) => {
         }
         if (skills !== undefined) user.skills = skills;
 
-        // Recalculate completion
-        user.profileCompletion = calculateCompletion(user);
+        syncSeekerProfileScoresToUser(user);
 
         // Auto-Verify logic (Example: 80% completion = Verified)
         if (user.profileCompletion >= 80 && user.profileStatus === 'Pending') {
             user.profileStatus = 'Verified';
         }
 
-        await user.save();
         await user.save();
 
         // Log profile update activity
@@ -114,7 +105,14 @@ router.put('/profile', async (req, res) => {
             { userId: user._id }
         );
 
-        res.json({ success: true, user });
+        const metrics = computeSeekerProfileMetrics(user.toObject());
+        res.json({
+            success: true,
+            user: {
+                ...user.toObject(),
+                profileMetrics: metrics
+            }
+        });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -148,7 +146,7 @@ router.patch('/upload-profile-image', (req, res, next) => {
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         user.profileImage = avatarUrl;
-        user.profileCompletion = calculateCompletion(user);
+        syncSeekerProfileScoresToUser(user);
 
         await user.save();
 
@@ -180,6 +178,13 @@ router.put('/change-password', async (req, res) => {
 
     if (!currentPassword || !newPassword) {
         return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
+    if (!strongPasswordRegex.test(newPassword)) {
+        return res.status(400).json({
+            message: 'New password must be at least 8 characters and include uppercase, lowercase, number, and special character'
+        });
     }
 
     try {

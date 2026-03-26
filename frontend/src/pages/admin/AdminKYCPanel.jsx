@@ -67,12 +67,11 @@ function getProofCardsByRole(kyc) {
 
     if (role === 'recruiter') {
         return [
-            { label: 'ID Front', path: kyc.documentFront || kyc.idFront || kyc.idFrontUrl },
-            { label: 'ID Back', path: kyc.documentBack || kyc.idBack || kyc.idBackUrl },
+            { label: 'ID Front', path: kyc.idFrontUrl || kyc.idFront || kyc.documentFront },
+            { label: 'ID Back', path: kyc.idBackUrl || kyc.idBack || kyc.documentBack },
             { label: 'Company Reg', path: kyc.registrationDocument || kyc.registrationDocUrl },
             { label: 'Tax Doc', path: kyc.taxDocument || kyc.taxDocUrl },
-            { label: 'Company Logo', path: kyc.companyLogo },
-            { label: 'Selfie', path: kyc.selfieWithId || kyc.selfie }
+            { label: 'Company Logo', path: kyc.companyLogo }
         ];
     }
 
@@ -80,6 +79,28 @@ function getProofCardsByRole(kyc) {
         { label: 'ID Front', path: kyc.documentFront || kyc.idFront },
         { label: 'ID Back', path: kyc.documentBack || kyc.idBack },
         { label: 'Selfie', path: kyc.selfieWithId || kyc.selfie }
+    ];
+}
+
+function getIdentityDetailsByRole(kyc) {
+    if (kyc?.role === 'recruiter') {
+        return [
+            { label: 'Type', value: kyc.idType || '—' },
+            { label: 'ID Number', value: kyc.idNumber || '—' },
+            { label: 'Job Title', value: kyc.jobTitle || '—' },
+            { label: 'Official Email', value: kyc.officialEmail || kyc.email || '—' },
+            { label: 'Phone', value: kyc.phoneNumber || '—' }
+        ];
+    }
+
+    return [
+        { label: 'Type', value: kyc?.idType || '—' },
+        { label: 'ID Number', value: kyc?.idNumber || '—' },
+        {
+            label: 'DOB',
+            value: kyc?.dateOfBirth ? new Date(kyc.dateOfBirth).toLocaleDateString() : '—'
+        },
+        { label: 'Nationality', value: kyc?.nationality || '—' }
     ];
 }
 
@@ -312,12 +333,7 @@ const AdminKYCPanel = () => {
                                                 Identity Details
                                             </h3>
                                             <div className="grid grid-cols-2 gap-4">
-                                                {[
-                                                    { label: 'Type', value: selectedKYC.idType },
-                                                    { label: 'ID Number', value: selectedKYC.idNumber },
-                                                    { label: 'DOB', value: selectedKYC.dateOfBirth ? new Date(selectedKYC.dateOfBirth).toLocaleDateString() : '—' },
-                                                    { label: 'Nationality', value: selectedKYC.nationality || '—' }
-                                                ].map((item, i) => (
+                                                {getIdentityDetailsByRole(selectedKYC).map((item, i) => (
                                                     <div key={i} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
                                                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">{item.label}</p>
                                                         <p className="text-sm font-semibold text-gray-900">{item.value}</p>
@@ -335,16 +351,26 @@ const AdminKYCPanel = () => {
                                                 <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100 space-y-3">
                                                     <div>
                                                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company Name</p>
-                                                        <p className="text-sm font-semibold text-gray-900">{selectedKYC.companyName}</p>
+                                                        <p className="text-sm font-semibold text-gray-900">{selectedKYC.companyName || '—'}</p>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <div>
                                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Reg No</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.registrationNumber}</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.registrationNumber || '—'}</p>
                                                         </div>
                                                         <div>
                                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Industry</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.industry}</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.industry || '—'}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div>
+                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Address</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.companyAddress || '—'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Website</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.website || '—'}</p>
                                                         </div>
                                                     </div>
                                                 </div>

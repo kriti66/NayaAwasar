@@ -1,8 +1,14 @@
 import React from 'react';
 import { CheckCircle2, Circle } from 'lucide-react';
+import {
+    getNormalizedSkills,
+    countMeaningfulWorkExperience,
+    countMeaningfulEducation
+} from '../../utils/seekerProfileDisplay';
 
 const ProfileStrengthCard = ({ profile }) => {
-    const completion = profile?.profileStrength || 0;
+    const completion =
+        typeof profile?.profileStrength === 'number' ? profile.profileStrength : 0;
 
     // Determine strength level
     let strength = 'Weak';
@@ -15,11 +21,15 @@ const ProfileStrengthCard = ({ profile }) => {
         strengthColor = 'text-yellow-500';
     }
 
+    const skillList = getNormalizedSkills(profile?.skills);
+    const meaningfulExp = countMeaningfulWorkExperience(profile?.workExperience);
+    const meaningfulEdu = countMeaningfulEducation(profile?.education);
+
     const checklist = [
         { id: 'bio', label: 'Complete professional summary', done: profile?.bio && profile?.bio.length > 20 },
-        { id: 'skills', label: 'Add core skills (min 5)', done: profile?.skills && (Array.isArray(profile.skills) ? profile.skills.length : profile.skills.split(',').length) >= 5 },
-        { id: 'experience', label: 'Add work experience', done: profile?.workExperience?.length > 0 },
-        { id: 'education', label: 'Add education', done: profile?.education?.length > 0 },
+        { id: 'skills', label: 'Add core skills (min 5)', done: skillList.length >= 5 },
+        { id: 'experience', label: 'Add work experience', done: meaningfulExp > 0 },
+        { id: 'education', label: 'Add education', done: meaningfulEdu > 0 },
         { id: 'projects', label: 'Add projects (min 2)', done: profile?.projects?.length >= 2 },
         { id: 'resume', label: 'Upload resume/CV', done: !!((profile?.resume && profile?.resume?.fileUrl) || profile?.resume_url) },
     ];

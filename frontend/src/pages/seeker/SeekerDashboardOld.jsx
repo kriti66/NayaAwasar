@@ -8,7 +8,13 @@ import { resolveAssetUrl } from '../../utils/assetUrl';
 
 const SeekerDashboard = () => {
     const { user } = useAuth();
-    const [stats, setStats] = useState({ applied: 12, saved: 5, recommended: 3, interviews: 1 });
+    const [stats, setStats] = useState({
+        applied: 0,
+        saved: 0,
+        recommended: 0,
+        interviews: 0,
+        profileMetrics: null
+    });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -16,10 +22,11 @@ const SeekerDashboard = () => {
             try {
                 const res = await api.get('/dashboard/seeker/stats');
                 setStats({
-                    applied: res.data.applied || 12,
-                    saved: res.data.saved || 5,
-                    recommended: 3,
-                    interviews: res.data.interviews || 1
+                    applied: res.data.applied ?? 0,
+                    saved: res.data.saved ?? 0,
+                    recommended: 0,
+                    interviews: res.data.interviews ?? 0,
+                    profileMetrics: res.data.profileMetrics ?? null
                 });
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
@@ -30,6 +37,13 @@ const SeekerDashboard = () => {
 
         fetchDashboardData();
     }, []);
+
+    const discoveryScore =
+        typeof stats.profileMetrics?.profileCompletionPercent === 'number'
+            ? stats.profileMetrics.profileCompletionPercent
+            : typeof user?.profileCompletion === 'number'
+              ? user.profileCompletion
+              : 0;
 
     // Get current time comparison (mock for display)
     const getTimeStamp = (minutes = 15) => `${minutes} mins ago`;
@@ -99,11 +113,11 @@ const SeekerDashboard = () => {
                                 </div>
                                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Discovery Score</h3>
                                 <div className="flex items-center justify-between mb-4">
-                                    <span className="text-4xl font-black text-slate-900 tracking-tighter">{user?.profileCompletion || 75}%</span>
+                                    <span className="text-4xl font-black text-slate-900 tracking-tighter">{discoveryScore}%</span>
                                     <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
                                 </div>
                                 <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden mb-6">
-                                    <div className="h-full bg-blue-600 rounded-full transition-all duration-1000 ease-out" style={{ width: `${user?.profileCompletion || 75}%` }}></div>
+                                    <div className="h-full bg-blue-600 rounded-full transition-all duration-1000 ease-out" style={{ width: `${discoveryScore}%` }}></div>
                                 </div>
                                 <p className="text-[11px] font-semibold text-slate-500 leading-normal">
                                     High score profiles are 5x more likely to be contacted by <span className="text-slate-900 font-bold">Premium Recruiters</span>.

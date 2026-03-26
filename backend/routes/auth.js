@@ -8,6 +8,7 @@ import sendEmail from '../utils/sendEmail.js';
 import { requireAuth, getJwtSecret } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { sendOtp, verifyOtp, resetPassword, googleLogin, facebookLogin } from '../controllers/authController.js';
+import { syncSeekerProfileScoresToUser } from '../utils/seekerProfileScoring.js';
 
 const router = express.Router();
 
@@ -46,10 +47,10 @@ router.post('/register', async (req, res) => {
             email: email.toLowerCase().trim(),
             password: hashedPassword,
             role: normalizeRole(role),
-            kycStatus: 'not_submitted',
-            profileCompletion: 20
+            kycStatus: 'not_submitted'
         });
 
+        syncSeekerProfileScoresToUser(user);
         await user.save();
 
         // Log registration activity

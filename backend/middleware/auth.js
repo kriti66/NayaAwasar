@@ -29,11 +29,27 @@ export const requireAuth = (req, res, next) => {
  * B) requireAdmin: Uses requireAuth (must be applied after requireAuth).
  * Checks req.user.role === 'admin'; returns 403 if not admin.
  */
-export const requireAdmin = (req, res, next) => {
-    if (req.user?.role !== 'admin') {
+export const requireAdmin = async (req, res, next) => {
+    try {
+        // Fast-path when token already has admin role
+        if (req.user?.role === 'admin') {
+            return next();
+        }
+
+        // Fallback: trust latest DB role in case JWT role is stale
+        if (req.user?.id) {
+            const user = await User.findById(req.user.id).select('role').lean();
+            if (user?.role === 'admin') {
+                req.user.role = 'admin';
+                return next();
+            }
+        }
+
         return res.status(403).json({ message: 'Forbidden: Admin access required' });
+    } catch (error) {
+        console.error('requireAdmin error:', error);
+        return res.status(500).json({ message: 'Error validating admin access' });
     }
-    next();
 };
 
 /**

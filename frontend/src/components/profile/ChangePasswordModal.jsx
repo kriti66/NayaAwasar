@@ -18,6 +18,15 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
 
+    const isStrongPassword = (value) => {
+        if (!value || value.length < 8) return false;
+        const hasUpper = /[A-Z]/.test(value);
+        const hasLower = /[a-z]/.test(value);
+        const hasNumber = /\d/.test(value);
+        const hasSpecial = /[^A-Za-z0-9]/.test(value);
+        return hasUpper && hasLower && hasNumber && hasSpecial;
+    };
+
     if (!isOpen) return null;
 
     const handleChange = (e) => {
@@ -38,8 +47,8 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
             return;
         }
 
-        if (formData.newPassword.length < 8) {
-            setError("New password must be at least 8 characters long");
+        if (!isStrongPassword(formData.newPassword)) {
+            setError('New password must be at least 8 characters and include uppercase, lowercase, number, and special character');
             return;
         }
 

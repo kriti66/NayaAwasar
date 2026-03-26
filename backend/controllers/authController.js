@@ -5,7 +5,10 @@ import { OAuth2Client } from 'google-auth-library';
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../middleware/auth.js';
-import { logActivity } from '../utils/activityLogger.js';// Generate a secure 6-digit OTP
+import { logActivity } from '../utils/activityLogger.js';
+import { syncSeekerProfileScoresToUser } from '../utils/seekerProfileScoring.js';
+
+// Generate a secure 6-digit OTP
 const generateOTP = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
 };
@@ -181,10 +184,10 @@ export const googleLogin = async (req, res) => {
                 providerId: sub,
                 role: 'jobseeker',
                 kycStatus: 'not_submitted',
-                profileCompletion: 20,
                 profileImage: picture || '',
                 isVerified: true
             });
+            syncSeekerProfileScoresToUser(user);
             await user.save();
 
             await logActivity(
@@ -260,10 +263,10 @@ export const facebookLogin = async (req, res) => {
                 providerId: id,
                 role: 'jobseeker',
                 kycStatus: 'not_submitted',
-                profileCompletion: 20,
                 profileImage: picture || '',
                 isVerified: true
             });
+            syncSeekerProfileScoresToUser(user);
             await user.save();
 
             await logActivity(

@@ -1,6 +1,12 @@
 import api from './api';
 
 const profileService = {
+    /** Job seeker User document from /api/users/profile (completion & strength from server) */
+    getProfile: async () => {
+        const response = await api.get('/users/profile');
+        return response.data;
+    },
+
     // Get full profile with computed strength
     getMyProfile: async () => {
         const response = await api.get('/profile/me');

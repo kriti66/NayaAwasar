@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LogOut, Menu, X, LayoutDashboard, Users, Building2, Briefcase, Megaphone, ShieldCheck, MessageSquare, MapPin, CreditCard } from 'lucide-react';
+import { LogOut, Menu, X, LayoutDashboard, Users, Building2, Briefcase, Megaphone, ShieldCheck, MessageSquare, MapPin, CreditCard, Lock } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import NotificationBell from '../notifications/NotificationBell';
 import NotificationDropdown from '../notifications/NotificationDropdown';
 import { resolveAssetUrl } from '../../utils/assetUrl';
+import ChangePasswordModal from '../profile/ChangePasswordModal';
 
 const mobileNavItems = [
     { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
@@ -29,6 +30,7 @@ const AdminTopbar = () => {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
     const { notifications, unreadCount, loading, fetchNotifications, markRead, markAllRead } = useNotifications(!!user);
 
     useEffect(() => {
@@ -131,6 +133,17 @@ const AdminTopbar = () => {
                                     <p className="text-xs text-slate-500 mt-0.5">{user?.email}</p>
                                 </div>
                                 <button
+                                    onClick={() => {
+                                        setIsDropdownOpen(false);
+                                        setIsChangePasswordOpen(true);
+                                    }}
+                                    className="w-full px-4 py-2.5 flex items-center gap-2 text-slate-700 hover:bg-slate-50 text-sm font-medium"
+                                >
+                                    <Lock size={16} />
+                                    Change Password
+                                </button>
+                                <div className="my-1 border-t border-slate-100" />
+                                <button
                                     onClick={handleLogout}
                                     className="w-full px-4 py-2.5 flex items-center gap-2 text-red-600 hover:bg-red-50 text-sm font-medium"
                                 >
@@ -170,6 +183,10 @@ const AdminTopbar = () => {
                     </nav>
                 </div>
             )}
+            <ChangePasswordModal
+                isOpen={isChangePasswordOpen}
+                onClose={() => setIsChangePasswordOpen(false)}
+            />
         </>
     );
 };

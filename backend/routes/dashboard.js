@@ -7,9 +7,51 @@ import Activity from '../models/Activity.js';
 import { getValidSavedJobIds } from '../utils/savedJobsUtils.js';
 import KYC from '../models/KYC.js';
 import Company from '../models/Company.js';
+import Profile from '../models/Profile.js';
 import { calculateRecruiterStrength } from '../utils/recruiterStrength.js';
+import {
+    computeSeekerProfileMetrics,
+    getNormalizedSkills
+} from '../utils/seekerProfileScoring.js';
 
 const router = express.Router();
+
+const mergeSeekerDataForScoring = (user, profile) => {
+    const expFromProfile = Array.isArray(profile?.experience)
+        ? profile.experience.map((e) => ({
+            title: e?.role || '',
+            company: e?.company || '',
+            duration:
+                e?.startDate || e?.endDate
+                    ? `${e?.startDate || ''} ${e?.endDate || ''}`.trim()
+                    : '',
+            description: e?.description || ''
+        }))
+        : [];
+
+    const eduFromProfile = Array.isArray(profile?.education)
+        ? profile.education.map((e) => ({
+            degree: e?.degree || '',
+            institution: e?.institute || '',
+            year: e?.endYear || e?.startYear || ''
+        }))
+        : [];
+
+    return {
+        ...user,
+        bio: user?.bio || profile?.summary || '',
+        professionalHeadline: user?.professionalHeadline || profile?.headline || '',
+        location: user?.location || profile?.location || '',
+        skills: Array.isArray(profile?.skills) && profile.skills.length ? profile.skills : user?.skills,
+        workExperience: expFromProfile.length ? expFromProfile : user?.workExperience,
+        education: eduFromProfile.length ? eduFromProfile : user?.education,
+        resume: profile?.resume?.fileUrl ? profile.resume : user?.resume,
+        jobPreferences:
+            profile?.jobPreferences && Object.keys(profile.jobPreferences).length
+                ? profile.jobPreferences
+                : user?.jobPreferences
+    };
+};
 
 router.get('/', async (req, res) => {
     const userId = req.user?.id;
@@ -19,7 +61,20 @@ router.get('/', async (req, res) => {
 
     try {
         if (role === 'jobseeker' || role === 'job_seeker') {
-            const user = await User.findById(userId).select('fullName profileCompletion kycStatus kycRejectionReason resume_url skills savedJobs professionalHeadline jobPreferences location');
+            const [user, profile] = await Promise.all([
+                User.findById(userId)
+                    .select(
+                        'fullName email phoneNumber profileCompletion profileStrength kycStatus kycRejectionReason resume_url skills savedJobs professionalHeadline jobPreferences location bio profileImage linkedinUrl portfolioUrl workExperience education resume isKycVerified'
+                    )
+                    .lean(),
+                Profile.findOne({ userId })
+                    .select('headline summary location skills experience education jobPreferences resume')
+                    .lean()
+            ]);
+
+            if (!user) {
+                return res.status(404).json({ message: 'User not found' });
+            }
 
             // Stats
             const [appliedCount, inReviewCount, interviewCount, offerCount, validSavedIds] = await Promise.all([
@@ -118,12 +173,11 @@ router.get('/', async (req, res) => {
             // Recommended Jobs
             // Simple algo: Match title or description with user skills
             let recommendedJobs = [];
-            if (user.skills && user.skills.length > 0) {
-                // Determine skills array (handle current string vs array inconsistency in DB vs app)
-                const skillsArray = Array.isArray(user.skills) ? user.skills : user.skills.split(',');
-
-                const regexConditions = skillsArray.map(skill => ({
-                    title: { $regex: skill.trim(), $options: 'i' }
+            const mergedProfileSource = mergeSeekerDataForScoring(user, profile);
+            const normalizedSkills = getNormalizedSkills(mergedProfileSource.skills);
+            if (normalizedSkills.length > 0) {
+                const regexConditions = normalizedSkills.map((skill) => ({
+                    title: { $regex: skill, $options: 'i' }
                 }));
 
                 // Also match location preference if set
@@ -132,7 +186,7 @@ router.get('/', async (req, res) => {
                     $or: regexConditions
                 };
 
-                if (user.jobPreferences?.location) {
+                if (mergedProfileSource.jobPreferences?.location || mergedProfileSource.jobPreferences?.preferredLocation) {
                     // Optional: boost or filter by location
                     // For now, let's just use skills matching for wider results
                 }
@@ -153,17 +207,17 @@ router.get('/', async (req, res) => {
 
             // Recommended Actions
             const actions = [];
-            if (user.kycStatus === 'not_submitted') {
+            if (mergedProfileSource.kycStatus === 'not_submitted') {
                 actions.push({ id: 'kyc', title: 'Complete your KYC verification', urgency: 'high', type: 'kyc' });
-            } else if (user.kycStatus === 'rejected') {
+            } else if (mergedProfileSource.kycStatus === 'rejected') {
                 actions.push({ id: 'kyc_retry', title: 'Re-submit KYC (Previous attempt rejected)', urgency: 'high', type: 'kyc' });
             }
 
-            if (!user.resume_url && (!user.resume || !user.resume.fileUrl)) {
+            if (!mergedProfileSource.resume_url && (!mergedProfileSource.resume || !mergedProfileSource.resume.fileUrl)) {
                 actions.push({ id: 'resume', title: 'Upload your professional resume', urgency: 'medium', type: 'profile' });
             }
 
-            const skillsCount = Array.isArray(user.skills) ? user.skills.length : (user.skills ? user.skills.split(',').length : 0);
+            const skillsCount = normalizedSkills.length;
             if (skillsCount < 3) {
                 actions.push({ id: 'skills', title: 'Add missing skills to your profile', urgency: 'medium', type: 'profile' });
             }
@@ -172,32 +226,53 @@ router.get('/', async (req, res) => {
                 actions.push({ id: 'interview', title: `Respond to ${interviewCount} interview invitation(s)`, urgency: 'high', type: 'interview' });
             }
 
-            // Profile Strength Breakdown
+            const seekerMetrics = computeSeekerProfileMetrics(mergedProfileSource);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('[Dashboard:/api/dashboard] scoring input', {
+                    userId,
+                    hasProfileDoc: Boolean(profile),
+                    skillsCount: normalizedSkills.length,
+                    workExperienceCount: Array.isArray(mergedProfileSource.workExperience) ? mergedProfileSource.workExperience.length : 0,
+                    educationCount: Array.isArray(mergedProfileSource.education) ? mergedProfileSource.education.length : 0,
+                    hasResume: Boolean(mergedProfileSource.resume?.fileUrl || mergedProfileSource.resume_url),
+                    kycStatus: mergedProfileSource.kycStatus
+                });
+                console.log('[Dashboard:/api/dashboard] scoring output', seekerMetrics);
+            }
+
+            // Profile Strength Breakdown (all derived from this user's stored data)
             const profileStrength = {
-                score: user.profileStrength || 0, // Utilize the pre-calculated strength field
-                completeness: user.profileCompletion || 0,
-                resumeQuality: (user.resume && user.resume.fileUrl) ? 70 : 0, // Mock logic or use real
-                skillsMatch: Math.min(skillsCount * 15, 100),
-                label: user.profileStrength > 70 ? 'Excellent' : (user.profileStrength > 40 ? 'Good' : 'Weak')
+                score: seekerMetrics.overallStrength,
+                completeness: seekerMetrics.profileCompletionPercent,
+                resumeQuality: seekerMetrics.resumeQualityPercent,
+                skillsMatch: seekerMetrics.skillsPercent,
+                activityLevel: Math.min(100, recentActivity.length * 20),
+                label:
+                    seekerMetrics.overallStrength >= 80
+                        ? 'Excellent'
+                        : seekerMetrics.overallStrength >= 40
+                          ? 'Good'
+                          : 'Weak'
             };
 
             res.json({
                 user: {
-                    fullName: user.fullName,
-                    profileCompletion: user.profileCompletion,
-                    kycStatus: user.kycStatus,
-                    professionalHeadline: user.professionalHeadline,
-                    location: user.location,
+                    fullName: mergedProfileSource.fullName,
+                    profileCompletion: seekerMetrics.profileCompletionPercent,
+                    kycStatus: mergedProfileSource.kycStatus,
+                    professionalHeadline: mergedProfileSource.professionalHeadline,
+                    location: mergedProfileSource.location,
                     isOpenToWork: true // Placeholder or field from DB
                 },
                 stats: {
-                    discoveryScore: 20, // Placeholder
+                    discoveryScore: seekerMetrics.profileCompletionPercent,
                     activeApplications: appliedCount,
                     profileViews: profileViews,
                     interviews: interviewCount,
                     saved: savedCount
                 },
                 profileStrength,
+                profileMetrics: seekerMetrics,
                 recommendedActions: actions,
                 applicationPipeline: {
                     inReview: inReviewCount,
@@ -223,7 +298,7 @@ router.get('/seeker/stats', async (req, res) => {
     if (!seekerId) return res.status(401).json({ message: 'Unauthorized' });
 
     try {
-        const [appliedCount, interviewCount, validSavedIds, profileViews] = await Promise.all([
+        const [appliedCount, interviewCount, validSavedIds, profileViews, seekerUser, seekerProfile] = await Promise.all([
             Application.countDocuments({ seeker_id: seekerId }),
             Application.countDocuments({ seeker_id: seekerId, status: 'interview' }),
             getValidSavedJobIds(seekerId),
@@ -233,14 +308,38 @@ router.get('/seeker/stats', async (req, res) => {
                 userId: seekerId,
                 type: 'RECRUITER_VIEW',
                 'meta.recruiterId': { $ne: seekerId }
-            })
+            }),
+            User.findById(seekerId)
+                .select(
+                    'fullName email phoneNumber location bio profileImage professionalHeadline linkedinUrl portfolioUrl skills workExperience education resume resume_url kycStatus isKycVerified'
+                )
+                .lean(),
+            Profile.findOne({ userId: seekerId })
+                .select('headline summary location skills experience education jobPreferences resume')
+                .lean()
         ]);
+
+        const mergedProfileSource = mergeSeekerDataForScoring(seekerUser || {}, seekerProfile || {});
+        const profileMetrics = computeSeekerProfileMetrics(mergedProfileSource);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[Dashboard:/api/dashboard/seeker/stats] scoring input', {
+                userId: seekerId,
+                hasProfileDoc: Boolean(seekerProfile),
+                skillsCount: getNormalizedSkills(mergedProfileSource.skills).length,
+                workExperienceCount: Array.isArray(mergedProfileSource.workExperience) ? mergedProfileSource.workExperience.length : 0,
+                educationCount: Array.isArray(mergedProfileSource.education) ? mergedProfileSource.education.length : 0,
+                hasResume: Boolean(mergedProfileSource.resume?.fileUrl || mergedProfileSource.resume_url),
+                kycStatus: mergedProfileSource.kycStatus
+            });
+            console.log('[Dashboard:/api/dashboard/seeker/stats] scoring output', profileMetrics);
+        }
 
         res.json({
             applied: appliedCount,
             saved: validSavedIds?.length || 0,
             interviews: interviewCount,
-            profileViews: profileViews || 0
+            profileViews: profileViews || 0,
+            profileMetrics
         });
     } catch (error) {
         console.error("Seeker stats error:", error);

@@ -34,7 +34,13 @@ import {
 const SeekerDashboard = () => {
     const { user } = useAuth();
     const { savedJobIds, setSavedJobIds, toggleSaveJob } = useJobSaver();
-    const [stats, setStats] = useState({ applied: 0, saved: 0, interviews: 0, profileViews: 0 });
+    const [stats, setStats] = useState({
+        applied: 0,
+        saved: 0,
+        interviews: 0,
+        profileViews: 0,
+        profileMetrics: null
+    });
     const [appliedJobIds, setAppliedJobIds] = useState([]);
     const [upcomingInterviews, setUpcomingInterviews] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -45,11 +51,17 @@ const SeekerDashboard = () => {
         try {
             setLoading(true);
             const [statsRes, savedRes, appsRes, interviewsRes] = await Promise.all([
-                api.get('/dashboard/seeker/stats').catch(() => ({ data: { applied: 0, saved: 0, interviews: 0, profileViews: 0 } })),
+                api.get('/dashboard/seeker/stats').catch(() => ({
+                    data: { applied: 0, saved: 0, interviews: 0, profileViews: 0, profileMetrics: null }
+                })),
                 api.get('/jobs/saved').catch(() => ({ data: { savedJobIds: [], jobs: [] } })),
                 api.get('/applications/my').catch(() => ({ data: [] })),
                 api.get('/applications/my-interviews').catch(() => ({ data: [] }))
             ]);
+
+            if (import.meta.env?.DEV) {
+                console.log('[SeekerDashboard] /dashboard/seeker/stats response:', statsRes.data);
+            }
 
             setStats(statsRes.data);
             const validSavedIds = savedRes.data?.savedJobIds || [];
@@ -80,7 +92,7 @@ const SeekerDashboard = () => {
 
     useEffect(() => {
         fetchDashboardData();
-    }, [setSavedJobIds]);
+    }, [setSavedJobIds, user?.kycStatus]);
 
 
     const getGreeting = () => {
@@ -89,6 +101,38 @@ const SeekerDashboard = () => {
         if (hour < 17) return 'Good afternoon';
         return 'Good evening';
     };
+
+    const pm = stats.profileMetrics || {};
+    const overallStrength = typeof pm.overallStrength === 'number' ? pm.overallStrength : 0;
+    const profileCompletionPct =
+        typeof pm.profileCompletionPercent === 'number' ? pm.profileCompletionPercent : 0;
+    const skillsPct = typeof pm.skillsPercent === 'number' ? pm.skillsPercent : 0;
+    const workExperiencePct =
+        typeof pm.workExperiencePercent === 'number' ? pm.workExperiencePercent : 0;
+    const discoveryScore =
+        typeof pm.overallStrength === 'number'
+            ? pm.overallStrength
+            : profileCompletionPct;
+
+    const profileStrengthRows = [
+        { label: 'Profile Completeness', value: profileCompletionPct },
+        { label: 'Skills', value: skillsPct },
+        { label: 'Work Experience', value: workExperiencePct }
+    ];
+
+    let profileNextStepHint =
+        'Complete your profile details to improve visibility to recruiters.';
+    if (skillsPct === 0) {
+        profileNextStepHint = 'Add skills that match the roles you want.';
+    } else if (workExperiencePct === 0) {
+        profileNextStepHint = 'Add work experience so recruiters can see your background.';
+    } else if (profileCompletionPct < 40) {
+        profileNextStepHint = 'Fill in location, headline, and bio to reach a stronger profile.';
+    } else if (!pm.kycVerified) {
+        profileNextStepHint = 'Complete KYC verification when you are ready to apply to jobs.';
+    } else {
+        profileNextStepHint = 'Keep your resume and profile up to date for the best matches.';
+    }
 
     if (loading) {
         return (
@@ -318,9 +362,9 @@ const SeekerDashboard = () => {
                         <div>
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Discovery Score</p>
                             <div className="flex items-end gap-2">
-                                <h3 className="text-3xl font-extrabold text-gray-900">20%</h3>
+                                <h3 className="text-3xl font-extrabold text-gray-900">{discoveryScore}%</h3>
                                 <span className="text-[#29a08e] text-xs font-bold mb-1 flex items-center gap-0.5">
-                                    <TrendingUp size={12} /> +20%
+                                    <TrendingUp size={12} /> {pm.kycVerified ? 'KYC On' : 'KYC Off'}
                                 </span>
                             </div>
                         </div>
@@ -449,25 +493,21 @@ const SeekerDashboard = () => {
                                     {/* Progress ring */}
                                     <svg className="absolute -inset-1 w-[88px] h-[88px] -rotate-90" viewBox="0 0 88 88">
                                         <circle cx="44" cy="44" r="40" fill="none" stroke="#f1f5f9" strokeWidth="4" />
-                                        <circle cx="44" cy="44" r="40" fill="none" stroke="#29a08e" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${65 * 2.51} ${100 * 2.51}`} />
+                                        <circle cx="44" cy="44" r="40" fill="none" stroke="#29a08e" strokeWidth="4" strokeLinecap="round" strokeDasharray={`${overallStrength * 2.51} ${100 * 2.51}`} />
                                     </svg>
                                 </div>
                             </div>
 
                             <div className="flex items-center justify-between mb-2">
                                 <h3 className="text-sm font-bold text-gray-900">Profile Strength</h3>
-                                <span className="h-8 px-3 rounded-xl bg-[#29a08e]/10 flex items-center text-xs font-bold text-[#29a08e]">65%</span>
+                                <span className="h-8 px-3 rounded-xl bg-[#29a08e]/10 flex items-center text-xs font-bold text-[#29a08e]">{overallStrength}%</span>
                             </div>
                             <p className="text-xs text-gray-400 mb-5 font-medium flex items-center gap-1.5">
                                 <TrendingUp size={12} className="text-[#29a08e]" /> Keep improving your profile
                             </p>
 
                             <div className="space-y-3.5">
-                                {[
-                                    { label: 'Profile Completeness', value: 95 },
-                                    { label: 'Skills', value: 75 },
-                                    { label: 'Work Experience', value: 45 }
-                                ].map((item, index) => (
+                                {profileStrengthRows.map((item, index) => (
                                     <div key={index}>
                                         <div className="flex justify-between text-[10px] font-bold text-gray-500 mb-1.5">
                                             <span>{item.label}</span>
@@ -488,7 +528,7 @@ const SeekerDashboard = () => {
                                     <div className="w-5 h-5 rounded-md bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold">!</div>
                                     <span className="text-xs font-bold text-gray-900">Next Step</span>
                                 </div>
-                                <p className="text-[11px] text-gray-600 font-medium pl-7">Add 2 more skills to reach 90% match rate.</p>
+                                <p className="text-[11px] text-gray-600 font-medium pl-7">{profileNextStepHint}</p>
                             </div>
 
                             <Link
