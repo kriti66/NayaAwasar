@@ -1,31 +1,35 @@
 import nodemailer from 'nodemailer';
 
+const emailPass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : '';
+
+const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: emailPass,
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 20000,
+});
+
 const sendEmail = async (options) => {
     try {
         console.log("📨 Attempting to send email to:", options.to);
 
         // Gmail SMTP configuration using App Password
-        const emailPass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : '';
-
         if (!process.env.EMAIL_USER || !emailPass) {
             throw new Error("Missing EMAIL_USER or EMAIL_PASS in environment variables");
         }
-
-        const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 465,
-            secure: true, // use SSL
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: emailPass,
-            },
-        });
 
         const mailOptions = {
             from: `"Naya Awasar" <${process.env.EMAIL_USER}>`,
             to: options.to,
             subject: options.subject,
-            html: options.text, // Treating text as HTML for formatting
+            html: options.html || options.text,
+            text: options.plainText || (typeof options.text === 'string' ? options.text.replace(/<[^>]*>/g, ' ') : undefined),
         };
 
         const info = await transporter.sendMail(mailOptions);

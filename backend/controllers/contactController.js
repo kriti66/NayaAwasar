@@ -11,11 +11,11 @@ export const submitContactMessage = async (req, res) => {
         const { fullName, email, subject, message } = req.body;
 
         // Validation
-        if (!fullName?.trim()) return res.status(400).json({ message: 'Full name is required.' });
-        if (!email?.trim()) return res.status(400).json({ message: 'Email is required.' });
-        if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ message: 'Please provide a valid email address.' });
-        if (!subject?.trim()) return res.status(400).json({ message: 'Subject is required.' });
-        if (!message?.trim()) return res.status(400).json({ message: 'Message is required.' });
+        if (!fullName?.trim()) return res.status(400).json({ success: false, message: 'Full name is required.' });
+        if (!email?.trim()) return res.status(400).json({ success: false, message: 'Email is required.' });
+        if (!/^\S+@\S+\.\S+$/.test(email)) return res.status(400).json({ success: false, message: 'Please provide a valid email address.' });
+        if (!subject?.trim()) return res.status(400).json({ success: false, message: 'Subject is required.' });
+        if (!message?.trim()) return res.status(400).json({ success: false, message: 'Message is required.' });
 
         // Save the contact message
         const contactMsg = await ContactMessage.create({
@@ -39,7 +39,7 @@ export const submitContactMessage = async (req, res) => {
             await sendEmail({
                 to: email.trim(),
                 subject: `We received your message — ${subject.trim()}`,
-                text: `
+                html: `
                     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0;">
                         <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px 24px; border-radius: 12px 12px 0 0;">
                             <h1 style="color: #29a08e; margin: 0; font-size: 24px;">Naya Awasar</h1>
@@ -67,17 +67,18 @@ export const submitContactMessage = async (req, res) => {
             });
         } catch (emailErr) {
             // Don't fail the submission if confirmation email fails
-            console.error('Failed to send confirmation email:', emailErr.message);
+            console.error('Failed to send confirmation email:', emailErr);
         }
 
         res.status(201).json({
+            success: true,
             message: 'Thank you for contacting us. We have received your message and will get back to you within 24 hours.',
             id: contactMsg._id
         });
 
     } catch (error) {
         console.error('Contact submission error:', error);
-        res.status(500).json({ message: 'Failed to submit your message. Please try again.' });
+        res.status(500).json({ success: false, message: 'Failed to submit your message. Please try again.' });
     }
 };
 
@@ -98,10 +99,10 @@ export const getAllContactMessages = async (req, res) => {
             .populate('repliedBy', 'fullName')
             .lean();
 
-        res.json(messages);
+        res.json({ success: true, data: messages });
     } catch (error) {
         console.error('Fetch contact messages error:', error);
-        res.status(500).json({ message: 'Failed to load contact messages.' });
+        res.status(500).json({ success: false, message: 'Failed to load contact messages.' });
     }
 };
 
@@ -116,13 +117,13 @@ export const getContactMessageById = async (req, res) => {
             .lean();
 
         if (!message) {
-            return res.status(404).json({ message: 'Contact message not found.' });
+            return res.status(404).json({ success: false, message: 'Contact message not found.' });
         }
 
-        res.json(message);
+        res.json({ success: true, data: message });
     } catch (error) {
         console.error('Fetch contact message error:', error);
-        res.status(500).json({ message: 'Failed to load contact message.' });
+        res.status(500).json({ success: false, message: 'Failed to load contact message.' });
     }
 };
 
@@ -134,7 +135,7 @@ export const updateContactStatus = async (req, res) => {
     try {
         const { status } = req.body;
         if (!status || !['NEW', 'READ', 'REPLIED', 'RESOLVED'].includes(status)) {
-            return res.status(400).json({ message: 'Invalid status value.' });
+            return res.status(400).json({ success: false, message: 'Invalid status value.' });
         }
 
         const message = await ContactMessage.findByIdAndUpdate(
@@ -144,13 +145,13 @@ export const updateContactStatus = async (req, res) => {
         );
 
         if (!message) {
-            return res.status(404).json({ message: 'Contact message not found.' });
+            return res.status(404).json({ success: false, message: 'Contact message not found.' });
         }
 
-        res.json({ message: `Status updated to ${status}`, contact: message });
+        res.json({ success: true, message: `Status updated to ${status}`, contact: message });
     } catch (error) {
         console.error('Update status error:', error);
-        res.status(500).json({ message: 'Failed to update status.' });
+        res.status(500).json({ success: false, message: 'Failed to update status.' });
     }
 };
 
@@ -163,19 +164,19 @@ export const replyToContactMessage = async (req, res) => {
         const { reply } = req.body;
 
         if (!reply?.trim()) {
-            return res.status(400).json({ message: 'Reply message cannot be empty.' });
+            return res.status(400).json({ success: false, message: 'Reply message cannot be empty.' });
         }
 
         const contactMsg = await ContactMessage.findById(req.params.id);
         if (!contactMsg) {
-            return res.status(404).json({ message: 'Contact message not found.' });
+            return res.status(404).json({ success: false, message: 'Contact message not found.' });
         }
 
         // Send the reply email to the user
         await sendEmail({
             to: contactMsg.email,
             subject: `Reply: ${contactMsg.subject}`,
-            text: `
+            html: `
                 <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 0;">
                     <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 32px 24px; border-radius: 12px 12px 0 0;">
                         <h1 style="color: #29a08e; margin: 0; font-size: 24px;">Naya Awasar</h1>
@@ -215,13 +216,16 @@ export const replyToContactMessage = async (req, res) => {
             .populate('repliedBy', 'fullName')
             .lean();
 
-        res.json({ message: 'Reply sent successfully.', contact: populated });
+        res.json({ success: true, message: 'Reply sent successfully.', contact: populated });
 
     } catch (error) {
         console.error('Reply error:', error);
         if (error.code === 'EAUTH' || error.code === 'ECONNREFUSED') {
-            return res.status(500).json({ message: 'Email service error. Please check email configuration.' });
+            return res.status(502).json({ success: false, message: 'Email service error. Please check email configuration.' });
         }
-        res.status(500).json({ message: 'Failed to send reply. Please try again.' });
+        if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKET') {
+            return res.status(504).json({ success: false, message: 'Email service timeout. Please try again.' });
+        }
+        res.status(500).json({ success: false, message: 'Failed to send reply. Please try again.' });
     }
 };

@@ -39,7 +39,8 @@ const AdminContactMessages = () => {
             setLoading(true);
             const params = statusFilter !== 'ALL' ? { status: statusFilter } : {};
             const res = await api.get('/contact', { params });
-            setMessages(res.data);
+            const payload = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            setMessages(payload);
         } catch (err) {
             console.error('Error fetching contact messages:', err);
             toast.error('Failed to load contact messages.');
@@ -81,13 +82,14 @@ const AdminContactMessages = () => {
         }
         setReplying(true);
         try {
-            const res = await api.post(`/contact/${selectedMessage._id}/reply`, { reply: replyText });
+            const res = await api.post(`/contact/${selectedMessage._id}/reply`, { reply: replyText }, { timeout: 20000 });
             toast.success('Reply sent successfully!');
             setMessages(prev => prev.map(m => m._id === selectedMessage._id ? res.data.contact : m));
             setShowReplyModal(false);
             setReplyText('');
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to send reply.');
+            const msg = err.response?.data?.message || (err.request ? 'Network/CORS error. Please check backend deployment and CORS.' : 'Failed to send reply.');
+            toast.error(msg);
         } finally {
             setReplying(false);
         }

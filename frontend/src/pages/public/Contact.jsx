@@ -56,10 +56,12 @@ const Contact = () => {
                 email: formData.email,
                 subject: formData.subject,
                 message: formData.message
-            });
+            }, { timeout: 20000 });
             setFormSubmitted(true);
         } catch (error) {
-            setSubmitError(error.response?.data?.message || 'Failed to send message. Please try again.');
+            const msg = error.response?.data?.message ||
+                (error.request ? 'Network/CORS error. Please check deployment configuration.' : 'Failed to send message. Please try again.');
+            setSubmitError(msg);
         } finally {
             setSubmitting(false);
         }
