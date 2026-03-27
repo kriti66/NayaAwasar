@@ -7,10 +7,218 @@ import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { syncSeekerProfileScoresToUser } from '../utils/seekerProfileScoring.js';
+import PendingSignup from '../models/PendingSignup.js';
 
 // Generate a secure 6-digit OTP
 const generateOTP = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+const normalizeRole = (role) => {
+    if (!role || role === 'job_seeker') return 'jobseeker';
+    if (['jobseeker', 'recruiter', 'admin'].includes(role)) return role;
+    return 'jobseeker';
+};
+
+const OTP_TTL_MS = 10 * 60 * 1000;
+const RESEND_COOLDOWN_MS = 60 * 1000;
+const MAX_OTP_ATTEMPTS = 5;
+
+const buildSignupOtpEmailHtml = (fullName, otp) => `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+        <h2 style="color: #333; text-align: center;">Verify your email</h2>
+        <p>Hi <strong>${fullName}</strong>,</p>
+        <p>Use this OTP to complete your Naya Awasar registration. This OTP is valid for <strong>10 minutes</strong>.</p>
+        <div style="text-align: center; margin: 30px 0;">
+            <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #4A90E2; background: #f4f4f4; padding: 10px 20px; border-radius: 5px;">${otp}</span>
+        </div>
+        <p>If you did not start this registration, please ignore this email.</p>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="font-size: 12px; color: #777; text-align: center;">Naya Awasar - Find Your Opportunity</p>
+    </div>
+`;
+
+export const sendSignupOTP = async (req, res) => {
+    const { fullName, email, password, role } = req.body;
+
+    if (!fullName?.trim() || !email?.trim() || !password) {
+        return res.status(400).json({ success: false, message: 'Full name, email and password are required.' });
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+        return res.status(400).json({ success: false, message: 'Please provide a valid email address.' });
+    }
+    if (password.length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
+    }
+
+    try {
+        const normalizedEmail = email.toLowerCase().trim();
+        const normalizedRole = normalizeRole(role);
+
+        const existingUser = await User.findOne({ email: normalizedEmail }).select('_id').lean();
+        if (existingUser) {
+            return res.status(409).json({ success: false, message: 'Email already exists.' });
+        }
+
+        const otp = generateOTP();
+        const [passwordHash, otpHash] = await Promise.all([
+            bcrypt.hash(password, 10),
+            bcrypt.hash(otp, 10)
+        ]);
+        const now = Date.now();
+        const otpExpiresAt = new Date(now + OTP_TTL_MS);
+        const resendAvailableAt = new Date(now + RESEND_COOLDOWN_MS);
+        const expiresAt = new Date(now + 24 * 60 * 60 * 1000);
+
+        await PendingSignup.findOneAndUpdate(
+            { email: normalizedEmail },
+            {
+                $set: {
+                    fullName: fullName.trim(),
+                    email: normalizedEmail,
+                    passwordHash,
+                    role: normalizedRole,
+                    otpHash,
+                    otpExpiresAt,
+                    attempts: 0,
+                    resendAvailableAt,
+                    expiresAt
+                }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+
+        await sendEmail({
+            to: normalizedEmail,
+            subject: 'Your Signup OTP - Naya Awasar',
+            html: buildSignupOtpEmailHtml(fullName.trim(), otp)
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'OTP sent to your email. Please verify to create account.',
+            email: normalizedEmail,
+            resendAvailableIn: Math.floor(RESEND_COOLDOWN_MS / 1000)
+        });
+    } catch (error) {
+        console.error('sendSignupOTP error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to send signup OTP.' });
+    }
+};
+
+export const verifySignupOTP = async (req, res) => {
+    const { email, otp } = req.body;
+
+    if (!email?.trim() || !otp?.trim()) {
+        return res.status(400).json({ success: false, message: 'Email and OTP are required.' });
+    }
+
+    try {
+        const normalizedEmail = email.toLowerCase().trim();
+        const pending = await PendingSignup.findOne({ email: normalizedEmail });
+        if (!pending) {
+            return res.status(404).json({ success: false, message: 'No pending signup found. Please start registration again.' });
+        }
+
+        if (pending.otpExpiresAt < new Date()) {
+            return res.status(400).json({ success: false, message: 'OTP expired. Please resend OTP.' });
+        }
+
+        if ((pending.attempts || 0) >= MAX_OTP_ATTEMPTS) {
+            return res.status(429).json({ success: false, message: 'Too many wrong attempts. Please resend OTP.' });
+        }
+
+        const isMatch = await bcrypt.compare(otp.trim(), pending.otpHash);
+        if (!isMatch) {
+            pending.attempts = (pending.attempts || 0) + 1;
+            await pending.save();
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid OTP.',
+                attemptsLeft: Math.max(0, MAX_OTP_ATTEMPTS - pending.attempts)
+            });
+        }
+
+        const existingUser = await User.findOne({ email: normalizedEmail }).select('_id').lean();
+        if (existingUser) {
+            await PendingSignup.deleteOne({ _id: pending._id });
+            return res.status(409).json({ success: false, message: 'Email already exists. Please login.' });
+        }
+
+        const user = new User({
+            fullName: pending.fullName,
+            email: pending.email,
+            password: pending.passwordHash,
+            role: normalizeRole(pending.role),
+            kycStatus: 'not_submitted'
+        });
+        syncSeekerProfileScoresToUser(user);
+        await user.save();
+        await PendingSignup.deleteOne({ _id: pending._id });
+
+        await logActivity(
+            user._id,
+            'USER_REGISTERED',
+            `New user '${user.fullName}' registered.`,
+            { role: user.role, via: 'signup_otp' }
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: 'Account created successfully. Please login.'
+        });
+    } catch (error) {
+        console.error('verifySignupOTP error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to verify signup OTP.' });
+    }
+};
+
+export const resendSignupOTP = async (req, res) => {
+    const { email } = req.body;
+    if (!email?.trim()) {
+        return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    try {
+        const normalizedEmail = email.toLowerCase().trim();
+        const pending = await PendingSignup.findOne({ email: normalizedEmail });
+        if (!pending) {
+            return res.status(404).json({ success: false, message: 'No pending signup found. Please register again.' });
+        }
+
+        const now = Date.now();
+        const waitMs = new Date(pending.resendAvailableAt).getTime() - now;
+        if (waitMs > 0) {
+            return res.status(429).json({
+                success: false,
+                message: 'Please wait before requesting another OTP.',
+                resendAvailableIn: Math.ceil(waitMs / 1000)
+            });
+        }
+
+        const otp = generateOTP();
+        pending.otpHash = await bcrypt.hash(otp, 10);
+        pending.otpExpiresAt = new Date(now + OTP_TTL_MS);
+        pending.resendAvailableAt = new Date(now + RESEND_COOLDOWN_MS);
+        pending.attempts = 0;
+        pending.expiresAt = new Date(now + 24 * 60 * 60 * 1000);
+        await pending.save();
+
+        await sendEmail({
+            to: pending.email,
+            subject: 'Your Signup OTP - Naya Awasar',
+            html: buildSignupOtpEmailHtml(pending.fullName, otp)
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'OTP resent successfully.',
+            resendAvailableIn: Math.floor(RESEND_COOLDOWN_MS / 1000)
+        });
+    } catch (error) {
+        console.error('resendSignupOTP error:', error);
+        return res.status(500).json({ success: false, message: 'Failed to resend OTP.' });
+    }
 };
 
 // 1. SEND OTP

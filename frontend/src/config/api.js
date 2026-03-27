@@ -10,11 +10,12 @@ const normalizeBaseUrl = (rawValue) => {
 };
 
 const resolveApiBaseUrl = () => {
+    const fromLocalEnv = normalizeBaseUrl(import.meta.env.VITE_API_URL);
     const fromEnv = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
     // Keep localhost DX unchanged.
     if (import.meta.env.DEV && isLocalHost) {
-        return fromEnv || LOCAL_API_BASE_URL;
+        return fromLocalEnv || LOCAL_API_BASE_URL;
     }
 
     // In non-local dev, keep previous local fallback behavior.

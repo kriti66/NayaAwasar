@@ -20,9 +20,14 @@ const Register = () => {
     });
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [otpStage, setOtpStage] = useState(false);
+    const [otpCode, setOtpCode] = useState('');
+    const [otpEmail, setOtpEmail] = useState('');
+    const [otpCooldown, setOtpCooldown] = useState(0);
+    const [successMessage, setSuccessMessage] = useState('');
     const [error, setError] = useState('');
     const [searchParams] = useSearchParams();
-    const { register } = useAuth();
+    const { register, verifySignupOtp, resendSignupOtp } = useAuth();
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -31,6 +36,37 @@ const Register = () => {
             setFormData(prev => ({ ...prev, role: roleParam }));
         }
     }, [searchParams]);
+
+    useEffect(() => {
+        const raw = sessionStorage.getItem('pendingSignup');
+        if (!raw) return;
+        try {
+            const parsed = JSON.parse(raw);
+            if (!parsed?.email || !parsed?.expiresAt) return;
+            if (Date.now() > parsed.expiresAt) {
+                sessionStorage.removeItem('pendingSignup');
+                return;
+            }
+            setOtpStage(true);
+            setOtpEmail(parsed.email);
+            if (typeof parsed.cooldownUntil === 'number') {
+                setOtpCooldown(Math.max(0, Math.ceil((parsed.cooldownUntil - Date.now()) / 1000)));
+            }
+            if (parsed.role) {
+                setFormData((prev) => ({ ...prev, role: parsed.role }));
+            }
+        } catch {
+            sessionStorage.removeItem('pendingSignup');
+        }
+    }, []);
+
+    useEffect(() => {
+        if (otpCooldown <= 0) return;
+        const timer = setInterval(() => {
+            setOtpCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [otpCooldown]);
 
     const handleNext = () => {
         if (currentStep === 2) {
@@ -58,6 +94,7 @@ const Register = () => {
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
+        if (error) setError('');
     };
 
     const handleRoleSelect = (role) => {
@@ -67,6 +104,7 @@ const Register = () => {
     const handleSubmit = async () => {
         setLoading(true);
         setError('');
+        setSuccessMessage('');
         const result = await register({
             fullName: formData.name,
             email: formData.email,
@@ -75,12 +113,75 @@ const Register = () => {
         });
 
         if (result.success) {
-            if (formData.role === 'recruiter') navigate('/recruiter/dashboard');
-            else navigate('/seeker/dashboard');
+            const cooldownSec = result.data?.resendAvailableIn || 60;
+            const cooldownUntil = Date.now() + cooldownSec * 1000;
+            const expiresAt = Date.now() + 10 * 60 * 1000;
+            setOtpStage(true);
+            setOtpEmail(formData.email.toLowerCase().trim());
+            setOtpCooldown(cooldownSec);
+            setOtpCode('');
+            sessionStorage.setItem('pendingSignup', JSON.stringify({
+                email: formData.email.toLowerCase().trim(),
+                role: formData.role,
+                cooldownUntil,
+                expiresAt
+            }));
+            setLoading(false);
         } else {
             setError(result.message);
             setLoading(false);
         }
+    };
+
+    const handleVerifyOtp = async () => {
+        if (!otpCode.trim()) {
+            setError('Please enter the OTP sent to your email.');
+            return;
+        }
+        setLoading(true);
+        setError('');
+        setSuccessMessage('');
+        const result = await verifySignupOtp({ email: otpEmail, otp: otpCode.trim() });
+        if (result.success) {
+            sessionStorage.removeItem('pendingSignup');
+            setSuccessMessage('Account created successfully. Redirecting to login...');
+            setLoading(false);
+            setTimeout(() => navigate('/login', { replace: true }), 1200);
+            return;
+        }
+        setError(result.message || 'OTP verification failed');
+        setLoading(false);
+    };
+
+    const handleResendOtp = async () => {
+        if (otpCooldown > 0 || !otpEmail) return;
+        setLoading(true);
+        setError('');
+        setSuccessMessage('');
+        const result = await resendSignupOtp(otpEmail);
+        if (result.success) {
+            const cooldownSec = result.data?.resendAvailableIn || 60;
+            const cooldownUntil = Date.now() + cooldownSec * 1000;
+            setOtpCooldown(cooldownSec);
+            const current = sessionStorage.getItem('pendingSignup');
+            if (current) {
+                try {
+                    const parsed = JSON.parse(current);
+                    sessionStorage.setItem('pendingSignup', JSON.stringify({
+                        ...parsed,
+                        cooldownUntil
+                    }));
+                } catch {
+                    // ignore malformed cache
+                }
+            }
+        } else {
+            setError(result.message || 'Failed to resend OTP');
+            if (result.resendAvailableIn) {
+                setOtpCooldown(result.resendAvailableIn);
+            }
+        }
+        setLoading(false);
     };
 
     const seekerTips = [
@@ -213,6 +314,92 @@ const Register = () => {
 
                     {/* Form Card */}
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+                        {otpStage ? (
+                            <div className="space-y-6 animate-fade-in">
+                                <div>
+                                    <h3 className="text-xl font-black text-gray-900">Verify your email</h3>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Enter the 6-digit OTP sent to <span className="font-semibold text-gray-700">{otpEmail}</span>
+                                    </p>
+                                </div>
+
+                                {error && (
+                                    <div className="flex items-start gap-3 bg-red-50 border border-red-200 p-4 rounded-xl">
+                                        <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </div>
+                                        <p className="text-sm text-red-700 font-medium">{error}</p>
+                                    </div>
+                                )}
+                                {successMessage && (
+                                    <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
+                                        <p className="text-sm text-emerald-700 font-medium">{successMessage}</p>
+                                    </div>
+                                )}
+
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">OTP Code</label>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        maxLength={6}
+                                        value={otpCode}
+                                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-gray-900 text-sm tracking-[0.3em] font-bold text-center"
+                                        placeholder="000000"
+                                    />
+                                </div>
+
+                                <div className="flex items-center justify-between text-sm">
+                                    <button
+                                        type="button"
+                                        onClick={handleResendOtp}
+                                        disabled={loading || otpCooldown > 0}
+                                        className="font-bold text-[#29a08e] disabled:text-gray-400 disabled:cursor-not-allowed"
+                                    >
+                                        {otpCooldown > 0 ? `Resend OTP in ${otpCooldown}s` : 'Resend OTP'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            sessionStorage.removeItem('pendingSignup');
+                                            setOtpStage(false);
+                                            setOtpCode('');
+                                            setOtpCooldown(0);
+                                            setError('');
+                                            setCurrentStep(2);
+                                        }}
+                                        className="text-gray-500 font-semibold hover:text-gray-700"
+                                    >
+                                        Edit details
+                                    </button>
+                                </div>
+
+                                <div className="pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleVerifyOtp}
+                                        disabled={loading}
+                                        className="w-full flex items-center justify-center gap-2 px-8 py-2.5 bg-[#29a08e] text-white rounded-xl text-sm font-bold hover:bg-[#228377] transition-all shadow-md shadow-[#29a08e]/20 disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                                </svg>
+                                                Verifying...
+                                            </>
+                                        ) : (
+                                            'Verify OTP & Create Account'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                        <>
 
                         {/* Step 1: Role Selection */}
                         {currentStep === 1 && (
@@ -434,6 +621,8 @@ const Register = () => {
                                 </button>
                             )}
                         </div>
+                        </>
+                        )}
                     </div>
 
                     <p className="mt-6 text-center text-sm text-gray-500">

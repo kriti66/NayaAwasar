@@ -125,16 +125,9 @@ export const AuthProvider = ({ children }) => {
 
     const register = async (userData) => {
         try {
-            console.log("AuthContext: Registering user...", userData.email);
-            const response = await api.post('/auth/register', userData);
-            const { token, user } = response.data;
-            if (token && user) {
-                localStorage.setItem('token', token);
-                localStorage.setItem('user', JSON.stringify(user));
-                setUser(user);
-                await refreshUser();
-            }
-            return { success: true };
+            console.log("AuthContext: Sending signup OTP for...", userData.email);
+            const response = await api.post('/auth/register/send-otp', userData);
+            return { success: true, data: response.data };
         } catch (error) {
             console.error("Registration failed detail:", error);
             let message = 'Registration failed';
@@ -148,6 +141,29 @@ export const AuthProvider = ({ children }) => {
             return { success: false, message };
         }
     };
+
+    const verifySignupOtp = async ({ email, otp }) => {
+        try {
+            const response = await api.post('/auth/register/verify-otp', { email, otp });
+            return { success: true, data: response.data };
+        } catch (error) {
+            const message = error.response?.data?.message || 'OTP verification failed';
+            const resendAvailableIn = error.response?.data?.resendAvailableIn;
+            const attemptsLeft = error.response?.data?.attemptsLeft;
+            return { success: false, message, resendAvailableIn, attemptsLeft };
+        }
+    };
+
+    const resendSignupOtp = async (email) => {
+        try {
+            const response = await api.post('/auth/register/resend-otp', { email });
+            return { success: true, data: response.data };
+        } catch (error) {
+            const message = error.response?.data?.message || 'Failed to resend OTP';
+            const resendAvailableIn = error.response?.data?.resendAvailableIn;
+            return { success: false, message, resendAvailableIn };
+        }
+    };
     const value = {
         user,
         loading,
@@ -156,6 +172,8 @@ export const AuthProvider = ({ children }) => {
         loginWithFacebook,
         logout,
         register,
+        verifySignupOtp,
+        resendSignupOtp,
         refreshUser
     };
 
