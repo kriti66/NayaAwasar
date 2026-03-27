@@ -276,9 +276,13 @@ export const sendOtp = async (req, res) => {
             res.status(200).json({ success: true, message: "OTP sent to your email successfully." });
         } catch (mailError) {
             console.error("❌ Failed to send OTP email:", mailError);
+            const isConfigError =
+                /missing|credentials|sender identity|email_from|resend_from|resend_api_key/i.test(String(mailError?.message || ''));
             res.status(500).json({
                 success: false,
-                message: "Failed to send reset email. Please check your email configuration.",
+                message: isConfigError
+                    ? "Email service is not configured correctly in deployment environment."
+                    : "Failed to send reset email. Please try again.",
                 error: mailError.message
             });
         }

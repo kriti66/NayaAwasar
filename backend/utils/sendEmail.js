@@ -2,7 +2,10 @@ import nodemailer from 'nodemailer';
 
 const RESEND_API_BASE = 'https://api.resend.com/emails';
 const resendApiKey = String(process.env.RESEND_API_KEY || '').trim();
-const resendFrom = String(process.env.EMAIL_FROM || '').trim();
+const resendFrom =
+    String(process.env.EMAIL_FROM || '').trim() ||
+    String(process.env.RESEND_FROM || '').trim() ||
+    (process.env.EMAIL_USER ? `Naya Awasar <${String(process.env.EMAIL_USER).trim()}>` : '');
 
 const emailPass = process.env.EMAIL_PASS ? process.env.EMAIL_PASS.replace(/\s/g, '') : '';
 
@@ -32,7 +35,7 @@ const sendWithResend = async ({ to, subject, html, plainText }) => {
         throw new Error('RESEND_API_KEY is missing');
     }
     if (!resendFrom) {
-        throw new Error('EMAIL_FROM is missing (required for Resend sender identity)');
+        throw new Error('Sender identity missing. Set EMAIL_FROM (or RESEND_FROM) for Resend.');
     }
 
     const response = await fetch(RESEND_API_BASE, {
