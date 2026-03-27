@@ -88,11 +88,24 @@ export const sendSignupOTP = async (req, res) => {
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
 
-        await sendEmail({
-            to: normalizedEmail,
-            subject: 'Your Signup OTP - Naya Awasar',
-            html: buildSignupOtpEmailHtml(fullName.trim(), otp)
-        });
+        try {
+            await sendEmail({
+                to: normalizedEmail,
+                subject: 'Your Signup OTP - Naya Awasar',
+                html: buildSignupOtpEmailHtml(fullName.trim(), otp)
+            });
+        } catch (mailError) {
+            const isConfigError =
+                /missing|credentials|sender identity|email_from|resend_from|resend_api_key|unauthorized|forbidden|domain/i
+                    .test(String(mailError?.message || ''));
+            return res.status(isConfigError ? 502 : 500).json({
+                success: false,
+                message: isConfigError
+                    ? 'Email service is not configured correctly in deployment environment.'
+                    : 'Failed to send signup OTP. Please try again.',
+                error: mailError.message
+            });
+        }
 
         return res.status(200).json({
             success: true,
@@ -204,11 +217,24 @@ export const resendSignupOTP = async (req, res) => {
         pending.expiresAt = new Date(now + 24 * 60 * 60 * 1000);
         await pending.save();
 
-        await sendEmail({
-            to: pending.email,
-            subject: 'Your Signup OTP - Naya Awasar',
-            html: buildSignupOtpEmailHtml(pending.fullName, otp)
-        });
+        try {
+            await sendEmail({
+                to: pending.email,
+                subject: 'Your Signup OTP - Naya Awasar',
+                html: buildSignupOtpEmailHtml(pending.fullName, otp)
+            });
+        } catch (mailError) {
+            const isConfigError =
+                /missing|credentials|sender identity|email_from|resend_from|resend_api_key|unauthorized|forbidden|domain/i
+                    .test(String(mailError?.message || ''));
+            return res.status(isConfigError ? 502 : 500).json({
+                success: false,
+                message: isConfigError
+                    ? 'Email service is not configured correctly in deployment environment.'
+                    : 'Failed to resend signup OTP. Please try again.',
+                error: mailError.message
+            });
+        }
 
         return res.status(200).json({
             success: true,
