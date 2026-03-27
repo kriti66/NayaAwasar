@@ -67,11 +67,12 @@ function getProofCardsByRole(kyc) {
 
     if (role === 'recruiter') {
         return [
-            { label: 'ID Front', path: kyc.idFrontUrl || kyc.idFront || kyc.documentFront },
-            { label: 'ID Back', path: kyc.idBackUrl || kyc.idBack || kyc.documentBack },
-            { label: 'Company Reg', path: kyc.registrationDocument || kyc.registrationDocUrl },
-            { label: 'Tax Doc', path: kyc.taxDocument || kyc.taxDocUrl },
-            { label: 'Company Logo', path: kyc.companyLogo }
+            { label: 'Representative Photo', path: kyc?.representative?.selfieUrl || kyc.selfieUrl || kyc.selfieWithId },
+            { label: 'ID Front', path: kyc?.representative?.idFrontUrl || kyc.idFrontUrl || kyc.idFront || kyc.documentFront },
+            { label: 'ID Back', path: kyc?.representative?.idBackUrl || kyc.idBackUrl || kyc.idBack || kyc.documentBack },
+            { label: 'Business Registration Document', path: kyc?.company?.registrationDocUrl || kyc.registrationDocument || kyc.registrationDocUrl },
+            { label: 'Tax Registration Document', path: kyc?.company?.taxDocUrl || kyc.taxDocument || kyc.taxDocUrl },
+            { label: 'Company Logo', path: kyc?.company?.companyLogo || kyc.companyLogo }
         ];
     }
 
@@ -84,12 +85,13 @@ function getProofCardsByRole(kyc) {
 
 function getIdentityDetailsByRole(kyc) {
     if (kyc?.role === 'recruiter') {
+        const rep = kyc?.representative || {};
         return [
-            { label: 'Type', value: kyc.idType || '—' },
-            { label: 'ID Number', value: kyc.idNumber || '—' },
-            { label: 'Job Title', value: kyc.jobTitle || '—' },
-            { label: 'Official Email', value: kyc.officialEmail || kyc.email || '—' },
-            { label: 'Phone', value: kyc.phoneNumber || '—' }
+            { label: 'ID Type', value: rep.idType || kyc.idType || '—' },
+            { label: 'ID Number', value: rep.idNumber || kyc.idNumber || '—' },
+            { label: 'Job Title', value: rep.jobTitle || kyc.jobTitle || '—' },
+            { label: 'Official Email', value: rep.officialEmail || kyc.officialEmail || kyc.email || '—' },
+            { label: 'Phone', value: rep.phoneNumber || kyc.phoneNumber || '—' }
         ];
     }
 
@@ -109,12 +111,19 @@ const AdminKYCPanel = () => {
     const [loading, setLoading] = useState(true);
     const [selectedKYC, setSelectedKYC] = useState(null);
     const [rejectionReason, setRejectionReason] = useState('');
+    const [reviewSection, setReviewSection] = useState('representative');
     const [processing, setProcessing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         fetchPendingKYC();
     }, []);
+
+    useEffect(() => {
+        if (selectedKYC?.role === 'recruiter') {
+            setReviewSection('representative');
+        }
+    }, [selectedKYC]);
 
     const fetchPendingKYC = async () => {
         try {
@@ -148,13 +157,13 @@ const AdminKYCPanel = () => {
         return kyc.userId?._id || kyc.userId || kyc._id;
     };
 
-    const handleApprove = async (kycRecord) => {
+    const handleApprove = async (kycRecord, section = 'representative') => {
         const userId = getUserId(kycRecord);
         const kycId = kycRecord._id;
         setProcessing(true);
         try {
             if (kycRecord.role === 'recruiter') {
-                await api.put(`/admin/kyc/recruiter/review/${kycId}`, { decision: 'approved' });
+                await api.put(`/admin/kyc/recruiter/review/${kycId}`, { decision: 'approved', section });
             } else {
                 await api.patch(`/admin/kyc/${userId}/approve`);
             }
@@ -167,7 +176,7 @@ const AdminKYCPanel = () => {
         }
     };
 
-    const handleReject = async (kycRecord) => {
+    const handleReject = async (kycRecord, section = 'representative') => {
         if (!rejectionReason.trim()) {
             alert('Please enter a reason for rejection.');
             return;
@@ -177,7 +186,11 @@ const AdminKYCPanel = () => {
         setProcessing(true);
         try {
             if (kycRecord.role === 'recruiter') {
-                await api.put(`/admin/kyc/recruiter/review/${kycId}`, { decision: 'rejected', reason: rejectionReason.trim() });
+                await api.put(`/admin/kyc/recruiter/review/${kycId}`, {
+                    decision: 'rejected',
+                    reason: rejectionReason.trim(),
+                    section
+                });
             } else {
                 await api.patch(`/admin/kyc/${userId}/reject`, { rejectionReason: rejectionReason.trim() });
             }
@@ -313,19 +326,72 @@ const AdminKYCPanel = () => {
                                             <p className="text-xs text-gray-400 font-medium mt-0.5">
                                                 <span className="capitalize">{selectedKYC.role}</span> applicant • <span className="text-amber-500 font-bold">Pending Review</span>
                                             </p>
+                                            {selectedKYC.role === 'recruiter' && (
+                                                <div className="mt-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
+                                                    <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">Representative: {selectedKYC.representativeStatus || 'pending'}</span>
+                                                    <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">Company: {selectedKYC.companyStatus || 'pending'}</span>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                    <button
-                                        disabled={processing}
-                                        onClick={() => handleApprove(selectedKYC)}
-                                        className="px-6 py-2.5 bg-gradient-to-r from-[#29a08e] to-[#228377] text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-[#29a08e]/20 transition-all disabled:opacity-50 flex items-center gap-2 active:scale-[0.98]"
-                                    >
-                                        <Check className="w-4 h-4" />
-                                        Approve
-                                    </button>
+                                    {selectedKYC.role !== 'recruiter' && (
+                                        <button
+                                            disabled={processing}
+                                            onClick={() => handleApprove(selectedKYC)}
+                                            className="px-6 py-2.5 bg-gradient-to-r from-[#29a08e] to-[#228377] text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-[#29a08e]/20 transition-all disabled:opacity-50 flex items-center gap-2 active:scale-[0.98]"
+                                        >
+                                            <Check className="w-4 h-4" />
+                                            Approve
+                                        </button>
+                                    )}
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                                    {selectedKYC.role === 'recruiter' && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="p-4 rounded-xl border border-gray-200 bg-white">
+                                                <h3 className="text-xs font-black text-gray-600 uppercase tracking-wider mb-2">Representative Verification</h3>
+                                                <p className="text-xs text-gray-500 mb-3">Verify identity of the authorized representative.</p>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        disabled={processing}
+                                                        onClick={() => handleApprove(selectedKYC, 'representative')}
+                                                        className="px-3 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white disabled:opacity-50"
+                                                    >
+                                                        Approve Representative
+                                                    </button>
+                                                    <button
+                                                        disabled={processing}
+                                                        onClick={() => setReviewSection('representative')}
+                                                        className={`px-3 py-2 text-xs font-bold rounded-lg border ${reviewSection === 'representative' ? 'border-red-400 text-red-600 bg-red-50' : 'border-gray-300 text-gray-600'}`}
+                                                    >
+                                                        Reject Representative
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="p-4 rounded-xl border border-gray-200 bg-white">
+                                                <h3 className="text-xs font-black text-gray-600 uppercase tracking-wider mb-2">Company Verification</h3>
+                                                <p className="text-xs text-gray-500 mb-3">Can be approved only after representative is approved.</p>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        disabled={processing || selectedKYC.representativeStatus !== 'approved'}
+                                                        onClick={() => handleApprove(selectedKYC, 'company')}
+                                                        className="px-3 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white disabled:opacity-50"
+                                                    >
+                                                        Approve Company
+                                                    </button>
+                                                    <button
+                                                        disabled={processing}
+                                                        onClick={() => setReviewSection('company')}
+                                                        className={`px-3 py-2 text-xs font-bold rounded-lg border ${reviewSection === 'company' ? 'border-red-400 text-red-600 bg-red-50' : 'border-gray-300 text-gray-600'}`}
+                                                    >
+                                                        Reject Company
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-2 gap-8">
                                         <div className="space-y-4">
                                             <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -346,31 +412,31 @@ const AdminKYCPanel = () => {
                                             <div className="space-y-4">
                                                 <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
                                                     <Building2 className="w-3.5 h-3.5 text-purple-500" />
-                                                    Company Info
+                                                    Company Verification
                                                 </h3>
                                                 <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100 space-y-3">
                                                     <div>
                                                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company Name</p>
-                                                        <p className="text-sm font-semibold text-gray-900">{selectedKYC.companyName || '—'}</p>
+                                                        <p className="text-sm font-semibold text-gray-900">{selectedKYC?.company?.companyName || selectedKYC.companyName || '—'}</p>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <div>
                                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Reg No</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.registrationNumber || '—'}</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC?.company?.registrationNumber || selectedKYC.registrationNumber || '—'}</p>
                                                         </div>
                                                         <div>
                                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Industry</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.industry || '—'}</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC?.company?.industry || selectedKYC.industry || '—'}</p>
                                                         </div>
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <div>
                                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Address</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.companyAddress || '—'}</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC?.company?.companyAddress || selectedKYC.companyAddress || '—'}</p>
                                                         </div>
                                                         <div>
                                                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Website</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC.website || '—'}</p>
+                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC?.company?.website || selectedKYC.website || '—'}</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -437,10 +503,10 @@ const AdminKYCPanel = () => {
                                             </div>
                                             <button
                                                 disabled={processing}
-                                                onClick={() => handleReject(selectedKYC)}
+                                                onClick={() => handleReject(selectedKYC, selectedKYC.role === 'recruiter' ? reviewSection : 'representative')}
                                                 className="w-full bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold py-2.5 rounded-xl hover:shadow-lg hover:shadow-red-500/20 transition-all text-sm active:scale-[0.98] disabled:opacity-50"
                                             >
-                                                Reject KYC
+                                                Reject {selectedKYC.role === 'recruiter' ? reviewSection : 'KYC'}
                                             </button>
                                         </div>
                                     </div>

@@ -4,6 +4,46 @@ import ActivityLog from '../models/ActivityLog.js';
 import { createNotification, notifyAdmins } from './notificationController.js';
 import { logActivity } from '../utils/activityLogger.js';
 
+const deriveOverallStatus = (repStatus, compStatus) => {
+    if (repStatus === 'approved' && compStatus === 'approved') return 'approved';
+    if (repStatus === 'rejected' || compStatus === 'rejected') return 'rejected';
+    return 'pending';
+};
+
+const normalizeRecruiterKycForResponse = (doc) => {
+    if (!doc) return null;
+    const rep = doc.representative || {};
+    const company = doc.company || {};
+    return {
+        ...doc,
+        representative: {
+            fullName: rep.fullName || doc.fullName || '',
+            jobTitle: rep.jobTitle || doc.jobTitle || '',
+            officialEmail: rep.officialEmail || doc.officialEmail || '',
+            phoneNumber: rep.phoneNumber || doc.phoneNumber || '',
+            selfieUrl: rep.selfieUrl || doc.selfieUrl || doc.selfieWithId || '',
+            idType: rep.idType || doc.idType || 'national_id',
+            idNumber: rep.idNumber || doc.idNumber || '',
+            idFrontUrl: rep.idFrontUrl || doc.idFrontUrl || '',
+            idBackUrl: rep.idBackUrl || doc.idBackUrl || ''
+        },
+        company: {
+            companyName: company.companyName || doc.companyName || '',
+            registrationNumber: company.registrationNumber || doc.registrationNumber || '',
+            companyAddress: company.companyAddress || doc.companyAddress || '',
+            industry: company.industry || doc.industry || '',
+            website: company.website || doc.website || '',
+            registrationDocUrl: company.registrationDocUrl || doc.registrationDocUrl || doc.registrationDocument || '',
+            taxDocUrl: company.taxDocUrl || doc.taxDocUrl || doc.taxDocument || '',
+            companyLogo: company.companyLogo || doc.companyLogo || ''
+        },
+        representativeStatus: doc.representativeStatus || 'pending',
+        companyStatus: doc.companyStatus || 'pending',
+        representativeRejectionReason: doc.representativeRejectionReason || '',
+        companyRejectionReason: doc.companyRejectionReason || ''
+    };
+};
+
 // Submit Recruiter KYC
 // Submit Recruiter KYC
 export const submitRecruiterKyc = async (req, res) => {
@@ -13,11 +53,41 @@ export const submitRecruiterKyc = async (req, res) => {
             fullName, jobTitle, officialEmail, phoneNumber,
             companyName, industry, registrationNumber, companyAddress, website,
             idType, idNumber,
-            idFront, idBack, registrationDocument,
+            representativePhoto, selfie, idFront, idBack, registrationDocument,
             companyLogo // Ensure this is captured
         } = req.body;
 
         console.log(`[KYC] Received submission for user: ${userId}`);
+
+        const selfieUrl = representativePhoto || selfie || req.body.selfieWithId || '';
+        const taxDocUrl = req.body.taxDocument || '';
+        const missingRepresentative = [];
+        if (!fullName) missingRepresentative.push('Full Name');
+        if (!jobTitle) missingRepresentative.push('Job Title');
+        if (!officialEmail) missingRepresentative.push('Official Email');
+        if (!phoneNumber) missingRepresentative.push('Phone Number');
+        if (!selfieUrl) missingRepresentative.push('Representative Photo / Selfie');
+        if (!idType) missingRepresentative.push('ID Type');
+        if (!idNumber) missingRepresentative.push('ID Number');
+        if (!idFront) missingRepresentative.push('ID Front');
+        if (!idBack) missingRepresentative.push('ID Back');
+
+        const missingCompany = [];
+        if (!companyName) missingCompany.push('Company Name');
+        if (!registrationNumber) missingCompany.push('Registration Number');
+        if (!companyAddress) missingCompany.push('Company Address');
+        if (!industry) missingCompany.push('Industry');
+        if (!registrationDocument) missingCompany.push('Business Registration Document');
+        if (!taxDocUrl) missingCompany.push('Tax Registration Document');
+
+        if (missingRepresentative.length || missingCompany.length) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please complete all required verification fields.',
+                representativeMissing: missingRepresentative,
+                companyMissing: missingCompany
+            });
+        }
 
         // data payload
         const kycData = {
@@ -36,9 +106,39 @@ export const submitRecruiterKyc = async (req, res) => {
             idFrontUrl: idFront,
             idBackUrl: idBack,
             registrationDocUrl: registrationDocument,
-            taxDocUrl: req.body.taxDocument || 'not-provided',
+            taxDocUrl,
             companyLogo: companyLogo || '', // Add logo
+            selfieUrl,
             status: 'pending',
+            representativeStatus: 'pending',
+            companyStatus: 'pending',
+            representativeRejectionReason: '',
+            companyRejectionReason: '',
+            representativeReviewedAt: null,
+            companyReviewedAt: null,
+            representativeReviewedBy: null,
+            companyReviewedBy: null,
+            representative: {
+                fullName,
+                jobTitle,
+                officialEmail,
+                phoneNumber,
+                selfieUrl,
+                idType,
+                idNumber,
+                idFrontUrl: idFront,
+                idBackUrl: idBack
+            },
+            company: {
+                companyName,
+                registrationNumber,
+                companyAddress,
+                industry,
+                website,
+                registrationDocUrl: registrationDocument,
+                taxDocUrl,
+                companyLogo: companyLogo || ''
+            },
             submissionDate: new Date()
         };
 
@@ -99,12 +199,17 @@ export const getRecruiterKycStatus = async (req, res) => {
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         const kyc = await RecruiterKyc.findOne({ userId: req.user.id });
+        const normalized = normalizeRecruiterKycForResponse(kyc?.toObject ? kyc.toObject() : kyc);
 
         res.json({
             status: user.recruiterKycStatus,
             rejectionReason: kyc?.rejectionReason || null,
+            representativeStatus: normalized?.representativeStatus || 'pending',
+            companyStatus: normalized?.companyStatus || 'pending',
+            representativeRejectionReason: normalized?.representativeRejectionReason || '',
+            companyRejectionReason: normalized?.companyRejectionReason || '',
             submittedAt: kyc?.updatedAt || kyc?.createdAt,
-            kycData: kyc,
+            kycData: normalized,
             resubmissionCount: kyc?.resubmissionCount || 0
         });
     } catch (error) {
@@ -117,12 +222,18 @@ export const getRecruiterKycStatus = async (req, res) => {
 export const getPendingRecruiterKycs = async (req, res) => {
     try {
         console.log("[Admin] Fetching pending recruiter KYCs");
-        const kycs = await RecruiterKyc.find({ status: 'pending' })
+        const kycs = await RecruiterKyc.find({
+            $or: [
+                { status: 'pending' },
+                { representativeStatus: 'pending' },
+                { companyStatus: 'pending' }
+            ]
+        })
             .populate('userId', 'email fullName role') // Include role
             .sort({ createdAt: 1 });
 
         console.log(`[Admin] Found ${kycs.length} pending recruiter KYCs`);
-        res.json(kycs);
+        res.json(kycs.map((k) => normalizeRecruiterKycForResponse(k.toObject())));
     } catch (error) {
         console.error("[Admin KYC List Error]:", error);
         res.status(500).json({ message: 'Server error retrieving KYC list.' });
@@ -133,28 +244,50 @@ export const getPendingRecruiterKycs = async (req, res) => {
 export const reviewRecruiterKyc = async (req, res) => {
     try {
         const { kycId } = req.params;
-        const { decision, reason } = req.body; // approved or rejected
+        const { decision, reason, section = 'representative' } = req.body; // approved or rejected
 
         if (!['approved', 'rejected'].includes(decision)) {
             return res.status(400).json({ message: 'Invalid decision.' });
+        }
+        if (!['representative', 'company'].includes(section)) {
+            return res.status(400).json({ message: 'Invalid section. Use representative or company.' });
         }
 
         const kyc = await RecruiterKyc.findById(kycId);
         if (!kyc) return res.status(404).json({ message: 'KYC not found.' });
 
-        let finalDecision = decision;
+        if (section === 'company' && kyc.representativeStatus !== 'approved') {
+            return res.status(400).json({
+                message: 'Representative verification must be approved before company verification.'
+            });
+        }
+
         if (decision === 'rejected') {
-            if (kyc.resubmissionCount >= 3) {
-                finalDecision = 'resubmission_locked';
-            }
-            kyc.rejectionReason = reason;
+            kyc.rejectionReason = reason || 'Rejected by admin';
             kyc.rejectionHistory.push({
-                reason: reason,
+                reason: reason || `Rejected ${section} verification`,
                 rejectedAt: new Date(),
                 rejectedBy: req.user.id
             });
         }
 
+        if (section === 'representative') {
+            kyc.representativeStatus = decision;
+            kyc.representativeRejectionReason = decision === 'rejected' ? (reason || '') : '';
+            kyc.representativeReviewedAt = new Date();
+            kyc.representativeReviewedBy = req.user.id;
+            if (decision === 'rejected') {
+                // If representative is rejected, company cannot be approved
+                kyc.companyStatus = 'pending';
+            }
+        } else {
+            kyc.companyStatus = decision;
+            kyc.companyRejectionReason = decision === 'rejected' ? (reason || '') : '';
+            kyc.companyReviewedAt = new Date();
+            kyc.companyReviewedBy = req.user.id;
+        }
+
+        const finalDecision = deriveOverallStatus(kyc.representativeStatus, kyc.companyStatus);
         kyc.status = finalDecision;
         kyc.reviewedBy = req.user.id;
         kyc.reviewedAt = new Date();
@@ -165,24 +298,28 @@ export const reviewRecruiterKyc = async (req, res) => {
             recruiterKycStatus: finalDecision,
             kycStatus: finalDecision, // Sync global status
             isKycVerified: finalDecision === 'approved',
-            kycRejectionReason: finalDecision === 'rejected' || finalDecision === 'resubmission_locked' ? reason : null,
+            kycRejectionReason: finalDecision === 'rejected'
+                ? (kyc.representativeRejectionReason || kyc.companyRejectionReason || reason || '')
+                : null,
             kycVerifiedAt: finalDecision === 'approved' ? new Date() : null
         });
 
         // Notify Recruiter
-        let messageTitle = finalDecision === 'resubmission_locked' ? 'Verification Locked' : `Recruiter KYC ${finalDecision === 'approved' ? 'Approved' : 'Rejected'}`;
-        let messageBody = finalDecision === 'approved'
-                ? 'Your Recruiter Identity has been verified. You can now post jobs and create a company profile.'
-                : `Your Recruiter KYC was rejected. Reason: ${reason}`;
-        if (finalDecision === 'resubmission_locked') {
-            messageBody += " You have reached the maximum resubmission limit. Please contact support.";
-        } else if (finalDecision === 'rejected') {
-            messageBody += ` You have ${3 - (kyc.resubmissionCount || 0)} resubmission attempts remaining. Please update your documents and resubmit.`;
+        const sectionLabel = section === 'representative' ? 'Representative Verification' : 'Company Verification';
+        const messageTitle = `${sectionLabel} ${decision === 'approved' ? 'Approved' : 'Rejected'}`;
+        let messageBody = decision === 'approved'
+            ? `${sectionLabel} has been approved by admin.`
+            : `${sectionLabel} was rejected. Reason: ${reason || 'Not specified'}`;
+        if (section === 'representative' && decision === 'approved' && kyc.companyStatus !== 'approved') {
+            messageBody += ' Company verification is still pending review.';
+        }
+        if (finalDecision === 'approved') {
+            messageBody += ' Your recruiter verification is fully approved.';
         }
 
         await createNotification({
             recipient: kyc.userId,
-            type: finalDecision === 'approved' ? 'recruiter_approved' : 'recruiter_rejected',
+            type: decision === 'approved' ? 'recruiter_approved' : 'recruiter_rejected',
             category: 'recruiter',
             title: messageTitle,
             message: messageBody,
@@ -193,12 +330,19 @@ export const reviewRecruiterKyc = async (req, res) => {
         // Log Activity
         await logActivity(
             req.user.id,
-            `KYC_${finalDecision.toUpperCase()}`,
-            `Admin ${finalDecision} recruiter KYC for ${updatedUser ? updatedUser.fullName : kyc.fullName}.`,
+            `KYC_${decision.toUpperCase()}`,
+            `Admin ${decision} ${section} review for ${updatedUser ? updatedUser.fullName : kyc.fullName}.`,
             { actorRole: 'admin' }
         );
 
-        res.json({ message: `KYC ${finalDecision} successfully.` });
+        res.json({
+            message: `${sectionLabel} ${decision} successfully.`,
+            status: {
+                representativeStatus: kyc.representativeStatus,
+                companyStatus: kyc.companyStatus,
+                overallStatus: kyc.status
+            }
+        });
 
     } catch (error) {
         console.error("KYC Review Error:", error);

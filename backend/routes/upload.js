@@ -68,7 +68,7 @@ const storage = multer.diskStorage({
 const allowedImageTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
 const allowedDocTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
 
-const kycImageOnlyFields = ['avatar', 'selfieWithId', 'selfie', 'companyLogo'];
+const kycImageOnlyFields = ['avatar', 'selfieWithId', 'selfie', 'representativePhoto', 'companyLogo'];
 const kycImageOrPdfFields = ['documentFront', 'documentBack', 'idFront', 'idBack', 'registrationDocument', 'taxDocument'];
 
 const fileFilter = (req, file, cb) => {
