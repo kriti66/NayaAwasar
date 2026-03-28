@@ -56,7 +56,12 @@ const profileSchema = new mongoose.Schema({
         fileName: { type: String, default: '' },
         uploadedAt: { type: Date },
         source: { type: String, enum: ['uploaded', 'generated'], default: 'uploaded' },
-        lastGeneratedAt: { type: Date }
+        lastGeneratedAt: { type: Date },
+        /** Set only for generated PDFs (not used for uploaded files). */
+        cvTemplate: {
+            type: String,
+            enum: ['classic', 'modern', 'professional', 'minimal', 'creative']
+        }
     },
     profileStrength: {
         type: Number,

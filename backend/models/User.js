@@ -142,6 +142,9 @@ const userSchema = new mongoose.Schema({
     reset_password_expires: { type: Date, default: null },
     isActive: { type: Boolean, default: true },
 
+    /** Free job promotions used (admin-approved free slots); max 3 before paid manual request flow */
+    freePromotionUsed: { type: Number, default: 0, min: 0 },
+
     // AI Recommendation Fields
     cvText: { type: String, default: '' }, // Extracted text from PDF
     userProfileText: { type: String, default: '' } // Combined text for AI analysis

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../services/api';
 
 const Contact = () => {
@@ -25,20 +26,13 @@ const Contact = () => {
 
     const displayLoc = location || {
         address: 'Kathmandu, Nepal',
-        latitude: 27.7172,
-        longitude: 85.3240,
         phone: '+977 1234567890',
         email: 'info@nayaawasar.com'
     };
 
-    const hasCoordinates = displayLoc.latitude && displayLoc.longitude &&
-        !isNaN(displayLoc.latitude) && !isNaN(displayLoc.longitude);
-
-    const mapQuery = hasCoordinates
-        ? `${displayLoc.latitude},${displayLoc.longitude}`
-        : encodeURIComponent(displayLoc.address || 'Kathmandu, Nepal');
-
-    const mapSrc = `https://maps.google.com/maps?q=${mapQuery}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+    // Google Maps embed: geocodes from the saved physical address only (no stored lat/lng).
+    const mapAddress = (displayLoc.address || '').trim() || 'Kathmandu, Nepal';
+    const mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(mapAddress)}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
 
     const handleChange = (e) => {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -103,57 +97,41 @@ const Contact = () => {
 
     return (
         <div className="bg-[#f8fafc] min-h-screen">
-            {/* Hero */}
-            <div className="relative bg-gradient-to-br from-slate-900 via-[#0d2f2b] to-slate-900 py-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
+            {/* Hero — slightly tighter so main content sits higher above the fold */}
+            <div className="relative bg-gradient-to-br from-slate-900 via-[#0d2f2b] to-slate-900 py-12 sm:py-14 px-4 sm:px-6 lg:px-8 overflow-hidden">
                 <div className="absolute inset-0 opacity-10">
                     <div className="absolute top-10 left-20 w-72 h-72 bg-[#29a08e] rounded-full blur-3xl"></div>
                 </div>
                 <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)', backgroundSize: '28px 28px' }}></div>
                 <div className="relative max-w-3xl mx-auto text-center">
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#29a08e]/20 border border-[#29a08e]/30 rounded-full text-sm font-medium text-[#29a08e] mb-6">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#29a08e]/20 border border-[#29a08e]/30 rounded-full text-sm font-medium text-[#29a08e] mb-4 sm:mb-5">
                         💬 We'd Love to Hear From You
                     </div>
-                    <h1 className="text-5xl font-black text-white mb-4 tracking-tight">
+                    <h1 className="text-4xl sm:text-5xl font-black text-white mb-3 tracking-tight">
                         Get in <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#29a08e] to-teal-300">Touch</span>
                     </h1>
-                    <p className="text-gray-300 text-lg">Have questions? Our friendly team is always ready to help.</p>
+                    <p className="text-gray-300 text-base sm:text-lg">Have questions? Our friendly team is always ready to help.</p>
                 </div>
             </div>
 
-            {/* Contact Info Cards */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-8 relative z-10 mb-10">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {contactInfo.map((info, i) => (
-                        <div key={i} className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-md transition-all flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center border ${info.color} shrink-0`}>
-                                {info.icon}
-                            </div>
-                            <div>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">{info.label}</p>
-                                <p className="text-gray-900 font-semibold text-sm">{info.value}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Main Content */}
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-20">
-                <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
-                    {/* Contact Form */}
-                    <div className="lg:col-span-3">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-                            <div className="mb-6">
-                                <h2 className="text-2xl font-black text-gray-900 truncate">Send us a Message</h2>
+            {/* Two columns (lg+): form + sidebar left | map + contact details right. Mobile: stacked, form first. */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 sm:-mt-8 relative z-10 pb-16 lg:pb-20">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+                    {/* Left: contact form, then hours, help, promotion CTA */}
+                    <div className="lg:col-span-7 space-y-6">
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-7">
+                            <div className="mb-5">
+                                <h2 className="text-xl sm:text-2xl font-black text-gray-900 truncate">Send us a Message</h2>
                                 <p className="text-gray-500 text-sm mt-1">We'll get back to you within 24 hours.</p>
                             </div>
 
                             {formSubmitted ? (
-                                <div className="text-center py-12">
+                                <div className="text-center py-10 sm:py-12">
                                     <div className="w-20 h-20 bg-[#29a08e]/10 rounded-full flex items-center justify-center mx-auto mb-4 text-4xl">✅</div>
                                     <h3 className="text-xl font-black text-gray-900 mb-2">Message Sent!</h3>
                                     <p className="text-gray-500 text-sm max-w-md mx-auto">Thank you for contacting us. We have received your message and will get back to you within 24 hours.</p>
                                     <button
+                                        type="button"
                                         onClick={() => { setFormSubmitted(false); setFormData({ name: '', email: '', subject: '', message: '' }); setSubmitError(''); }}
                                         className="mt-6 px-6 py-2.5 text-sm font-bold text-[#29a08e] border border-[#29a08e]/30 rounded-xl hover:bg-[#29a08e]/5 transition-colors"
                                     >
@@ -161,7 +139,7 @@ const Contact = () => {
                                     </button>
                                 </div>
                             ) : (
-                                <form className="space-y-5" onSubmit={handleSubmit}>
+                                <form className="space-y-4" onSubmit={handleSubmit}>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {[
                                             { label: 'Full Name', name: 'name', type: 'text', placeholder: 'John Doe' },
@@ -175,7 +153,7 @@ const Contact = () => {
                                                     value={formData[field.name]}
                                                     onChange={handleChange}
                                                     placeholder={field.placeholder}
-                                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-gray-900 text-sm transition-all placeholder-gray-400"
+                                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 sm:py-3 px-4 text-gray-900 text-sm transition-all placeholder-gray-400"
                                                     required
                                                 />
                                             </div>
@@ -190,7 +168,7 @@ const Contact = () => {
                                             value={formData.subject}
                                             onChange={handleChange}
                                             placeholder="How can we help you?"
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-gray-900 text-sm transition-all placeholder-gray-400"
+                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 sm:py-3 px-4 text-gray-900 text-sm transition-all placeholder-gray-400"
                                             required
                                         />
                                     </div>
@@ -198,12 +176,12 @@ const Contact = () => {
                                     <div className="space-y-1.5">
                                         <label className="text-sm font-semibold text-gray-700">Message</label>
                                         <textarea
-                                            rows={5}
+                                            rows={4}
                                             name="message"
                                             value={formData.message}
                                             onChange={handleChange}
                                             placeholder="Tell us more about your question or feedback..."
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-gray-900 text-sm transition-all resize-none placeholder-gray-400"
+                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-2.5 sm:py-3 px-4 text-gray-900 text-sm transition-all resize-y min-h-[100px] placeholder-gray-400"
                                             required
                                         />
                                     </div>
@@ -236,57 +214,92 @@ const Contact = () => {
                                 </form>
                             )}
                         </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 sm:p-6">
+                                <h3 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                                    <span>🕐</span> Office Hours
+                                </h3>
+                                <div className="space-y-2">
+                                    {[
+                                        { day: 'Sunday – Friday', hours: '9:00 AM – 6:00 PM' },
+                                        { day: 'Saturday', hours: '10:00 AM – 3:00 PM' },
+                                        { day: 'Public Holidays', hours: 'Closed' },
+                                    ].map((h, i) => (
+                                        <div key={i} className="flex justify-between items-center gap-2 py-2 border-b border-gray-50 last:border-0">
+                                            <span className="text-sm text-gray-600 font-medium">{h.day}</span>
+                                            <span className={`text-sm font-bold shrink-0 ${h.hours === 'Closed' ? 'text-red-500' : 'text-[#29a08e]'}`}>{h.hours}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-gradient-to-br from-[#29a08e]/5 to-[#29a08e]/10 border border-[#29a08e]/20 rounded-2xl p-5 sm:p-6 flex flex-col">
+                                <h3 className="font-bold text-gray-900 mb-2">Need Help Right Now?</h3>
+                                <p className="text-sm text-gray-600 mb-4 flex-1">Browse our FAQ or explore our platform directly.</p>
+                                <Link to="/help-center" className="inline-flex items-center gap-2 text-sm font-bold text-[#29a08e] hover:text-[#228377] transition-colors mt-auto">
+                                    View Help Center →
+                                </Link>
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 sm:p-6">
+                            <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                <span aria-hidden>📣</span> Recruiters: paid job promotion
+                            </h3>
+                            <p className="text-sm text-gray-600 mb-4">
+                                If you have already used your <strong>3 free</strong> job promotions, you can submit a
+                                manual paid promotion request with payment proof. Sign in as a recruiter to complete the
+                                form — use the message form here for general inquiries.
+                            </p>
+                            <Link
+                                to="/promotion-payment"
+                                className="inline-flex items-center justify-center w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold bg-[#29a08e] text-white hover:bg-[#228377] transition-colors"
+                            >
+                                Paid promotion request →
+                            </Link>
+                        </div>
                     </div>
 
-                    {/* Map & Extra Info */}
-                    <div className="lg:col-span-2 space-y-6">
+                    {/* Right: map + contact chips */}
+                    <aside className="lg:col-span-5 space-y-4">
                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                            <div className="p-5 border-b border-gray-50">
-                                <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                    <span>📍</span> Our Location
+                            <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-gray-50">
+                                <h3 className="font-bold text-gray-900 text-base sm:text-lg flex items-center gap-2">
+                                    <span aria-hidden>📍</span> Find us
                                 </h3>
-                                <p className="text-sm text-gray-500 mt-0.5">{displayLoc.address}</p>
+                                <p className="text-xs sm:text-sm text-gray-500 mt-1 leading-snug">{mapAddress}</p>
                             </div>
-                            <div className="h-[280px]">
+                            <div className="h-[250px] sm:h-[280px] bg-gray-100">
                                 <iframe
-                                    title="Office Location"
+                                    title="Office location map"
                                     width="100%"
                                     height="100%"
-                                    frameBorder="0"
+                                    loading="lazy"
+                                    referrerPolicy="no-referrer-when-downgrade"
                                     src={mapSrc}
-                                    className="w-full h-full"
+                                    className="w-full h-full border-0"
                                 />
                             </div>
                         </div>
 
-                        {/* Office Hours */}
-                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <span>🕐</span> Office Hours
-                            </h3>
-                            <div className="space-y-2">
-                                {[
-                                    { day: 'Sunday – Friday', hours: '9:00 AM – 6:00 PM' },
-                                    { day: 'Saturday', hours: '10:00 AM – 3:00 PM' },
-                                    { day: 'Public Holidays', hours: 'Closed' },
-                                ].map((h, i) => (
-                                    <div key={i} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-0">
-                                        <span className="text-sm text-gray-600 font-medium">{h.day}</span>
-                                        <span className={`text-sm font-bold ${h.hours === 'Closed' ? 'text-red-500' : 'text-[#29a08e]'}`}>{h.hours}</span>
+                        <div className="space-y-3">
+                            {contactInfo.map((info, i) => (
+                                <div
+                                    key={i}
+                                    className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-all flex items-center gap-3"
+                                >
+                                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center border ${info.color} shrink-0`}>
+                                        {info.icon}
                                     </div>
-                                ))}
-                            </div>
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">{info.label}</p>
+                                        <p className="text-gray-900 font-semibold text-sm break-words">{info.value}</p>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-
-                        {/* Quick Links */}
-                        <div className="bg-gradient-to-br from-[#29a08e]/5 to-[#29a08e]/10 border border-[#29a08e]/20 rounded-2xl p-6">
-                            <h3 className="font-bold text-gray-900 mb-3">Need Help Right Now?</h3>
-                            <p className="text-sm text-gray-600 mb-4">Browse our FAQ or explore our platform directly.</p>
-                            <a href="/about" className="inline-flex items-center gap-2 text-sm font-bold text-[#29a08e] hover:text-[#228377] transition-colors">
-                                View Help Center →
-                            </a>
-                        </div>
-                    </div>
+                    </aside>
                 </div>
             </div>
         </div>

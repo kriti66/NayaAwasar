@@ -128,6 +128,7 @@ import zegoRoutes from './routes/zegoRoutes.js';
 import recommendationRoutes from './routes/recommendations.js';
 import contactRoutes from './routes/contact.js';
 import promotionRoutes from './routes/promotions.js';
+import promotionPaymentRequestRoutes from './routes/promotionPaymentRequests.js';
 
 import aiRoutes from './routes/ai.js';
 
@@ -158,6 +159,7 @@ app.use('/api/companies', companyRoutes);
 app.use('/api/recruiter', recruiterRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/promotions', promotionRoutes);
+app.use('/api/promotion-payment-requests', promotionPaymentRequestRoutes);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

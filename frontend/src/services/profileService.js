@@ -76,8 +76,9 @@ const profileService = {
     },
 
     // CV Methods
-    generateCV: async () => {
-        const response = await api.post('/profile/generate-cv');
+    /** @param {string} [template] - classic | modern | professional | minimal | creative */
+    generateCV: async (template) => {
+        const response = await api.post('/profile/generate-cv', template ? { template } : {});
         return response.data;
     },
 

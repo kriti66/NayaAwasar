@@ -12,6 +12,8 @@ import profileService from '../../services/profileService';
 import projectService from '../../services/projectService';
 import activityService from '../../services/activityService';
 import { resolveAssetUrl } from '../../utils/assetUrl';
+import { getCvTemplateLabel } from '../../constants/cvTemplates';
+import CvTemplatePickerModal from '../../components/profile/CvTemplatePickerModal';
 
 const JobseekerProfileDashboard = () => {
 
@@ -23,6 +25,7 @@ const JobseekerProfileDashboard = () => {
     const [fetchError, setFetchError] = useState(null);
     const [modal, setModal] = useState(null);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [cvTemplateModalOpen, setCvTemplateModalOpen] = useState(false);
     const [avatarFailed, setAvatarFailed] = useState(false);
 
     // Fetch Data
@@ -115,19 +118,24 @@ const JobseekerProfileDashboard = () => {
         }
     };
 
-    const handleGenerateCV = async () => {
+    const runGenerateCV = async (templateId, { closeModal = false } = {}) => {
         if (isGenerating) return;
         setIsGenerating(true);
-        const toastId = toast.loading("Syncing profile data to CV...");
+        const toastId = toast.loading('Building your CV PDF...');
         try {
-            const res = await profileService.generateCV();
-            setProfile(prev => ({ ...prev, resume: res.resume }));
-            toast.success("CV updated with your latest profile data!", { id: toastId });
-            refreshProfile();
+            const res = await profileService.generateCV(templateId);
+            if (res.success && res.resume) {
+                setProfile((prev) => ({ ...prev, resume: res.resume }));
+                toast.success('CV updated with your latest profile data!', { id: toastId });
+                if (closeModal) setCvTemplateModalOpen(false);
+                await refreshProfile();
+            } else {
+                toast.error('Unexpected response from server', { id: toastId });
+            }
         } catch (err) {
             console.error(err);
             const payload = err?.response?.data;
-            const backendMessage = payload?.error || payload?.message || err?.message || "Failed to generate CV";
+            const backendMessage = payload?.error || payload?.message || err?.message || 'Failed to generate CV';
             const details = payload?.details;
             const detailsShort =
                 typeof details === 'string'
@@ -477,13 +485,15 @@ const JobseekerProfileDashboard = () => {
                         {(!profile.resume || !profile.resume.fileUrl) && (
                             <div className="mb-4">
                                 <button
-                                    onClick={handleGenerateCV}
+                                    type="button"
+                                    onClick={() => setCvTemplateModalOpen(true)}
                                     disabled={isGenerating}
                                     className="w-full py-3 bg-gradient-to-r from-[#29a08e]/10 to-teal-50 hover:from-[#29a08e]/20 hover:to-teal-100 text-[#29a08e] border border-[#29a08e]/20 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <RefreshCw size={16} className={isGenerating ? 'animate-spin' : ''} />
-                                    {isGenerating ? 'Syncing...' : 'Auto-Generate CV from Profile'}
+                                    Auto-Generate CV from Profile
                                 </button>
+                                <p className="text-[10px] text-gray-400 text-center mt-2 font-medium">Choose a template in the next step</p>
                                 <div className="text-center text-[10px] font-black text-gray-300 uppercase tracking-widest my-3">or upload manually</div>
                             </div>
                         )}
@@ -501,6 +511,12 @@ const JobseekerProfileDashboard = () => {
                                     </span>
                                 )}
 
+                                {profile.resume.source === 'generated' && profile.resume.cvTemplate && (
+                                    <p className="text-[11px] text-gray-600 mt-2 font-bold">
+                                        Template: <span className="text-[#29a08e]">{getCvTemplateLabel(profile.resume.cvTemplate)}</span>
+                                    </p>
+                                )}
+
                                 <p className="text-[11px] text-gray-400 mt-1 font-medium">
                                     {profile.resume.source === 'generated' ? 'Generated ' : 'Uploaded '}
                                     {new Date(profile.resume.uploadedAt || profile.resume.lastGeneratedAt).toLocaleDateString()}
@@ -508,6 +524,7 @@ const JobseekerProfileDashboard = () => {
 
                                 <div className="grid grid-cols-2 gap-2 mt-4">
                                     <button
+                                        type="button"
                                         onClick={() => profileService.viewGeneratedCV()}
                                         className="col-span-2 flex items-center justify-center gap-2 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-black transition-colors"
                                     >
@@ -515,6 +532,7 @@ const JobseekerProfileDashboard = () => {
                                     </button>
 
                                     <button
+                                        type="button"
                                         onClick={() => profileService.downloadGeneratedCV(profile.resume.fileName)}
                                         className="col-span-2 flex items-center justify-center gap-2 py-2.5 bg-[#29a08e] text-white rounded-xl text-xs font-bold hover:bg-[#228377] transition-all shadow-md shadow-[#29a08e]/20"
                                     >
@@ -522,16 +540,28 @@ const JobseekerProfileDashboard = () => {
                                     </button>
 
                                     {profile.resume.source === 'generated' ? (
-                                        <button
-                                            onClick={handleGenerateCV}
-                                            disabled={isGenerating}
-                                            className="flex items-center justify-center gap-2 py-2.5 bg-white border border-[#29a08e]/20 text-[#29a08e] rounded-xl text-xs font-bold hover:bg-[#29a08e]/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            <RefreshCw size={14} className={isGenerating ? 'animate-spin' : ''} />
-                                            {isGenerating ? 'Updating...' : 'Update'}
-                                        </button>
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCvTemplateModalOpen(true)}
+                                                disabled={isGenerating}
+                                                className="col-span-2 flex items-center justify-center gap-2 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors disabled:opacity-50"
+                                            >
+                                                Change template
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => runGenerateCV(profile.resume?.cvTemplate || 'professional')}
+                                                disabled={isGenerating}
+                                                className="flex items-center justify-center gap-2 py-2.5 bg-white border border-[#29a08e]/20 text-[#29a08e] rounded-xl text-xs font-bold hover:bg-[#29a08e]/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <RefreshCw size={14} className={isGenerating ? 'animate-spin' : ''} />
+                                                {isGenerating ? 'Updating...' : 'Update'}
+                                            </button>
+                                        </>
                                     ) : (
                                         <button
+                                            type="button"
                                             onClick={() => document.getElementById('resume-upload').click()}
                                             className="flex items-center justify-center gap-2 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors"
                                         >
@@ -540,6 +570,7 @@ const JobseekerProfileDashboard = () => {
                                     )}
 
                                     <button
+                                        type="button"
                                         onClick={handleDeleteResume}
                                         className="flex items-center justify-center gap-2 py-2.5 bg-white border border-rose-100 text-rose-500 rounded-xl text-xs font-bold hover:bg-rose-50 transition-colors"
                                     >
@@ -647,6 +678,22 @@ const JobseekerProfileDashboard = () => {
             </div>
 
             {/* ─── MODALS ─── */}
+            <CvTemplatePickerModal
+                open={cvTemplateModalOpen}
+                onClose={() => {
+                    if (!isGenerating) setCvTemplateModalOpen(false);
+                }}
+                initialTemplateId={profile?.resume?.cvTemplate || 'professional'}
+                isGenerating={isGenerating}
+                title={
+                    profile?.resume?.fileUrl && profile?.resume?.source === 'generated'
+                        ? 'Change resume template'
+                        : 'Choose a resume template'
+                }
+                subtitle="Your profile data is unchanged—we only update the PDF layout. Pick a design, then generate."
+                onConfirm={(templateId) => runGenerateCV(templateId, { closeModal: true })}
+            />
+
             {modal && (
                 <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in zoom-in-95 duration-200 border border-gray-100">

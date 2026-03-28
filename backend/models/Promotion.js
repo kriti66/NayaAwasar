@@ -63,6 +63,17 @@ const promotionSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: false
+    },
+    /** standard = free/paid flow via Promotion request; manual_payment_request = admin approved paid form */
+    promotionSource: {
+        type: String,
+        enum: ['standard', 'manual_payment_request'],
+        default: 'standard'
+    },
+    manualPaymentRequestId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'PromotionPaymentRequest',
+        default: null
     }
 }, { timestamps: true });
 

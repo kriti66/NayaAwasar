@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 
 const Login = () => {
@@ -11,22 +11,33 @@ const Login = () => {
     const [error, setError] = useState('');
     const { login, loginWithGoogle } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    const getPostLoginPath = (role, kycStatus) => {
+        const raw = location.state?.from;
+        const safeFrom =
+            typeof raw === 'string' && raw.startsWith('/') && !raw.startsWith('//') ? raw : null;
+
+        if (role === 'admin') return '/admin/dashboard';
+
+        const needsKyc =
+            kycStatus === 'not_started' ||
+            kycStatus === 'not_submitted' ||
+            kycStatus === 'pending' ||
+            kycStatus === 'rejected';
+        if (needsKyc) return '/kyc';
+
+        if (role === 'recruiter' && safeFrom) return safeFrom;
+        if (role === 'recruiter') return '/recruiter/dashboard';
+        return '/seeker/dashboard';
+    };
 
     const handleSocialLoginSuccess = (result) => {
         if (result.success) {
             const storedUser = JSON.parse(localStorage.getItem('user'));
             const role = storedUser?.role;
-            if (role === 'admin') {
-                navigate('/admin/dashboard');
-                return;
-            }
             const kycStatus = storedUser?.kycStatus;
-            if (kycStatus === 'not_started' || kycStatus === 'not_submitted' || kycStatus === 'pending' || kycStatus === 'rejected') {
-                navigate('/kyc');
-            } else {
-                if (role === 'recruiter') navigate('/recruiter/dashboard');
-                else navigate('/seeker/dashboard');
-            }
+            navigate(getPostLoginPath(role, kycStatus));
         } else {
             setError(result.message || 'Social login failed. Please try again.');
             setLoading(false);
@@ -56,19 +67,8 @@ const Login = () => {
         if (result.success) {
             const storedUser = JSON.parse(localStorage.getItem('user'));
             const role = storedUser?.role;
-
-            if (role === 'admin') {
-                navigate('/admin/dashboard');
-                return;
-            }
-
             const kycStatus = storedUser?.kycStatus;
-            if (kycStatus === 'not_started' || kycStatus === 'not_submitted' || kycStatus === 'pending' || kycStatus === 'rejected') {
-                navigate('/kyc');
-            } else {
-                if (role === 'recruiter') navigate('/recruiter/dashboard');
-                else navigate('/seeker/dashboard');
-            }
+            navigate(getPostLoginPath(role, kycStatus));
         } else {
             setError(result.message || 'Login failed. Please check your credentials.');
             setLoading(false);

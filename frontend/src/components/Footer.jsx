@@ -93,7 +93,7 @@ const Footer = () => {
                                 { id: 'create-profile', label: 'Create Profile', path: '/register?role=jobseeker' },
                                 { id: 'my-dashboard', label: 'My Dashboard', path: '/seeker/dashboard' },
                                 { id: 'job-alerts', label: 'Job Alerts', path: '/seeker/dashboard' },
-                                { id: 'career-resources', label: 'Career Resources', path: '/about' },
+                                { id: 'career-resources', label: 'Career Resources', path: '/help-center' },
                             ].map((l) => (
                                 <li key={l.id || l.path}>
                                     <Link to={l.path} className="text-sm text-gray-400 hover:text-[#29a08e] transition-colors flex items-center gap-1.5 group">
@@ -131,6 +131,7 @@ const Footer = () => {
                         <h3 className="text-xs font-bold text-white uppercase tracking-widest">Company</h3>
                         <ul className="space-y-2.5">
                             {[
+                                { label: 'Help Center', path: '/help-center' },
                                 { label: 'About Us', path: '/about' },
                                 { label: 'Contact', path: '/contact' },
                             ].map((l) => (

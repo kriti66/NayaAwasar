@@ -1,18 +1,14 @@
 import { useState, useEffect } from 'react';
-import { promotionService, PROMOTION_TYPE_LABELS, STATUS_COLORS, PROMOTION_TYPE_COLORS, PAYMENT_STATUS_COLORS } from '../../services/promotionService';
-import { toast } from 'react-hot-toast';
 import {
-    Megaphone,
-    Search,
-    Filter,
-    CheckCircle,
-    XCircle,
-    CreditCard,
-    Eye,
-    X,
-    RefreshCw,
-    ChevronDown
-} from 'lucide-react';
+    promotionService,
+    PROMOTION_TYPE_LABELS,
+    STATUS_COLORS,
+    PROMOTION_TYPE_COLORS,
+    PAYMENT_STATUS_COLORS
+} from '../../services/promotionService';
+import { resolveAssetUrl } from '../../utils/assetUrl';
+import { toast } from 'react-hot-toast';
+import { Search, CheckCircle, XCircle, Eye, RefreshCw } from 'lucide-react';
 import { API_BASE_URL } from '../../config/api';
 
 const API_BASE = API_BASE_URL;
@@ -24,7 +20,8 @@ const AdminPromotionRequests = () => {
     const [filterStatus, setFilterStatus] = useState('');
     const [filterType, setFilterType] = useState('');
     const [search, setSearch] = useState('');
-    const [activeTab, setActiveTab] = useState('promotions'); // promotions | payments
+    const [activeTab, setActiveTab] = useState('promotions'); // promotions | payments | manual
+    const [manualPending, setManualPending] = useState([]);
     const [rejectReason, setRejectReason] = useState('');
     const [rejectModal, setRejectModal] = useState({ open: false, id: null, type: 'promotion' });
 
@@ -36,12 +33,14 @@ const AdminPromotionRequests = () => {
             if (filterType) params.type = filterType;
             if (search) params.search = search;
 
-            const [promRes, payRes] = await Promise.all([
+            const [promRes, payRes, manualRes] = await Promise.all([
                 promotionService.adminGetAll(params),
-                promotionService.adminGetPayments({ status: 'pending_verification' })
+                promotionService.adminGetPayments({ status: 'pending_verification' }),
+                promotionService.adminListPendingManualPromotionRequests()
             ]);
             setPromotions(promRes.data);
             setPayments(payRes.data);
+            setManualPending(Array.isArray(manualRes.data) ? manualRes.data : []);
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to load data');
         } finally {
@@ -108,6 +107,29 @@ const AdminPromotionRequests = () => {
         }
     };
 
+    const handleApproveManual = async (requestId) => {
+        try {
+            await promotionService.adminApproveManualPromotionRequest(requestId);
+            toast.success('Manual payment approved; job promoted');
+            fetchData();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to approve');
+        }
+    };
+
+    const handleRejectManual = async () => {
+        if (!rejectModal.id) return;
+        try {
+            await promotionService.adminRejectManualPromotionRequest(rejectModal.id, rejectReason);
+            toast.success('Manual request rejected');
+            setRejectModal({ open: false, id: null, type: 'promotion' });
+            setRejectReason('');
+            fetchData();
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Failed to reject');
+        }
+    };
+
     const formatDate = (d) => {
         if (!d) return '—';
         const x = new Date(d);
@@ -149,6 +171,12 @@ const AdminPromotionRequests = () => {
                         className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors ${activeTab === 'payments' ? 'bg-[#29a08e] text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'}`}
                     >
                         Payment Verification ({paymentsPending.length})
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('manual')}
+                        className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors ${activeTab === 'manual' ? 'bg-[#29a08e] text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'}`}
+                    >
+                        Manual paid requests ({manualPending.length})
                     </button>
                 </div>
 
@@ -192,6 +220,91 @@ const AdminPromotionRequests = () => {
                 {loading ? (
                     <div className="flex justify-center py-24">
                         <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#29a08e] border-t-transparent" />
+                    </div>
+                ) : activeTab === 'manual' ? (
+                    <div className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="bg-slate-800">
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-200 uppercase tracking-wider">Recruiter / Company</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-200 uppercase tracking-wider">Job</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-200 uppercase tracking-wider">Package</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-200 uppercase tracking-wider">Payment</th>
+                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-200 uppercase tracking-wider">Proof</th>
+                                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-200 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-200">
+                                    {manualPending.map((row) => (
+                                        <tr key={row._id} className="bg-white hover:bg-slate-50 transition-colors duration-150">
+                                            <td className="px-6 py-4">
+                                                <p className="font-semibold text-slate-900">{row.recruiterId?.fullName || '—'}</p>
+                                                <p className="text-sm text-slate-600 mt-0.5">{row.companyName || row.companyId?.name || '—'}</p>
+                                                <p className="text-xs text-slate-500 mt-1">{row.email} · {row.phone}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="font-medium text-slate-900">{row.jobTitle || row.jobId?.title || '—'}</p>
+                                                <p className="text-xs font-mono text-slate-500 mt-1">{row.jobId?._id || row.jobId}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border ${PROMOTION_TYPE_COLORS[row.promotionType] || 'bg-slate-100 text-slate-700 border-slate-300'}`}>
+                                                    {PROMOTION_TYPE_LABELS[row.promotionType] || row.promotionType}
+                                                </span>
+                                                <p className="text-sm text-slate-600 mt-1">{row.durationDays} days · Rs. {row.amount}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="text-xs font-semibold text-slate-600">{row.paymentMethod?.replace(/_/g, ' ')}</p>
+                                                <p className="text-sm font-mono text-slate-800 bg-slate-100 px-2 py-1 rounded mt-1 inline-block">{row.transactionId}</p>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {row.paymentScreenshot ? (
+                                                    <a
+                                                        href={resolveAssetUrl(row.paymentScreenshot)}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#29a08e] hover:text-[#238276]"
+                                                    >
+                                                        <Eye size={16} />
+                                                        View
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-slate-400 text-sm">—</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex gap-2 justify-end">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleApproveManual(row._id)}
+                                                        className="p-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors"
+                                                        title="Approve"
+                                                        aria-label="Approve"
+                                                    >
+                                                        <CheckCircle size={18} strokeWidth={2.5} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setRejectModal({ open: true, id: row._id, type: 'manual' })}
+                                                        className="p-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
+                                                        title="Reject"
+                                                        aria-label="Reject"
+                                                    >
+                                                        <XCircle size={18} strokeWidth={2.5} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {manualPending.length === 0 && (
+                            <div className="p-16 text-center">
+                                <p className="text-slate-600 font-medium">No pending manual promotion payment requests.</p>
+                                <p className="text-sm text-slate-500 mt-1">Recruiter submissions with proof appear here.</p>
+                            </div>
+                        )}
                     </div>
                 ) : activeTab === 'promotions' ? (
                     <div className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
@@ -369,7 +482,14 @@ const AdminPromotionRequests = () => {
             {rejectModal.open && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60">
                     <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-                        <h3 className="text-lg font-black text-slate-900 mb-4">Reject {rejectModal.type === 'promotion' ? 'Promotion' : 'Payment'}</h3>
+                        <h3 className="text-lg font-black text-slate-900 mb-4">
+                            Reject{' '}
+                            {rejectModal.type === 'promotion'
+                                ? 'Promotion'
+                                : rejectModal.type === 'manual'
+                                    ? 'manual payment request'
+                                    : 'Payment'}
+                        </h3>
                         <textarea
                             value={rejectReason}
                             onChange={e => setRejectReason(e.target.value)}
@@ -388,7 +508,11 @@ const AdminPromotionRequests = () => {
                                 Cancel
                             </button>
                             <button
-                                onClick={rejectModal.type === 'promotion' ? handleRejectPromotion : handleRejectPayment}
+                                onClick={() => {
+                                    if (rejectModal.type === 'promotion') handleRejectPromotion();
+                                    else if (rejectModal.type === 'manual') handleRejectManual();
+                                    else handleRejectPayment();
+                                }}
                                 className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
                             >
                                 Reject

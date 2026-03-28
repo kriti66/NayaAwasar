@@ -14,6 +14,7 @@ import Education from '../../components/profile/Education';
 import Skills from '../../components/profile/Skills';
 import ProjectsSection from '../../components/profile/ProjectsSection';
 import ResumeManagementCard from '../../components/profile/ResumeManagementCard';
+import CvTemplatePickerModal from '../../components/profile/CvTemplatePickerModal';
 import ProfileVisibilityCard from '../../components/profile/ProfileVisibilityCard';
 import ProfileStrengthCard from '../../components/profile/ProfileStrengthCard';
 import RecentActivityWidget from '../../components/dashboard/RecentActivityWidget';
@@ -25,6 +26,7 @@ const ProfileManagement = () => {
     const [editSection, setEditSection] = useState(null);
     const [formData, setFormData] = useState({});
     const [isGenerating, setIsGenerating] = useState(false);
+    const [cvTemplateModalOpen, setCvTemplateModalOpen] = useState(false);
 
     useEffect(() => {
         fetchProfile();
@@ -34,8 +36,16 @@ const ProfileManagement = () => {
         try {
             setLoading(true);
             const data = await profileService.getProfile();
-            setProfile(data);
-            setFormData(data);
+            let merged = { ...data };
+            try {
+                const me = await profileService.getMyProfile();
+                if (me?.resume) merged.resume = me.resume;
+                if (typeof me?.visibleToRecruiters === 'boolean') merged.visibleToRecruiters = me.visibleToRecruiters;
+            } catch {
+                /* Profile doc optional */
+            }
+            setProfile(merged);
+            setFormData(merged);
         } catch (error) {
             console.error("Error fetching profile:", error);
             toast.error("Failed to load profile");
@@ -116,15 +126,18 @@ const ProfileManagement = () => {
         }
     };
 
-    const handleAutoGenerateCV = async () => {
+    const runGenerateCV = async (templateId, { closeModal = false } = {}) => {
+        if (isGenerating) return;
         setIsGenerating(true);
+        const toastId = toast.loading('Building your CV PDF...');
         try {
-            toast.loading("Syncing profile data to CV...", { id: "cv-gen" });
-            const res = await profileService.generateCV();
-            // Expected response: { success: true, resume: { ... } }
+            const res = await profileService.generateCV(templateId);
             if (res.success && res.resume) {
-                setProfile(prev => ({ ...prev, resume: res.resume }));
-                toast.success("CV synchronized with your latest profile changes!", { id: "cv-gen" });
+                setProfile((prev) => ({ ...prev, resume: res.resume }));
+                toast.success('CV synchronized with your latest profile changes!', { id: toastId });
+                if (closeModal) setCvTemplateModalOpen(false);
+            } else {
+                toast.error('Unexpected response from server', { id: toastId });
             }
         } catch (error) {
             console.error("CV Gen error:", error);
@@ -137,7 +150,7 @@ const ProfileManagement = () => {
                     : details
                         ? JSON.stringify(details).slice(0, 240)
                         : '';
-            toast.error(detailsShort ? `${backendMessage}: ${detailsShort}` : backendMessage, { id: "cv-gen" });
+            toast.error(detailsShort ? `${backendMessage}: ${detailsShort}` : backendMessage, { id: toastId });
         } finally {
             setIsGenerating(false);
         }
@@ -370,8 +383,26 @@ const ProfileManagement = () => {
                             profile={profile}
                             onDownloadPDF={handleDownloadResume}
                             onUploadClick={handleFileUpload}
-                            onAutoGenerate={handleAutoGenerateCV}
+                            onAutoGenerate={() => setCvTemplateModalOpen(true)}
+                            onChangeTemplate={() => setCvTemplateModalOpen(true)}
+                            onRegenerateSameTemplate={() => runGenerateCV(profile?.resume?.cvTemplate || 'professional')}
                             isGenerating={isGenerating}
+                        />
+
+                        <CvTemplatePickerModal
+                            open={cvTemplateModalOpen}
+                            onClose={() => {
+                                if (!isGenerating) setCvTemplateModalOpen(false);
+                            }}
+                            initialTemplateId={profile?.resume?.cvTemplate || 'professional'}
+                            isGenerating={isGenerating}
+                            title={
+                                profile?.resume?.fileUrl && profile?.resume?.source === 'generated'
+                                    ? 'Change resume template'
+                                    : 'Choose a resume template'
+                            }
+                            subtitle="Your profile data stays the same—we only update the PDF layout."
+                            onConfirm={(templateId) => runGenerateCV(templateId, { closeModal: true })}
                         />
 
                         {/* Job Preferences (UI Card) */}

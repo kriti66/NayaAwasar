@@ -25,11 +25,57 @@ export async function getFreePromotionUsedCount(companyId) {
 }
 
 /**
- * Check if company can request free promotion
+ * Check if company can request free promotion (legacy: count Promotion docs)
  */
 export async function canUseFreePromotion(companyId) {
     const used = await getFreePromotionUsedCount(companyId);
     return used < FREE_PROMOTION_QUOTA;
+}
+
+/**
+ * Free promotion slots in use: pending review, active, expired, or approved (rejected/cancelled do not count).
+ */
+export async function getRecruiterCommittedFreePromotionSlots(recruiterId) {
+    return Promotion.countDocuments({
+        recruiterId,
+        isFreePromotion: true,
+        status: {
+            $in: [
+                PROMOTION_STATUSES.PENDING,
+                PROMOTION_STATUSES.ACTIVE,
+                PROMOTION_STATUSES.EXPIRED,
+                PROMOTION_STATUSES.APPROVED
+            ]
+        }
+    });
+}
+
+/**
+ * Free promotions that reached activation (for User.freePromotionUsed cache).
+ */
+export async function getRecruiterCompletedFreePromotionCount(recruiterId) {
+    return Promotion.countDocuments({
+        recruiterId,
+        isFreePromotion: true,
+        status: { $in: [PROMOTION_STATUSES.ACTIVE, PROMOTION_STATUSES.EXPIRED, PROMOTION_STATUSES.APPROVED] }
+    });
+}
+
+/**
+ * Sync User.freePromotionUsed from completed free promotions (optional cache for dashboards).
+ */
+export async function syncRecruiterFreePromotionUsedField(recruiterId) {
+    const completed = await getRecruiterCompletedFreePromotionCount(recruiterId);
+    await User.findByIdAndUpdate(recruiterId, { $set: { freePromotionUsed: completed } });
+    return completed;
+}
+
+/**
+ * Recruiter may request another free promotion (per recruiter, max FREE_PROMOTION_QUOTA committed slots).
+ */
+export async function canRecruiterUseFreePromotion(recruiterId) {
+    const committed = await getRecruiterCommittedFreePromotionSlots(recruiterId);
+    return committed < FREE_PROMOTION_QUOTA;
 }
 
 /**

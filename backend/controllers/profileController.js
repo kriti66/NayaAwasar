@@ -237,7 +237,8 @@ export const uploadResume = async (req, res) => {
         profile.resume = {
             fileUrl: `/uploads/resumes/${req.file.filename}`,
             fileName: req.file.originalname,
-            uploadedAt: new Date()
+            uploadedAt: new Date(),
+            source: 'uploaded'
         };
 
         const { score } = calculateProfileStrength(profile);

@@ -16,7 +16,16 @@ export const promotionService = {
     adminExpire: (promotionId) => api.patch(`/promotions/admin/${promotionId}/expire`),
     adminGetPayments: (params) => api.get('/promotions/admin/payments', { params }),
     adminApprovePayment: (paymentId) => api.patch(`/promotions/admin/payments/${paymentId}/approve`),
-    adminRejectPayment: (paymentId, reason) => api.patch(`/promotions/admin/payments/${paymentId}/reject`, { reason })
+    adminRejectPayment: (paymentId, reason) => api.patch(`/promotions/admin/payments/${paymentId}/reject`, { reason }),
+
+    /** Manual paid promotion requests (bank / wallet proof) */
+    submitPromotionPaymentRequest: (formData) => api.post('/promotion-payment-requests/', formData),
+    getMyPromotionPaymentRequests: () => api.get('/promotion-payment-requests/my'),
+    adminListPendingManualPromotionRequests: () => api.get('/promotion-payment-requests/admin/pending'),
+    adminApproveManualPromotionRequest: (requestId) =>
+        api.patch(`/promotion-payment-requests/admin/${requestId}/approve`),
+    adminRejectManualPromotionRequest: (requestId, reason) =>
+        api.patch(`/promotion-payment-requests/admin/${requestId}/reject`, { reason })
 };
 
 export const PROMOTION_TYPES = {
@@ -46,6 +55,12 @@ export const PROMOTION_TYPE_COLORS = {
     FEATURED: 'bg-indigo-100 text-indigo-800 border-indigo-300',
     SPONSORED: 'bg-violet-100 text-violet-800 border-violet-300',
     HOMEPAGE_HIGHLIGHT: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-300'
+};
+
+export const MANUAL_PAYMENT_REQUEST_STATUS_COLORS = {
+    pending: 'bg-amber-100 text-amber-800 border-amber-300',
+    approved: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    rejected: 'bg-red-100 text-red-800 border-red-300'
 };
 
 export const PAYMENT_STATUS_COLORS = {

@@ -1,5 +1,6 @@
 import Profile from '../models/Profile.js';
 import { generateCV_PDF } from '../utils/cvGenerator.js';
+import { normalizeCvTemplate } from '../constants/cvTemplateConfig.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,7 +22,7 @@ const getProfileAndProjects = async (userId) => {
     return { profile, profileData };
 };
 
-// Generate CV
+// Generate CV (optional body: { template: 'professional' | 'classic' | ... })
 export const generateCV = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -29,7 +30,8 @@ export const generateCV = async (req, res) => {
         if (!data) return res.status(404).json({ message: 'Profile not found' });
         const { profile, profileData } = data;
 
-        const fileRelPath = await generateCV_PDF(profileData);
+        const template = normalizeCvTemplate(req.body?.template ?? profile.resume?.cvTemplate);
+        const fileRelPath = await generateCV_PDF(profileData, template);
 
         // Update profile
         profile.resume = {
@@ -37,7 +39,8 @@ export const generateCV = async (req, res) => {
             fileName: `${(profileData.user?.fullName || 'Jobseeker').replace(/\s+/g, '_')}_CV.pdf`,
             uploadedAt: new Date(),
             source: 'generated',
-            lastGeneratedAt: new Date()
+            lastGeneratedAt: new Date(),
+            cvTemplate: template
         };
         await profile.save();
 
@@ -132,10 +135,12 @@ export const autoRegenerateCV = async (userId) => {
             const data = await getProfileAndProjects(userId);
             if (data) {
                 const { profile, profileData } = data;
-                const fileRelPath = await generateCV_PDF(profileData);
+                const template = normalizeCvTemplate(profile.resume?.cvTemplate);
+                const fileRelPath = await generateCV_PDF(profileData, template);
 
                 profile.resume.fileUrl = fileRelPath;
                 profile.resume.lastGeneratedAt = new Date();
+                profile.resume.cvTemplate = template;
                 await profile.save();
                 console.log(`CV auto-regenerated for user ${userId}`);
             }

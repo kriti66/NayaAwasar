@@ -23,6 +23,7 @@ import JobListing from '../pages/public/JobListing';
 import JobDetails from '../pages/public/JobDetails';
 import About from '../pages/public/About';
 import Contact from '../pages/public/Contact';
+import HelpCenter from '../pages/public/HelpCenter';
 import CompanyProfile from '../pages/shared/CompanyProfile';
 
 // KYC Pages
@@ -44,6 +45,7 @@ import RecruiterJobs from '../pages/recruiter/RecruiterJobs';
 import EditJob from '../pages/recruiter/EditJob';
 import RecruiterApplicants from '../pages/recruiter/RecruiterApplicants';
 import RecruiterPromotions from '../pages/recruiter/RecruiterPromotions';
+import PromotionPayment from '../pages/recruiter/PromotionPayment';
 import JobAnalytics from '../pages/recruiter/JobAnalytics';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminUsers from '../pages/admin/AdminUsers';
@@ -94,6 +96,7 @@ const AppRoutes = () => {
             <Route element={<PublicLayout />}>
                 <Route path="/jobs" element={<JobListing />} />
                 <Route path="/jobs/:id" element={<JobDetails />} />
+                <Route path="/help-center" element={<HelpCenter />} />
             </Route>
 
             {/* 
@@ -167,6 +170,7 @@ const AppRoutes = () => {
                         <Route path="/recruiter/applications" element={<RecruiterApplicants />} />
                         <Route path="/recruiter/jobs/:jobId/analytics" element={<JobAnalytics />} />
                         <Route path="/recruiter/promotions" element={<RecruiterPromotions />} />
+                        <Route path="/promotion-payment" element={<PromotionPayment />} />
                         <Route path="/recruiter/notifications" element={<Notifications />} />
                     </Route>
                 </Route>

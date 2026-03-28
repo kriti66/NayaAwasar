@@ -61,48 +61,41 @@ export const requestPromotion = async (req, res) => {
             return res.status(400).json({ message: 'This job already has an active promotion' });
         }
 
-        const canFree = await promotionService.canUseFreePromotion(companyId);
+        const canFree = await promotionService.canRecruiterUseFreePromotion(recruiterId);
         const amount = promotionService.getPromotionAmount(promotionType, Number(durationDays));
 
-        let promotion;
-        if (canFree) {
-            const seq = await promotionService.getNextFreeSequenceNumber(companyId);
-            promotion = await Promotion.create({
-                companyId,
-                recruiterId,
-                jobId,
-                promotionType,
-                durationDays: Number(durationDays),
-                amount: 0,
-                isFreePromotion: true,
-                freePromotionSequenceNumber: seq,
-                status: PROMOTION_STATUSES.PENDING,
-                paymentRequired: false,
-                paymentStatus: PAYMENT_STATUSES.UNPAID
-            });
-        } else {
-            promotion = await Promotion.create({
-                companyId,
-                recruiterId,
-                jobId,
-                promotionType,
-                durationDays: Number(durationDays),
-                amount,
-                isFreePromotion: false,
-                status: PROMOTION_STATUSES.PAYMENT_REQUIRED,
+        if (!canFree) {
+            return res.status(403).json({
+                success: false,
                 paymentRequired: true,
-                paymentStatus: PAYMENT_STATUSES.UNPAID
+                message:
+                    'You have used all 3 free promotions. Submit a paid promotion request with payment proof for admin review.',
+                redirectPath: '/promotion-payment'
             });
         }
 
+        const seq = await promotionService.getNextFreeSequenceNumber(companyId);
+        const promotion = await Promotion.create({
+            companyId,
+            recruiterId,
+            jobId,
+            promotionType,
+            durationDays: Number(durationDays),
+            amount: 0,
+            isFreePromotion: true,
+            freePromotionSequenceNumber: seq,
+            status: PROMOTION_STATUSES.PENDING,
+            paymentRequired: false,
+            paymentStatus: PAYMENT_STATUSES.UNPAID,
+            promotionSource: 'standard'
+        });
+
         await createNotification({
             recipient: recruiterId,
-            type: canFree ? 'promotion_request_submitted' : 'payment_required',
-            category: canFree ? 'promotion' : 'payment',
-            title: canFree ? 'Promotion Request Submitted' : 'Payment Required',
-            message: canFree
-                ? 'Your free promotion request has been submitted and is pending admin approval.'
-                : 'Payment is required for this promotion. Please submit your payment proof.',
+            type: 'promotion_request_submitted',
+            category: 'promotion',
+            title: 'Promotion Request Submitted',
+            message: 'Your free promotion request has been submitted and is pending admin approval.',
             link: '/recruiter/promotions',
             metadata: { promotionId: promotion._id, jobId, companyId }
         });
@@ -117,8 +110,9 @@ export const requestPromotion = async (req, res) => {
         });
 
         res.status(201).json({
-            message: canFree ? 'Promotion request submitted. Awaiting admin approval.' : 'Payment required. Please submit payment proof.',
-            promotion
+            message: 'Promotion request submitted. Awaiting admin approval.',
+            promotion,
+            paymentRequired: false
         });
     } catch (error) {
         console.error('Request promotion error:', error);
@@ -164,7 +158,9 @@ export const getPromotionSummary = async (req, res) => {
             });
         }
 
-        const freeUsed = await promotionService.getFreePromotionUsedCount(companyIds[0]);
+        const committed = await promotionService.getRecruiterCommittedFreePromotionSlots(userId);
+        await promotionService.syncRecruiterFreePromotionUsedField(userId);
+        const freeUsed = committed;
         const totalPromotions = await Promotion.countDocuments({ companyId: { $in: companyIds } });
         const now = new Date();
         const activePromotions = await Promotion.countDocuments({
@@ -333,6 +329,10 @@ export const adminApprovePromotion = async (req, res) => {
         await promotion.save();
 
         await promotionService.applyPromotionToJob(promotion);
+
+        if (promotion.isFreePromotion) {
+            await promotionService.syncRecruiterFreePromotionUsedField(promotion.recruiterId);
+        }
 
         await createNotification({
             recipient: promotion.recruiterId,
