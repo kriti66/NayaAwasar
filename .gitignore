@@ -23,6 +23,8 @@ lerna-debug.log*
 # Node / MERN
 # ===============================
 node_modules/
+**/.puppeteer-cache/
+
 dist
 dist-ssr
 *.local

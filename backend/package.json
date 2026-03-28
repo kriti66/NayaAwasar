@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "postinstall": "npx puppeteer browsers install chrome"
+    "postinstall": "node scripts/install-puppeteer-chrome.mjs"
   },
   "dependencies": {
     "axios": "^1.13.6",
