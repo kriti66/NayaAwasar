@@ -49,7 +49,12 @@ const InterviewCall = () => {
                     throw new Error('Missing interview or account information. Open the interview again from your schedule.');
                 }
 
-                const { data } = await api.post('/zego/token', { roomID, userID });
+                const { data } = await api.post('/zego/token', {
+                    roomID,
+                    userID,
+                    roomId: roomID,
+                    userId: userID
+                });
 
                 if (!data?.token || !data?.appId || !data?.roomId || !data?.userId) {
                     throw new Error('Invalid response from the video service. Please try again.');
