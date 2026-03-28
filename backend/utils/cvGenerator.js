@@ -7,6 +7,26 @@ import { normalizeCvTemplate } from '../constants/cvTemplateConfig.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** Args required for Chromium in Docker / Render and other locked-down Linux hosts */
+const PUPPETEER_LAUNCH_ARGS = [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu'
+];
+
+/** Prefer PUPPETEER_EXECUTABLE_PATH on hosts where Chrome is installed system-wide; else Puppeteer’s downloaded Chrome (postinstall). */
+function resolveChromeExecutablePath() {
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+        return process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+    try {
+        return puppeteer.executablePath();
+    } catch {
+        return undefined;
+    }
+}
+
 const getBaseUrl = () => {
     const base = process.env.BASE_URL || process.env.API_URL;
     if (base) return base.replace(/\/api\/?$/, '').replace(/\/$/, '');
@@ -419,14 +439,20 @@ export const generateCV_PDF = async (profile, templateId = 'professional') => {
 
         const htmlContent = buildCvHtml(profile, templateId);
 
-        const browser = await puppeteer.launch({
+        const executablePath = resolveChromeExecutablePath();
+        const launchOptions = {
             headless: true,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
-            },
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
-        });
+            args: PUPPETEER_LAUNCH_ARGS
+        };
+        if (executablePath) {
+            launchOptions.executablePath = executablePath;
+        }
+
+        const browser = await puppeteer.launch(launchOptions);
         const page = await browser.newPage();
+        await page.setUserAgent(
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        );
 
         try {
             await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
