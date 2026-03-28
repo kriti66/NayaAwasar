@@ -12,6 +12,7 @@ import { getPublicJobsWithPromotionSort, getJobsForSeekerWithPromotion } from '.
 import { normalizeTagsInput } from '../services/jobSearchFilter.js';
 import { JOB_CATEGORIES } from '../constants/jobCategories.js';
 import { getValidSavedJobIds, cleanUserSavedJobs } from '../utils/savedJobsUtils.js';
+import { notDeletedFilter } from '../utils/userQueryHelpers.js';
 
 const router = express.Router();
 
@@ -178,7 +179,7 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
         // Notify Seekers (Simplified: In a real app, optimize this to targeted users)
         // Here we just notify all active jobseekers for MVP or just log it.
         // For this task request: "if some company posted job then show in notification this company posted a job"
-        const { broadcastNotification, notifyAdmins } = await import('../controllers/notificationController.js');
+        const { broadcastNotification } = await import('../controllers/notificationController.js');
         await broadcastNotification({
             role: 'jobseeker',
             type: 'job_posted',
@@ -186,15 +187,6 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
             message: `${job.company_name} posted a new job: ${job.title}`,
             link: `/jobseeker/jobs/${job._id}`,
             sender: recruiter_id
-        });
-        await notifyAdmins({
-            type: 'job_posted',
-            category: 'job',
-            title: 'New Job Posted',
-            message: `${job.company_name} posted: ${job.title}. Review in Manage Jobs.`,
-            link: '/admin/jobs',
-            metadata: { jobId: job._id },
-            senderId: recruiter_id
         });
 
         res.status(201).json({ success: true, id: job._id });
@@ -413,7 +405,10 @@ router.patch('/:id/status', requireAuth, requireKycApproved, requireCompanyAppro
 // Admin: Clean duplicate/stale saved jobs for all users
 router.post('/admin/clean-saved-jobs', requireAuth, requireAdmin, async (req, res) => {
     try {
-        const users = await User.find({ savedJobs: { $exists: true, $ne: [] } }).select('_id').lean();
+        const users = await User.find({
+            savedJobs: { $exists: true, $ne: [] },
+            ...notDeletedFilter()
+        }).select('_id').lean();
         let totalRemoved = 0;
         for (const u of users) {
             const removed = await cleanUserSavedJobs(u._id.toString());

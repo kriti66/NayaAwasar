@@ -142,6 +142,11 @@ const userSchema = new mongoose.Schema({
     reset_password_expires: { type: Date, default: null },
     isActive: { type: Boolean, default: true },
 
+    /** Soft delete — record kept; excluded from normal queries and login. */
+    isDeleted: { type: Boolean, default: false, index: true },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
     /** Free job promotions used (admin-approved free slots); max 3 before paid manual request flow */
     freePromotionUsed: { type: Number, default: 0, min: 0 },
 

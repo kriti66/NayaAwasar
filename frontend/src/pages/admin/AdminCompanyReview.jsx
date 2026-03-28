@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 
 import companyService from '../../services/companyService';
+import { getRecruiterKycVerificationDisplay } from '../../utils/recruiterVerificationDisplay';
 import {
     Building2,
     MapPin,
@@ -47,25 +48,30 @@ const AdminCompanyReview = () => {
         fetchCompanyData();
     }, [id]);
 
-    const handleAction = async (status) => {
+    const handleSuspend = async () => {
+        const comment = prompt('Suspend this company?\n\nEnter a reason (required):');
+        if (comment === null) return;
+        if (!comment.trim()) {
+            toast.error('Suspension reason is required.');
+            return;
+        }
         try {
-            let comment = '';
-            if (status === 'rejected' || status === 'suspended') {
-                comment = prompt(`MANDATORY: Enter reason for ${status.toUpperCase()} status:`);
-                if (!comment || !comment.trim()) {
-                    if (comment !== null) toast.error('Rejection reason is required');
-                    return;
-                }
-                comment = comment.trim();
-            }
-
-            const res = await companyService.adminUpdateCompanyStatus(id, status, comment);
-            toast.success(res.message || `Protocol updated to ${status.toUpperCase()}`);
+            const res = await companyService.adminUpdateCompanyStatus(id, 'suspended', comment.trim());
+            toast.success(res.message || 'Company suspended.');
             fetchCompanyData();
         } catch (error) {
-            console.error('Status Change Error:', error.response?.data || error);
-            const errorMessage = error.response?.data?.message || "Execution Failure: Protocol update rejected.";
-            toast.error(errorMessage);
+            toast.error(error.response?.data?.message || 'Failed to suspend company.');
+        }
+    };
+
+    const handleReactivate = async () => {
+        if (!window.confirm('Reactivate this company?')) return;
+        try {
+            const res = await companyService.adminUpdateCompanyStatus(id, 'approved', '');
+            toast.success(res.message || 'Company reactivated.');
+            fetchCompanyData();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to reactivate company.');
         }
     };
 
@@ -77,7 +83,9 @@ const AdminCompanyReview = () => {
 
     if (!company) return null;
 
-    const isRecruiterApproved = company.recruiters?.some(r => r.kycStatus === 'approved');
+    const primaryRecruiter = company.recruiters?.[0];
+    const kycDisplay = getRecruiterKycVerificationDisplay(primaryRecruiter);
+    const isRecruiterKycVerified = kycDisplay.tone === 'verified';
 
     const getStatusConfig = (status) => {
         switch(status) {
@@ -112,45 +120,45 @@ const AdminCompanyReview = () => {
                                         <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-[0.2em]">Company Review</span>
                                     </div>
                                     <h1 className="text-3xl font-black text-white tracking-tight">{company.name}</h1>
-                                    <p className="text-gray-400 mt-1.5 font-medium text-sm">Review organization details and manage approval status.</p>
+                                    <p className="text-gray-400 mt-1.5 font-medium text-sm max-w-xl">
+                                        Organization details and moderation. Verification approve/reject is done in the{' '}
+                                        <Link to="/admin/kyc" className="text-indigo-300 hover:text-white underline font-semibold">
+                                            KYC panel
+                                        </Link>
+                                        .
+                                    </p>
                                 </div>
                             </div>
 
                             <div className="flex items-center gap-2 flex-wrap">
-                                {!isRecruiterApproved && (company.status === 'pending' || company.status === 'waiting_for_recruiter_approval') && (
-                                    <span className="text-xs text-orange-400 font-bold flex items-center gap-1.5 bg-orange-500/20 px-3.5 py-2 rounded-xl mr-1 border border-orange-500/30">
-                                        <AlertCircle className="w-4 h-4" />
-                                        Locked: Recruiter identity pending
+                                <Link
+                                    to="/admin/kyc"
+                                    className="px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 bg-white/10 hover:bg-white/15 text-white border border-white/15 transition-all"
+                                >
+                                    <ShieldCheck className="w-4 h-4" /> KYC panel
+                                </Link>
+                                {!isRecruiterKycVerified && (
+                                    <span className="text-xs text-orange-300 font-bold flex items-center gap-1.5 bg-orange-500/20 px-3.5 py-2 rounded-xl border border-orange-500/30">
+                                        <AlertCircle className="w-4 h-4 shrink-0" />
+                                        Recruiter verification: use KYC panel
                                     </span>
-                                )}
-                                {company.status !== 'approved' && (
-                                    <button
-                                        onClick={() => handleAction('approved')}
-                                        disabled={!isRecruiterApproved}
-                                        className={`px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all ${
-                                            isRecruiterApproved 
-                                            ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:shadow-lg hover:shadow-emerald-500/20 active:scale-[0.98]' 
-                                            : 'bg-white/10 text-gray-500 cursor-not-allowed opacity-50 border border-white/10'
-                                        }`}
-                                        title={!isRecruiterApproved ? "Approve the recruiter identity first" : ""}
-                                    >
-                                        <CheckCircle2 className="w-4 h-4" /> Approve
-                                    </button>
-                                )}
-                                {company.status !== 'rejected' && (
-                                    <button
-                                        onClick={() => handleAction('rejected')}
-                                        className="px-5 py-2.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-red-500/20 transition-all flex items-center gap-2 active:scale-[0.98]"
-                                    >
-                                        <XCircle className="w-4 h-4" /> Reject
-                                    </button>
                                 )}
                                 {company.status === 'approved' && (
                                     <button
-                                        onClick={() => handleAction('suspended')}
+                                        type="button"
+                                        onClick={handleSuspend}
                                         className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-amber-500/20 transition-all flex items-center gap-2 active:scale-[0.98]"
                                     >
                                         <AlertCircle className="w-4 h-4" /> Suspend
+                                    </button>
+                                )}
+                                {company.status === 'suspended' && (
+                                    <button
+                                        type="button"
+                                        onClick={handleReactivate}
+                                        className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-emerald-500/20 transition-all flex items-center gap-2 active:scale-[0.98]"
+                                    >
+                                        <CheckCircle2 className="w-4 h-4" /> Reactivate
                                     </button>
                                 )}
                             </div>
@@ -166,8 +174,21 @@ const AdminCompanyReview = () => {
                                 <StatusIcon className="w-7 h-7" />
                             </div>
                             <div>
-                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Current Status</p>
+                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-1">Profile status</p>
                                 <p className="text-2xl font-black capitalize text-gray-900">{company.status}</p>
+                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mt-2">Recruiter KYC</p>
+                                <p
+                                    className={`text-sm font-black mt-0.5 ${
+                                        kycDisplay.tone === 'verified'
+                                            ? 'text-emerald-700'
+                                            : kycDisplay.tone === 'rejected'
+                                              ? 'text-red-700'
+                                              : 'text-sky-800'
+                                    }`}
+                                >
+                                    {kycDisplay.label}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">{kycDisplay.detail}</p>
                                 {company.status === 'rejected' && (company.rejectionReason || company.adminFeedback) && (
                                     <p className="text-sm text-red-600 font-medium mt-2 max-w-md">Reason: {company.rejectionReason || company.adminFeedback}</p>
                                 )}
@@ -327,12 +348,25 @@ const AdminCompanyReview = () => {
                                         </div>
                                     </div>
                                     <div className="px-4 py-3 bg-[#29a08e]/10 border border-[#29a08e]/20 rounded-xl flex flex-col items-start">
-                                        <p className="text-[10px] font-black text-[#29a08e] uppercase tracking-wider">Recruiter Status</p>
-                                        <div className={`mt-1.5 text-xs font-bold uppercase rounded-lg px-3 py-1 ${
-                                            isRecruiterApproved ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
-                                        }`}>
-                                            {isRecruiterApproved ? 'Identity Verified' : 'Identity Pending'}
+                                        <p className="text-[10px] font-black text-[#29a08e] uppercase tracking-wider">Recruiter KYC</p>
+                                        <div
+                                            className={`mt-1.5 text-xs font-bold uppercase rounded-lg px-3 py-1 ${
+                                                kycDisplay.tone === 'verified'
+                                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                                    : kycDisplay.tone === 'rejected'
+                                                      ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                                                      : 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                                            }`}
+                                        >
+                                            {kycDisplay.label}
                                         </div>
+                                        <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
+                                            Approve or reject in the{' '}
+                                            <Link to="/admin/kyc" className="text-[#29a08e] hover:underline font-bold">
+                                                KYC panel
+                                            </Link>
+                                            .
+                                        </p>
                                     </div>
                                 </div>
                             </div>

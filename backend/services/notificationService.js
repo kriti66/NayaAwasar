@@ -1,5 +1,6 @@
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import { notDeletedFilter } from '../utils/userQueryHelpers.js';
 import { NOTIFICATION_CATEGORIES } from '../constants/notificationTypes.js';
 
 /**
@@ -25,7 +26,7 @@ export async function notify(opts) {
     } else if (opts.recipientIds && opts.recipientIds.length) {
         recipientIds = [...opts.recipientIds];
     } else if (opts.recipientRole) {
-        const users = await User.find({ role: opts.recipientRole }).select('_id').lean();
+        const users = await User.find({ role: opts.recipientRole, ...notDeletedFilter() }).select('_id').lean();
         recipientIds = users.map((u) => u._id.toString());
     }
 

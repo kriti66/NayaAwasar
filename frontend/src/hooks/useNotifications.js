@@ -5,8 +5,9 @@ import api from '../services/api';
  * Hook for notification state and actions
  * @param {boolean} enabled - Whether to fetch (e.g. when user is logged in)
  * @param {boolean} fetchOnOpen - Fetch when dropdown opens (or use polling)
+ * @param {number} options.limit - Page size (admins use a higher default via caller)
  */
-export function useNotifications(enabled = true, { fetchOnOpen = false } = {}) {
+export function useNotifications(enabled = true, { fetchOnOpen = false, limit = 20 } = {}) {
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
@@ -15,7 +16,7 @@ export function useNotifications(enabled = true, { fetchOnOpen = false } = {}) {
         if (!enabled) return;
         setLoading(true);
         try {
-            const res = await api.get('/notifications?page=1&limit=20');
+            const res = await api.get(`/notifications?page=1&limit=${limit}`);
             setNotifications(res.data.notifications || []);
             setUnreadCount(res.data.unreadCount ?? 0);
         } catch (e) {
@@ -23,7 +24,7 @@ export function useNotifications(enabled = true, { fetchOnOpen = false } = {}) {
         } finally {
             setLoading(false);
         }
-    }, [enabled]);
+    }, [enabled, limit]);
 
     useEffect(() => {
         if (!enabled) return;

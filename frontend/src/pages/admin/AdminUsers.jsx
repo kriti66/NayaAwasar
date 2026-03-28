@@ -8,17 +8,21 @@ import {
     Shield,
     Briefcase,
     AlertCircle,
-    RefreshCw
+    RefreshCw,
+    RotateCcw
 } from 'lucide-react';
 
 const AdminUsers = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [showRemoved, setShowRemoved] = useState(false);
 
     const fetchUsers = async () => {
         try {
-            const res = await api.get('/admin/users');
+            const res = await api.get('/admin/users', {
+                params: { includeDeleted: showRemoved ? 'true' : 'false' }
+            });
             setUsers(res.data);
         } catch (error) {
             console.error(error);
@@ -28,18 +32,32 @@ const AdminUsers = () => {
     };
 
     useEffect(() => {
+        setLoading(true);
         fetchUsers();
-    }, []);
+    }, [showRemoved]);
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this user? This action cannot be undone.")) return;
+        if (!window.confirm(
+            'Remove this user? They will not be able to sign in. The record is kept and can be restored here, or the user can register again with the same email.'
+        )) return;
         try {
             await api.delete(`/admin/users/${id}`);
-            setUsers(users.filter(u => u._id !== id));
-            alert("User deleted successfully.");
+            await fetchUsers();
+            alert('User removed successfully.');
         } catch (error) {
             console.error(error);
-            alert("Failed to delete user.");
+            alert(error.response?.data?.message || 'Failed to remove user.');
+        }
+    };
+
+    const handleRestore = async (id) => {
+        try {
+            await api.patch(`/admin/users/${id}/restore`);
+            await fetchUsers();
+            alert('User restored successfully.');
+        } catch (error) {
+            console.error(error);
+            alert(error.response?.data?.message || 'Failed to restore user.');
         }
     };
 
@@ -49,10 +67,11 @@ const AdminUsers = () => {
         u.role?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const listForCounts = users.filter((u) => !u.isDeleted);
     const roleCounts = {
-        admin: users.filter(u => u.role === 'admin').length,
-        recruiter: users.filter(u => u.role === 'recruiter').length,
-        jobseeker: users.filter(u => u.role === 'jobseeker' || u.role === 'job_seeker').length,
+        admin: listForCounts.filter(u => u.role === 'admin').length,
+        recruiter: listForCounts.filter(u => u.role === 'recruiter').length,
+        jobseeker: listForCounts.filter(u => u.role === 'jobseeker' || u.role === 'job_seeker').length,
     };
 
     const getRoleBadge = (role) => {
@@ -124,11 +143,20 @@ const AdminUsers = () => {
                                 className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#29a08e]/30 focus:border-[#29a08e] outline-none transition-all"
                             />
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={showRemoved}
+                                    onChange={(e) => setShowRemoved(e.target.checked)}
+                                    className="rounded border-gray-300 text-[#29a08e] focus:ring-[#29a08e]/30"
+                                />
+                                <span className="font-medium">Show removed accounts</span>
+                            </label>
                             <span className="text-sm font-medium text-gray-400">
                                 Showing <span className="text-gray-900 font-bold">{filteredUsers.length}</span> of <span className="text-gray-900 font-bold">{users.length}</span>
                             </span>
-                            <button onClick={() => { setLoading(true); fetchUsers(); }} className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-xl text-xs font-bold transition-all hover:shadow-sm">
+                            <button type="button" onClick={() => { setLoading(true); fetchUsers(); }} className="flex items-center gap-1.5 px-3.5 py-2 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-xl text-xs font-bold transition-all hover:shadow-sm">
                                 <RefreshCw className="h-3.5 w-3.5" />
                                 Refresh
                             </button>
@@ -169,16 +197,22 @@ const AdminUsers = () => {
                                 ) : filteredUsers.map((user) => {
                                     const badge = getRoleBadge(user.role);
                                     const BadgeIcon = badge.icon;
+                                    const isRemoved = Boolean(user.isDeleted);
                                     return (
-                                        <tr key={user._id} className="hover:bg-[#29a08e]/[0.02] transition-colors group">
+                                        <tr key={user._id} className={`hover:bg-[#29a08e]/[0.02] transition-colors group ${isRemoved ? 'bg-red-50/40' : ''}`}>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center gap-3">
                                                     <div className={`h-10 w-10 bg-gradient-to-br ${getAvatarGradient(user.role)} rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm`}>
                                                         {user.fullName ? user.fullName.charAt(0).toUpperCase() : '?'}
                                                     </div>
-                                                    <span className="text-sm font-semibold text-gray-900 group-hover:text-[#29a08e] transition-colors">
-                                                        {user.fullName || 'Unknown User'}
-                                                    </span>
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <span className="text-sm font-semibold text-gray-900 group-hover:text-[#29a08e] transition-colors">
+                                                            {user.fullName || 'Unknown User'}
+                                                        </span>
+                                                        {isRemoved && (
+                                                            <span className="text-[10px] font-bold uppercase tracking-wider text-red-600">Removed</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
@@ -191,14 +225,26 @@ const AdminUsers = () => {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                {user.role !== 'admin' && (
+                                                {isRemoved ? (
                                                     <button
-                                                        onClick={() => handleDelete(user._id)}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all hover:shadow-sm border border-red-100"
+                                                        type="button"
+                                                        onClick={() => handleRestore(user._id)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-all hover:shadow-sm border border-emerald-100"
                                                     >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                        Delete
+                                                        <RotateCcw className="w-3.5 h-3.5" />
+                                                        Restore
                                                     </button>
+                                                ) : (
+                                                    user.role !== 'admin' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDelete(user._id)}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-all hover:shadow-sm border border-red-100"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                            Remove
+                                                        </button>
+                                                    )
                                                 )}
                                             </td>
                                         </tr>

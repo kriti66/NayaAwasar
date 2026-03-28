@@ -31,7 +31,11 @@ const AdminTopbar = () => {
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
-    const { notifications, unreadCount, loading, fetchNotifications, markRead, markAllRead } = useNotifications(!!user);
+    const notificationPageLimit = user?.role === 'admin' ? 60 : 20;
+    const { notifications, unreadCount, loading, fetchNotifications, markRead, markAllRead } = useNotifications(
+        !!user,
+        { limit: notificationPageLimit }
+    );
 
     useEffect(() => {
         setMobileMenuOpen(false);

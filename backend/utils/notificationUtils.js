@@ -1,5 +1,6 @@
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import { notDeletedFilter } from './userQueryHelpers.js';
 
 /**
  * Create a notification for a specific user
@@ -22,7 +23,7 @@ export const createNotification = async (recipientId, type, message, relatedId =
  */
 export const broadcastNotification = async (role, type, message, relatedId = null) => {
     try {
-        const users = await User.find({ role }).select('_id');
+        const users = await User.find({ role, ...notDeletedFilter() }).select('_id');
         const notifications = users.map(user => ({
             recipient: user._id,
             type,

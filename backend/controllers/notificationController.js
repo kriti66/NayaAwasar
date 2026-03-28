@@ -43,8 +43,9 @@ export { notify, notifyAdmins, notifyUser } from '../services/notificationServic
 // API: Get user's notifications
 export const getNotifications = async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const rawLimit = parseInt(req.query.limit, 10) || 10;
+        const limit = Math.min(Math.max(1, rawLimit), 100);
         const skip = (page - 1) * limit;
 
         const filter = { recipient: req.user.id };

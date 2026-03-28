@@ -4,6 +4,7 @@ import Company from '../models/Company.js';
 import { validateJobSeekerKYC, validateRecruiterKYC } from '../services/kycValidation.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { createNotification, notifyAdmins } from './notificationController.js';
+import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
 
 /**
  * POST /api/kyc/submit
@@ -31,6 +32,10 @@ export const submitKYC = async (req, res) => {
         }
 
         let existingKYC = await KYC.findOne({ userId });
+        const priorKycForNotify = existingKYC
+            ? { status: existingKYC.status }
+            : null;
+
         if (existingKYC && existingKYC.status === 'approved') {
             return res.status(400).json({ message: 'KYC is already approved' });
         }
@@ -126,14 +131,42 @@ export const submitKYC = async (req, res) => {
             { role: submittedRole }
         );
 
-        await notifyAdmins({
-            type: submittedRole === 'recruiter' ? 'recruiter_kyc_submitted' : 'kyc_submitted',
-            category: submittedRole === 'recruiter' ? 'recruiter' : 'application',
-            title: 'New KYC Submission',
-            message: `A ${submittedRole} submitted verification. Review in KYC Panel.`,
-            link: '/admin/kyc',
-            metadata: { userId }
-        });
+        const notifyFirstOrResubmitAfterReject =
+            !priorKycForNotify || priorKycForNotify.status === 'rejected';
+        if (notifyFirstOrResubmitAfterReject) {
+            const submitter = await User.findById(userId).select('fullName email').lean();
+            const displayName = submitter?.fullName?.trim() || submitter?.email || 'A user';
+            const isResubmitAfterRejection = priorKycForNotify?.status === 'rejected';
+            const isRecruiterSubmit = submittedRole === 'recruiter';
+
+            if (isResubmitAfterRejection) {
+                await notifyAdmins({
+                    type: isRecruiterSubmit
+                        ? NOTIFICATION_TYPES.RECRUITER_KYC_RESUBMITTED_AFTER_REJECTION
+                        : NOTIFICATION_TYPES.KYC_RESUBMITTED_AFTER_REJECTION,
+                    category: isRecruiterSubmit ? 'recruiter' : 'application',
+                    title: 'KYC Resubmitted',
+                    message: isRecruiterSubmit
+                        ? `${displayName} resubmitted recruiter verification after a previous rejection. Review in KYC Panel.`
+                        : `${displayName} resubmitted their KYC after a previous rejection. Review in KYC Panel.`,
+                    link: '/admin/kyc',
+                    metadata: { userId, role: submittedRole, resubmissionAfterRejection: true }
+                });
+            } else if (!priorKycForNotify) {
+                await notifyAdmins({
+                    type: isRecruiterSubmit
+                        ? NOTIFICATION_TYPES.RECRUITER_KYC_NEW_SUBMISSION
+                        : NOTIFICATION_TYPES.KYC_NEW_SUBMISSION,
+                    category: isRecruiterSubmit ? 'recruiter' : 'application',
+                    title: 'New KYC Submission',
+                    message: isRecruiterSubmit
+                        ? `${displayName} submitted recruiter verification for the first time. Review in KYC Panel.`
+                        : `${displayName} submitted verification for the first time. Review in KYC Panel.`,
+                    link: '/admin/kyc',
+                    metadata: { userId, role: submittedRole, firstSubmission: true }
+                });
+            }
+        }
 
         return res.status(201).json({
             success: true,

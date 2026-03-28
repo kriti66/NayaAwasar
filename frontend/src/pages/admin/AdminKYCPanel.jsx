@@ -5,19 +5,17 @@ import {
     ShieldCheck,
     ShieldX,
     FileText,
-    Calendar,
     Building2,
-    BadgeCheck,
     AlertTriangle,
-    ChevronRight,
     ExternalLink,
     Search,
     User,
     Clock,
-    Eye,
     Check,
-    X,
-    ShieldQuestion
+    ShieldQuestion,
+    ImageOff,
+    CheckCircle2,
+    CircleDot
 } from 'lucide-react';
 
 const resolveAssetUrl = (path) => {
@@ -35,8 +33,8 @@ const KycImagePreview = ({ label, path }) => {
     const showImage = !!url && !failed;
 
     return (
-        <div className="space-y-2">
-            <div className="relative aspect-video rounded-xl overflow-hidden border border-gray-200 bg-gray-50 group shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex flex-col gap-2 min-w-0">
+            <div className="relative aspect-square rounded-xl overflow-hidden border border-gray-200/80 bg-gradient-to-br from-gray-50 to-gray-100/80 group shadow-sm ring-1 ring-black/[0.03] hover:ring-[#29a08e]/20 hover:shadow-md transition-all">
                 {showImage ? (
                     <>
                         <img
@@ -45,22 +43,153 @@ const KycImagePreview = ({ label, path }) => {
                             className="w-full h-full object-cover"
                             onError={() => setFailed(true)}
                         />
-                        <a href={url} target="_blank" rel="noreferrer" className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/70 to-transparent flex items-end justify-center pb-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="flex items-center gap-1.5 text-white text-xs font-bold">
-                                <ExternalLink className="w-3.5 h-3.5" /> View Full
+                        <a
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="absolute inset-0 bg-gradient-to-t from-[#0f172a]/75 via-transparent to-transparent flex items-end justify-center pb-2.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                            <span className="flex items-center gap-1.5 text-white text-[11px] font-bold px-2 py-1 rounded-lg bg-black/30 backdrop-blur-sm">
+                                <ExternalLink className="w-3.5 h-3.5 shrink-0" /> Open
                             </span>
                         </a>
                     </>
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center px-3 text-center">
-                        <p className="text-[11px] font-semibold text-gray-400">No image uploaded</p>
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-2 px-2 text-center">
+                        <div className="w-10 h-10 rounded-lg bg-gray-200/60 flex items-center justify-center text-gray-400">
+                            <ImageOff className="w-5 h-5" strokeWidth={1.75} />
+                        </div>
+                        <p className="text-[10px] font-semibold text-gray-500 leading-tight">No file uploaded</p>
                     </div>
                 )}
             </div>
-            <p className="text-[10px] font-bold text-gray-400 text-center uppercase tracking-wider">{label}</p>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider text-center leading-snug line-clamp-2" title={label}>
+                {label}
+            </p>
         </div>
     );
 };
+
+/** Single row in detail cards — value column handles long email/phone cleanly */
+const DetailRow = ({ label, value, valueClassName = '' }) => (
+    <div className="grid grid-cols-1 sm:grid-cols-[minmax(7rem,38%)_1fr] gap-1 sm:gap-4 py-2.5 border-b border-gray-100/90 last:border-0 last:pb-0 first:pt-0">
+        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide shrink-0 pt-0.5">
+            {label}
+        </div>
+        <div
+            className={`text-sm text-gray-900 font-medium min-w-0 ${valueClassName}`}
+        >
+            {value == null || value === '' ? '—' : value}
+        </div>
+    </div>
+);
+
+function getCompanyDetailRows(kyc) {
+    return [
+        { label: 'Company name', value: kyc?.company?.companyName || kyc.companyName },
+        { label: 'Registration no.', value: kyc?.company?.registrationNumber || kyc.registrationNumber },
+        { label: 'Industry', value: kyc?.company?.industry || kyc.industry },
+        { label: 'Address', value: kyc?.company?.companyAddress || kyc.companyAddress },
+        { label: 'Website', value: kyc?.company?.website || kyc.website, mono: true }
+    ];
+}
+
+function identityValueTypography(label) {
+    const l = String(label).toLowerCase();
+    if (l.includes('email')) return 'break-all [overflow-wrap:anywhere] text-[13px] leading-snug';
+    if (l.includes('phone')) return 'tabular-nums tracking-tight break-all sm:break-all text-[13px] leading-snug';
+    return 'break-words [overflow-wrap:anywhere] leading-snug';
+}
+
+/** Normalize API status strings */
+function normKycStatus(s) {
+    return String(s || 'pending').toLowerCase();
+}
+
+/**
+ * Recruiter KYC overall: approved only when both sections approved;
+ * rejected if either section rejected; otherwise pending (includes partial progress).
+ */
+function getRecruiterKycOverallStatus(kyc) {
+    const rep = normKycStatus(kyc?.representativeStatus);
+    const comp = normKycStatus(kyc?.companyStatus);
+    if (rep === 'approved' && comp === 'approved') return 'approved';
+    if (rep === 'rejected' || comp === 'rejected') return 'rejected';
+    return 'pending';
+}
+
+/**
+ * Copy + styling hints for admin UI (queue row + detail header).
+ */
+function getRecruiterKycUiState(kyc) {
+    const rep = normKycStatus(kyc?.representativeStatus);
+    const comp = normKycStatus(kyc?.companyStatus);
+    const overall = getRecruiterKycOverallStatus(kyc);
+
+    if (overall === 'approved') {
+        return {
+            overall,
+            rep,
+            comp,
+            label: 'Fully verified',
+            description: 'Representative and company verification are complete.',
+            tone: 'success',
+            queueHint: 'Complete'
+        };
+    }
+    if (overall === 'rejected') {
+        let description = 'One or more verification steps were rejected.';
+        if (rep === 'rejected' && comp !== 'rejected') {
+            description = 'Representative verification was rejected.';
+        } else if (comp === 'rejected' && rep !== 'rejected') {
+            description = 'Company verification was rejected.';
+        } else if (rep === 'rejected' && comp === 'rejected') {
+            description = 'Representative and company verification were rejected.';
+        }
+        return {
+            overall,
+            rep,
+            comp,
+            label: 'Rejected',
+            description,
+            tone: 'danger',
+            queueHint: 'Rejected'
+        };
+    }
+
+    // Pending — includes “partial” (one approved, other still pending)
+    if (rep === 'approved' && comp === 'pending') {
+        return {
+            overall,
+            rep,
+            comp,
+            label: 'In progress',
+            description: 'Representative approved, waiting for company verification.',
+            tone: 'partial',
+            queueHint: 'Rep ✓ · Company pending'
+        };
+    }
+    if (rep === 'pending' && comp === 'approved') {
+        return {
+            overall,
+            rep,
+            comp,
+            label: 'In progress',
+            description: 'Company approved, waiting for representative verification.',
+            tone: 'partial',
+            queueHint: 'Company ✓ · Rep pending'
+        };
+    }
+    return {
+        overall,
+        rep,
+        comp,
+        label: 'Awaiting review',
+        description: 'Representative and company verification still need admin review.',
+        tone: 'pending',
+        queueHint: 'Both pending'
+    };
+}
 
 function getProofCardsByRole(kyc) {
     const role = kyc?.role === 'recruiter' ? 'recruiter' : 'jobseeker';
@@ -125,7 +254,10 @@ const AdminKYCPanel = () => {
         }
     }, [selectedKYC]);
 
-    const fetchPendingKYC = async () => {
+    const fetchPendingKYC = async (opts = {}) => {
+        const quiet = opts.quiet === true;
+        const preserveSelection = opts.preserveSelection === true;
+        if (!quiet) setLoading(true);
         try {
             const [seekerRes, recruiterRes] = await Promise.all([
                 api.get('/admin/kyc/pending'),
@@ -145,11 +277,18 @@ const AdminKYCPanel = () => {
                 role: k.role || 'jobseeker'
             }));
 
-            setPendingKYC([...seekerData, ...recruiterData]);
+            const next = [...seekerData, ...recruiterData];
+            setPendingKYC(next);
+            if (preserveSelection) {
+                setSelectedKYC((prev) => {
+                    if (!prev?._id) return prev;
+                    return next.find((k) => k._id === prev._id) || null;
+                });
+            }
         } catch (err) {
             console.error('Error fetching KYC:', err);
         } finally {
-            setLoading(false);
+            if (!quiet) setLoading(false);
         }
     };
 
@@ -167,8 +306,7 @@ const AdminKYCPanel = () => {
             } else {
                 await api.patch(`/admin/kyc/${userId}/approve`);
             }
-            setPendingKYC((prev) => prev.filter((k) => k._id !== kycId && getUserId(k) !== userId));
-            setSelectedKYC(null);
+            await fetchPendingKYC({ quiet: true, preserveSelection: true });
         } catch (err) {
             alert(err.response?.data?.message || 'Approval failed');
         } finally {
@@ -195,8 +333,7 @@ const AdminKYCPanel = () => {
                 await api.patch(`/admin/kyc/${userId}/reject`, { rejectionReason: rejectionReason.trim() });
             }
 
-            setPendingKYC((prev) => prev.filter((k) => k._id !== kycId && getUserId(k) !== userId));
-            setSelectedKYC(null);
+            await fetchPendingKYC({ quiet: true, preserveSelection: true });
             setRejectionReason('');
         } catch (err) {
             alert(err.response?.data?.message || 'Rejection failed');
@@ -209,6 +346,28 @@ const AdminKYCPanel = () => {
         kyc.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         kyc.role.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const selectedRecruiterUi =
+        selectedKYC?.role === 'recruiter' ? getRecruiterKycUiState(selectedKYC) : null;
+    const recruiterStatusAccentClass = selectedRecruiterUi
+        ? selectedRecruiterUi.tone === 'partial'
+            ? 'text-sky-700'
+            : selectedRecruiterUi.tone === 'rejected'
+              ? 'text-red-700'
+              : selectedRecruiterUi.tone === 'success'
+                ? 'text-emerald-700'
+                : 'text-amber-700'
+        : 'text-amber-600';
+
+    const recruiterBannerClass = selectedRecruiterUi
+        ? selectedRecruiterUi.tone === 'partial'
+            ? 'border-sky-200/90 bg-sky-50/90 text-sky-950'
+            : selectedRecruiterUi.tone === 'rejected'
+              ? 'border-red-200/90 bg-red-50/90 text-red-950'
+              : selectedRecruiterUi.tone === 'success'
+                ? 'border-emerald-200/90 bg-emerald-50/90 text-emerald-950'
+                : 'border-amber-200/90 bg-amber-50/80 text-amber-950'
+        : '';
 
     return (
         <div className="flex-1 w-full flex flex-col min-h-[calc(100vh-64px)]">
@@ -227,7 +386,10 @@ const AdminKYCPanel = () => {
                                 <span className="text-[11px] font-bold text-purple-400 uppercase tracking-[0.2em]">Identity Verification</span>
                             </div>
                             <h1 className="text-3xl font-black text-white tracking-tight">KYC Verification</h1>
-                            <p className="text-gray-400 mt-1.5 font-medium text-sm">Review and process pending verification requests.</p>
+                            <p className="text-gray-400 mt-1.5 font-medium text-sm max-w-xl">
+                                Review and process pending verification requests. Recruiter entries stay in this queue until{' '}
+                                <span className="text-gray-300">both representative and company</span> verification are approved.
+                            </p>
                         </div>
                         <div className="flex items-center gap-3">
                             <div className="px-4 py-2.5 rounded-xl border bg-purple-500/20 text-purple-300 border-purple-500/30 text-xs font-bold">
@@ -267,7 +429,17 @@ const AdminKYCPanel = () => {
                         </div>
                         <div className="flex-1 overflow-y-auto">
                             <div className="divide-y divide-gray-50">
-                                {filteredKYC.map(kyc => (
+                                {filteredKYC.map((kyc) => {
+                                    const recruiterState = kyc.role === 'recruiter' ? getRecruiterKycUiState(kyc) : null;
+                                    const queueToneClass =
+                                        recruiterState?.tone === 'partial'
+                                            ? 'bg-sky-50 text-sky-800 border-sky-200/90'
+                                            : recruiterState?.tone === 'rejected'
+                                              ? 'bg-red-50 text-red-800 border-red-200/90'
+                                              : recruiterState?.tone === 'success'
+                                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200/90'
+                                                : 'bg-amber-50 text-amber-900 border-amber-200/80';
+                                    return (
                                     <div
                                         key={kyc._id || getUserId(kyc)}
                                         onClick={() => setSelectedKYC(kyc)}
@@ -290,12 +462,26 @@ const AdminKYCPanel = () => {
                                                 {kyc.role}
                                             </span>
                                         </div>
-                                        <div className="mt-2 text-[10px] text-gray-400 flex items-center gap-1 ml-13">
-                                            <Clock className="w-3 h-3" />
+                                        {recruiterState && (
+                                            <div className="mt-2 pl-[52px] pr-1">
+                                                <span
+                                                    className={`inline-flex items-center gap-1 max-w-full rounded-md border px-2 py-1 text-[10px] font-bold leading-tight ${queueToneClass}`}
+                                                    title={recruiterState.description}
+                                                >
+                                                    {recruiterState.tone === 'partial' && (
+                                                        <CircleDot className="w-3 h-3 shrink-0 text-sky-600" aria-hidden />
+                                                    )}
+                                                    <span className="break-words">{recruiterState.queueHint}</span>
+                                                </span>
+                                            </div>
+                                        )}
+                                        <div className="mt-2 text-[10px] text-gray-400 flex items-center gap-1 pl-[52px]">
+                                            <Clock className="w-3 h-3 shrink-0" />
                                             {kyc.createdAt ? new Date(kyc.createdAt).toLocaleDateString() : '—'}
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                                 {loading ? (
                                     [1, 2, 3].map(i => <div key={i} className="h-20 bg-gray-50 animate-pulse m-3 rounded-xl"></div>)
                                 ) : filteredKYC.length === 0 && (
@@ -315,146 +501,296 @@ const AdminKYCPanel = () => {
                     <div className="lg:col-span-8 h-full">
                         {selectedKYC ? (
                             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm h-full flex flex-col overflow-hidden">
-                                {/* Detail Header */}
-                                <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-sm ${selectedKYC.role === 'recruiter' ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-[#29a08e] to-[#228377]'}`}>
-                                            {selectedKYC.fullName.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-black text-gray-900">{selectedKYC.fullName}</h2>
-                                            <p className="text-xs text-gray-400 font-medium mt-0.5">
-                                                <span className="capitalize">{selectedKYC.role}</span> applicant • <span className="text-amber-500 font-bold">Pending Review</span>
-                                            </p>
-                                            {selectedKYC.role === 'recruiter' && (
-                                                <div className="mt-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider">
-                                                    <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">Representative: {selectedKYC.representativeStatus || 'pending'}</span>
-                                                    <span className="px-2 py-1 rounded bg-gray-100 text-gray-700">Company: {selectedKYC.companyStatus || 'pending'}</span>
+                                {/* Applicant header */}
+                                <header className="p-5 sm:p-6 border-b border-gray-100 bg-gradient-to-r from-[#0f172a]/[0.03] via-white to-white shrink-0">
+                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                        <div className="flex items-start gap-4 min-w-0 flex-1">
+                                            <div
+                                                className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-md shrink-0 ${selectedKYC.role === 'recruiter' ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-[#29a08e] to-[#228377]'}`}
+                                                aria-hidden
+                                            >
+                                                {selectedKYC.fullName.charAt(0)}
+                                            </div>
+                                            <div className="min-w-0 flex-1 space-y-2">
+                                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                    <h2 className="text-xl font-black text-gray-900 tracking-tight break-words">
+                                                        {selectedKYC.fullName}
+                                                    </h2>
                                                 </div>
-                                            )}
+                                                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                                    <span
+                                                        className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border ${selectedKYC.role === 'recruiter' ? 'bg-purple-50 text-purple-700 border-purple-200/80' : 'bg-emerald-50 text-emerald-700 border-emerald-200/80'}`}
+                                                    >
+                                                        {selectedKYC.role}
+                                                    </span>
+                                                    <span className="hidden sm:inline text-gray-300" aria-hidden>
+                                                        |
+                                                    </span>
+                                                    {selectedRecruiterUi ? (
+                                                        <span className={`font-bold ${recruiterStatusAccentClass}`}>
+                                                            {selectedRecruiterUi.label}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-amber-600 font-bold">Pending review</span>
+                                                    )}
+                                                </div>
+                                                {selectedKYC.email && (
+                                                    <p
+                                                        className="text-sm text-gray-600 break-all [overflow-wrap:anywhere] leading-snug max-w-full"
+                                                        title={selectedKYC.email}
+                                                    >
+                                                        {selectedKYC.email}
+                                                    </p>
+                                                )}
+                                                {selectedKYC.role === 'recruiter' && (
+                                                    <div className="flex flex-wrap gap-2 pt-0.5">
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100 text-[10px] font-bold uppercase tracking-wide text-gray-700 border border-gray-200/80">
+                                                            Representative:{' '}
+                                                            <span className="font-black text-gray-900 normal-case">
+                                                                {selectedKYC.representativeStatus || 'pending'}
+                                                            </span>
+                                                        </span>
+                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-100 text-[10px] font-bold uppercase tracking-wide text-gray-700 border border-gray-200/80">
+                                                            Company:{' '}
+                                                            <span className="font-black text-gray-900 normal-case">
+                                                                {selectedKYC.companyStatus || 'pending'}
+                                                            </span>
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <p className="text-[11px] text-gray-400 font-medium">
+                                                    Submitted{' '}
+                                                    {selectedKYC.createdAt
+                                                        ? new Date(selectedKYC.createdAt).toLocaleString()
+                                                        : '—'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {selectedKYC.role !== 'recruiter' && (
+                                            <button
+                                                type="button"
+                                                disabled={processing}
+                                                onClick={() => handleApprove(selectedKYC)}
+                                                className="shrink-0 w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#29a08e] to-[#228377] text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-[#29a08e]/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2 active:scale-[0.98]"
+                                            >
+                                                <Check className="w-4 h-4 shrink-0" />
+                                                Approve
+                                            </button>
+                                        )}
+                                    </div>
+                                </header>
+
+                                {selectedRecruiterUi && (
+                                    <div
+                                        className={`shrink-0 mx-5 sm:mx-6 mt-4 rounded-xl border px-4 py-3 flex gap-3 ${recruiterBannerClass}`}
+                                        role="status"
+                                    >
+                                        {selectedRecruiterUi.tone === 'partial' && (
+                                            <CircleDot className="w-5 h-5 shrink-0 text-sky-600 mt-0.5" aria-hidden />
+                                        )}
+                                        {selectedRecruiterUi.tone === 'pending' && (
+                                            <Clock className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" aria-hidden />
+                                        )}
+                                        {selectedRecruiterUi.tone === 'rejected' && (
+                                            <ShieldX className="w-5 h-5 shrink-0 text-red-600 mt-0.5" aria-hidden />
+                                        )}
+                                        {selectedRecruiterUi.tone === 'success' && (
+                                            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 mt-0.5" aria-hidden />
+                                        )}
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-bold leading-snug">
+                                                {selectedRecruiterUi.tone === 'partial'
+                                                    ? 'Partial approval'
+                                                    : selectedRecruiterUi.tone === 'rejected'
+                                                      ? 'Verification rejected'
+                                                      : selectedRecruiterUi.tone === 'success'
+                                                        ? 'Fully verified'
+                                                        : 'Awaiting review'}
+                                            </p>
+                                            <p className="text-xs font-medium leading-relaxed mt-1 opacity-90">
+                                                {selectedRecruiterUi.description}
+                                            </p>
                                         </div>
                                     </div>
-                                    {selectedKYC.role !== 'recruiter' && (
-                                        <button
-                                            disabled={processing}
-                                            onClick={() => handleApprove(selectedKYC)}
-                                            className="px-6 py-2.5 bg-gradient-to-r from-[#29a08e] to-[#228377] text-white rounded-xl text-sm font-bold hover:shadow-lg hover:shadow-[#29a08e]/20 transition-all disabled:opacity-50 flex items-center gap-2 active:scale-[0.98]"
-                                        >
-                                            <Check className="w-4 h-4" />
-                                            Approve
-                                        </button>
-                                    )}
-                                </div>
+                                )}
 
-                                <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                                <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 lg:space-y-8">
                                     {selectedKYC.role === 'recruiter' && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="p-4 rounded-xl border border-gray-200 bg-white">
-                                                <h3 className="text-xs font-black text-gray-600 uppercase tracking-wider mb-2">Representative Verification</h3>
-                                                <p className="text-xs text-gray-500 mb-3">Verify identity of the authorized representative.</p>
-                                                <div className="flex items-center gap-2">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
+                                            <div className="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm ring-1 ring-black/[0.02] flex flex-col min-h-[160px]">
+                                                <div className="flex items-start gap-3 mb-4">
+                                                    <div className="w-10 h-10 rounded-xl bg-[#29a08e]/10 flex items-center justify-center text-[#29a08e] shrink-0 border border-[#29a08e]/15">
+                                                        <User className="w-5 h-5" strokeWidth={2} />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <h3 className="text-sm font-bold text-gray-900 tracking-tight">
+                                                                Representative verification
+                                                            </h3>
+                                                            {normKycStatus(selectedKYC.representativeStatus) === 'approved' && (
+                                                                <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-100/80 border border-emerald-200/80 px-2 py-0.5 rounded-lg">
+                                                                    <Check className="w-3 h-3" aria-hidden />
+                                                                    Done
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                                                            {normKycStatus(selectedKYC.representativeStatus) === 'approved'
+                                                                ? 'This step is complete. Continue with company verification below.'
+                                                                : 'Verify identity of the authorized representative.'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 mt-auto pt-1">
                                                     <button
-                                                        disabled={processing}
+                                                        type="button"
+                                                        disabled={
+                                                            processing ||
+                                                            normKycStatus(selectedKYC.representativeStatus) === 'approved'
+                                                        }
                                                         onClick={() => handleApprove(selectedKYC, 'representative')}
-                                                        className="px-3 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white disabled:opacity-50"
+                                                        className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-[#29a08e] to-[#228377] text-white shadow-sm disabled:opacity-50"
                                                     >
-                                                        Approve Representative
+                                                        Approve representative
                                                     </button>
                                                     <button
+                                                        type="button"
                                                         disabled={processing}
                                                         onClick={() => setReviewSection('representative')}
-                                                        className={`px-3 py-2 text-xs font-bold rounded-lg border ${reviewSection === 'representative' ? 'border-red-400 text-red-600 bg-red-50' : 'border-gray-300 text-gray-600'}`}
+                                                        className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition-colors ${reviewSection === 'representative' ? 'border-red-400 text-red-700 bg-red-50' : 'border-gray-200 text-gray-600 bg-gray-50 hover:bg-gray-100'}`}
                                                     >
-                                                        Reject Representative
+                                                        Reject representative
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div className="p-4 rounded-xl border border-gray-200 bg-white">
-                                                <h3 className="text-xs font-black text-gray-600 uppercase tracking-wider mb-2">Company Verification</h3>
-                                                <p className="text-xs text-gray-500 mb-3">Can be approved only after representative is approved.</p>
-                                                <div className="flex items-center gap-2">
+                                            <div className="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm ring-1 ring-black/[0.02] flex flex-col min-h-[160px]">
+                                                <div className="flex items-start gap-3 mb-4">
+                                                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600 shrink-0 border border-purple-200/60">
+                                                        <Building2 className="w-5 h-5" strokeWidth={2} />
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <h3 className="text-sm font-bold text-gray-900 tracking-tight">
+                                                                Company verification
+                                                            </h3>
+                                                            {normKycStatus(selectedKYC.companyStatus) === 'approved' && (
+                                                                <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-100/80 border border-emerald-200/80 px-2 py-0.5 rounded-lg">
+                                                                    <Check className="w-3 h-3" aria-hidden />
+                                                                    Done
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                                                            {normKycStatus(selectedKYC.representativeStatus) !== 'approved'
+                                                                ? 'Unlocks after representative verification is approved.'
+                                                                : normKycStatus(selectedKYC.companyStatus) === 'approved'
+                                                                  ? 'Company verification is complete.'
+                                                                  : 'Representative is approved — review company documents and approve when ready.'}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2 mt-auto pt-1">
                                                     <button
-                                                        disabled={processing || selectedKYC.representativeStatus !== 'approved'}
+                                                        type="button"
+                                                        disabled={
+                                                            processing ||
+                                                            normKycStatus(selectedKYC.representativeStatus) !== 'approved' ||
+                                                            normKycStatus(selectedKYC.companyStatus) === 'approved'
+                                                        }
                                                         onClick={() => handleApprove(selectedKYC, 'company')}
-                                                        className="px-3 py-2 text-xs font-bold rounded-lg bg-emerald-600 text-white disabled:opacity-50"
+                                                        className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-[#29a08e] to-[#228377] text-white shadow-sm disabled:opacity-50"
                                                     >
-                                                        Approve Company
+                                                        Approve company
                                                     </button>
                                                     <button
+                                                        type="button"
                                                         disabled={processing}
                                                         onClick={() => setReviewSection('company')}
-                                                        className={`px-3 py-2 text-xs font-bold rounded-lg border ${reviewSection === 'company' ? 'border-red-400 text-red-600 bg-red-50' : 'border-gray-300 text-gray-600'}`}
+                                                        className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition-colors ${reviewSection === 'company' ? 'border-red-400 text-red-700 bg-red-50' : 'border-gray-200 text-gray-600 bg-gray-50 hover:bg-gray-100'}`}
                                                     >
-                                                        Reject Company
+                                                        Reject company
                                                     </button>
                                                 </div>
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="grid grid-cols-2 gap-8">
-                                        <div className="space-y-4">
-                                            <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                                <User className="w-3.5 h-3.5 text-[#29a08e]" />
-                                                Identity Details
-                                            </h3>
-                                            <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6 items-start">
+                                        <section className="rounded-2xl border border-gray-200/90 bg-white shadow-sm ring-1 ring-black/[0.02] overflow-hidden min-w-0">
+                                            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/90 flex items-center gap-2">
+                                                <User className="w-4 h-4 text-[#29a08e] shrink-0" />
+                                                <h3 className="text-[11px] font-black text-gray-700 uppercase tracking-[0.14em]">
+                                                    Identity details
+                                                </h3>
+                                            </div>
+                                            <div className="p-4 sm:p-5">
                                                 {getIdentityDetailsByRole(selectedKYC).map((item, i) => (
-                                                    <div key={i} className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">{item.label}</p>
-                                                        <p className="text-sm font-semibold text-gray-900">{item.value}</p>
-                                                    </div>
+                                                    <DetailRow
+                                                        key={i}
+                                                        label={item.label}
+                                                        value={item.value}
+                                                        valueClassName={identityValueTypography(item.label)}
+                                                    />
                                                 ))}
                                             </div>
-                                        </div>
+                                        </section>
 
-                                        {selectedKYC.role === 'recruiter' && (
-                                            <div className="space-y-4">
-                                                <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                                    <Building2 className="w-3.5 h-3.5 text-purple-500" />
-                                                    Company Verification
-                                                </h3>
-                                                <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100 space-y-3">
-                                                    <div>
-                                                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company Name</p>
-                                                        <p className="text-sm font-semibold text-gray-900">{selectedKYC?.company?.companyName || selectedKYC.companyName || '—'}</p>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div>
-                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Reg No</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC?.company?.registrationNumber || selectedKYC.registrationNumber || '—'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Industry</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC?.company?.industry || selectedKYC.industry || '—'}</p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div>
-                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Address</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC?.company?.companyAddress || selectedKYC.companyAddress || '—'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Website</p>
-                                                            <p className="text-xs font-semibold text-gray-900">{selectedKYC?.company?.website || selectedKYC.website || '—'}</p>
-                                                        </div>
-                                                    </div>
+                                        {selectedKYC.role === 'recruiter' ? (
+                                            <section className="rounded-2xl border border-gray-200/90 bg-white shadow-sm ring-1 ring-black/[0.02] overflow-hidden min-w-0">
+                                                <div className="px-4 py-3 border-b border-gray-100 bg-purple-50/50 flex items-center gap-2">
+                                                    <Building2 className="w-4 h-4 text-purple-600 shrink-0" />
+                                                    <h3 className="text-[11px] font-black text-gray-700 uppercase tracking-[0.14em]">
+                                                        Company details
+                                                    </h3>
                                                 </div>
-                                            </div>
+                                                <div className="p-4 sm:p-5">
+                                                    {getCompanyDetailRows(selectedKYC).map((row, i) => (
+                                                        <DetailRow
+                                                            key={i}
+                                                            label={row.label}
+                                                            value={row.value}
+                                                            valueClassName={
+                                                                row.mono
+                                                                    ? 'font-mono text-[13px] break-all [overflow-wrap:anywhere] leading-snug'
+                                                                    : 'break-words [overflow-wrap:anywhere] leading-snug'
+                                                            }
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </section>
+                                        ) : (
+                                            <section className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 min-h-[180px] flex flex-col items-center justify-center text-center p-6 sm:p-8">
+                                                <div className="w-12 h-12 rounded-xl bg-gray-200/60 flex items-center justify-center text-gray-400 mb-3">
+                                                    <Building2 className="w-6 h-6" strokeWidth={1.75} />
+                                                </div>
+                                                <p className="text-sm font-bold text-gray-600">Company details</p>
+                                                <p className="text-xs text-gray-500 mt-1.5 max-w-[240px] leading-relaxed">
+                                                    Not required for job seeker applications.
+                                                </p>
+                                            </section>
                                         )}
                                     </div>
 
-                                    <div className="space-y-4">
-                                        <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                                            <FileText className="w-3.5 h-3.5 text-[#29a08e]" />
-                                            Verification Proofs
-                                        </h3>
-                                        <div className="grid grid-cols-3 gap-4">
-                                            {getProofCardsByRole(selectedKYC).map((img, i) => (
-                                                <KycImagePreview key={i} label={img.label} path={img.path} />
-                                            ))}
+                                    <section className="rounded-2xl border border-gray-200/90 bg-white shadow-sm ring-1 ring-black/[0.02] overflow-hidden">
+                                        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/90 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <FileText className="w-4 h-4 text-[#29a08e] shrink-0" />
+                                                <h3 className="text-[11px] font-black text-gray-700 uppercase tracking-[0.14em] truncate">
+                                                    Verification proofs
+                                                </h3>
+                                            </div>
+                                            <p className="text-[11px] text-gray-400 font-medium shrink-0 hidden sm:block">
+                                                Hover a thumbnail to open the full file
+                                            </p>
                                         </div>
-                                    </div>
+                                        <div className="p-4 sm:p-5">
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+                                                {getProofCardsByRole(selectedKYC).map((img, i) => (
+                                                    <KycImagePreview key={i} label={img.label} path={img.path} />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </section>
 
                                     {selectedKYC.rejectionHistory && selectedKYC.rejectionHistory.length > 0 && (
                                         <div className="space-y-4">

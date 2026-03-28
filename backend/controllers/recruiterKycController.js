@@ -1,7 +1,9 @@
 import User from '../models/User.js';
 import RecruiterKyc from '../models/RecruiterKyc.js';
+import Company from '../models/Company.js';
 import ActivityLog from '../models/ActivityLog.js';
 import { createNotification, notifyAdmins } from './notificationController.js';
+import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
 import { logActivity } from '../utils/activityLogger.js';
 
 const deriveOverallStatus = (repStatus, compStatus) => {
@@ -144,6 +146,9 @@ export const submitRecruiterKyc = async (req, res) => {
 
         // Check if exists
         let existingKyc = await RecruiterKyc.findOne({ userId });
+        const priorRecruiterKycForNotify = existingKyc
+            ? { status: existingKyc.status }
+            : null;
 
         if (existingKyc && existingKyc.status === 'approved') {
             return res.status(400).json({ success: false, message: 'KYC is already approved.' });
@@ -184,6 +189,31 @@ export const submitRecruiterKyc = async (req, res) => {
             `Recruiter ${fullName || 'User'} submitted KYC verification.`
         );
 
+        const shouldNotifyAdmin =
+            !priorRecruiterKycForNotify || priorRecruiterKycForNotify.status === 'rejected';
+        if (shouldNotifyAdmin) {
+            const displayName = (fullName || '').trim() || 'A recruiter';
+            if (priorRecruiterKycForNotify?.status === 'rejected') {
+                await notifyAdmins({
+                    type: NOTIFICATION_TYPES.RECRUITER_KYC_RESUBMITTED_AFTER_REJECTION,
+                    category: 'recruiter',
+                    title: 'KYC Resubmitted',
+                    message: `${displayName} resubmitted recruiter verification after a previous rejection. Review in KYC Panel.`,
+                    link: '/admin/kyc',
+                    metadata: { userId, resubmissionAfterRejection: true }
+                });
+            } else if (!priorRecruiterKycForNotify) {
+                await notifyAdmins({
+                    type: NOTIFICATION_TYPES.RECRUITER_KYC_NEW_SUBMISSION,
+                    category: 'recruiter',
+                    title: 'New KYC Submission',
+                    message: `${displayName} submitted recruiter verification for the first time. Review in KYC Panel.`,
+                    link: '/admin/kyc',
+                    metadata: { userId, firstSubmission: true }
+                });
+            }
+        }
+
         res.status(200).json({ success: true, message: 'KYC submitted successfully.' });
 
     } catch (error) {
@@ -222,12 +252,9 @@ export const getRecruiterKycStatus = async (req, res) => {
 export const getPendingRecruiterKycs = async (req, res) => {
     try {
         console.log("[Admin] Fetching pending recruiter KYCs");
+        // Drop from queue only when both representative and company are approved
         const kycs = await RecruiterKyc.find({
-            $or: [
-                { status: 'pending' },
-                { representativeStatus: 'pending' },
-                { companyStatus: 'pending' }
-            ]
+            $nor: [{ representativeStatus: 'approved', companyStatus: 'approved' }]
         })
             .populate('userId', 'email fullName role') // Include role
             .sort({ createdAt: 1 });
@@ -303,6 +330,40 @@ export const reviewRecruiterKyc = async (req, res) => {
                 : null,
             kycVerifiedAt: finalDecision === 'approved' ? new Date() : null
         });
+
+        // Keep Company profile in sync: job posting still requires company.status === 'approved'
+        const rejectionText =
+            (kyc.representativeRejectionReason || kyc.companyRejectionReason || reason || '').trim() || 'Rejected in KYC review';
+        if (finalDecision === 'approved') {
+            await Company.findOneAndUpdate(
+                { recruiters: kyc.userId },
+                {
+                    $set: {
+                        status: 'approved',
+                        verificationStatus: 'approved',
+                        adminFeedback: '',
+                        rejectionReason: '',
+                        lastReviewedAt: new Date(),
+                        reviewedBy: req.user.id
+                    }
+                }
+            );
+        } else if (finalDecision === 'rejected') {
+            await Company.findOneAndUpdate(
+                { recruiters: kyc.userId },
+                {
+                    $set: {
+                        status: 'rejected',
+                        verificationStatus: 'rejected',
+                        adminFeedback: rejectionText,
+                        rejectionReason: rejectionText,
+                        lastReviewedAt: new Date(),
+                        lastRejectedAt: new Date(),
+                        reviewedBy: req.user.id
+                    }
+                }
+            );
+        }
 
         // Notify Recruiter
         const sectionLabel = section === 'representative' ? 'Representative Verification' : 'Company Verification';

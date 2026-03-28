@@ -4,7 +4,6 @@ import ActivityLog from '../models/ActivityLog.js';
 import Company from '../models/Company.js';
 import Job from '../models/Job.js';
 import { logActivity } from '../utils/activityLogger.js';
-import { getProfileFingerprint } from '../utils/companyVerificationUtils.js';
 
 /**
  * GET /api/admin/stats
@@ -58,7 +57,7 @@ export const getActivityLogs = async (req, res) => {
 export const getAllCompanies = async (req, res) => {
     try {
         const companies = await Company.find({})
-            .populate('recruiters', 'fullName email kycStatus')
+            .populate('recruiters', 'fullName email kycStatus recruiterKycStatus')
             .sort({ createdAt: -1 });
 
         // Add job counts manually or via aggregation
@@ -84,7 +83,7 @@ export const getAllCompanies = async (req, res) => {
 export const getCompanyDetails = async (req, res) => {
     try {
         const company = await Company.findById(req.params.id)
-            .populate('recruiters', 'fullName email kycStatus')
+            .populate('recruiters', 'fullName email kycStatus recruiterKycStatus')
             .populate('reviewedBy', 'fullName email')
             .populate('adminFields.reviewHistory.adminId', 'fullName role')
             .populate('adminFields.verificationAuditLog.adminId', 'fullName email');
@@ -106,7 +105,7 @@ export const getCompanyDetails = async (req, res) => {
 
 /**
  * PATCH /api/admin/companies/:id/status
- * Updates company status and adds review history
+ * Moderation only: suspend / reactivate. Verification approve/reject lives in KYC panel.
  */
 export const updateCompanyStatus = async (req, res) => {
     try {
@@ -122,120 +121,157 @@ export const updateCompanyStatus = async (req, res) => {
             return res.status(400).json({ message: 'Invalid status' });
         }
 
-        // Backend validation: company cannot be approved before recruiter approval
-        if (status === 'approved') {
-             if (company.status === 'approved') {
-                 return res.status(400).json({
-                     success: false,
-                     message: 'This company has already been approved.'
-                 });
-             }
-
-             if (!company.recruiters || company.recruiters.length === 0) {
-                 return res.status(400).json({
-                     success: false,
-                     message: 'Linked recruiter record was not found.'
-                 });
-             }
-
-             // Check if at least one recruiter associated with the company is approved
-             const hasApprovedRecruiter = await User.exists({ 
-                 _id: { $in: company.recruiters }, 
-                 kycStatus: 'approved' 
-             });
-             
-             if (!hasApprovedRecruiter) {
-                 return res.status(400).json({ 
-                     success: false,
-                     message: 'Company approval failed because the recruiter account is not approved yet.' 
-                 });
-             }
-        }
-        
-        company.status = status;
-
         if (status === 'rejected') {
-            if (!comment || comment.trim() === '') {
-                return res.status(400).json({ success: false, message: 'Rejection reason is required' });
-            }
-            company.adminFeedback = comment;
-            company.rejectionReason = comment.trim();
-            company.lastReviewedAt = new Date();
-            company.reviewedBy = req.user.id;
-            company.lastRejectedAt = new Date();
-            company.lastRejectedSnapshot = { fingerprint: getProfileFingerprint(company), at: new Date() };
-            company.verificationStatus = 'rejected';
-
-            if (company.reapplyCount >= 3) {
-                company.isLockedAfterMaxAttempts = true;
-                company.verificationStatus = 'resubmission_locked';
-            }
-
-            if (!company.adminFields) company.adminFields = {};
-            if (!company.adminFields.verificationAuditLog) company.adminFields.verificationAuditLog = [];
-            company.adminFields.verificationAuditLog.push({
-                date: new Date(),
-                action: company.isLockedAfterMaxAttempts ? 'locked' : 'rejected',
-                adminId: req.user.id,
-                rejectionReason: comment.trim(),
-                reapplyCount: company.reapplyCount,
-                metadata: { locked: company.isLockedAfterMaxAttempts }
+            return res.status(403).json({
+                success: false,
+                message: 'Verification rejection is handled in the KYC panel only.'
             });
-        } else if (status === 'approved') {
+        }
+
+        if (!company.adminFields) company.adminFields = {};
+        if (!company.adminFields.reviewHistory) company.adminFields.reviewHistory = [];
+
+        if (status === 'approved') {
+            if (company.status === 'approved') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'This company is already active (approved).'
+                });
+            }
+
+            if (company.status !== 'suspended') {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        'Initial company verification is approved automatically when recruiter KYC (representative + company) completes in the KYC panel. You can only use Approve here to reactivate a suspended company.'
+                });
+            }
+
+            if (!company.recruiters || company.recruiters.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Linked recruiter record was not found.'
+                });
+            }
+
+            const hasFullRecruiterKyc = await User.exists({
+                _id: { $in: company.recruiters },
+                recruiterKycStatus: 'approved'
+            });
+
+            if (!hasFullRecruiterKyc) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot reactivate: recruiter KYC is not fully approved.'
+                });
+            }
+
+            company.status = 'approved';
             company.adminFeedback = '';
             company.rejectionReason = '';
             company.verificationStatus = 'approved';
             company.isLockedAfterMaxAttempts = false;
             company.lastReviewedAt = new Date();
             company.reviewedBy = req.user.id;
+            company.adminFields.moderationStatus = 'approved';
 
-            if (!company.adminFields) company.adminFields = {};
             if (!company.adminFields.verificationAuditLog) company.adminFields.verificationAuditLog = [];
             company.adminFields.verificationAuditLog.push({
                 date: new Date(),
                 action: 'approved',
                 adminId: req.user.id,
-                reapplyCount: company.reapplyCount
+                reapplyCount: company.reapplyCount,
+                metadata: { source: 'admin_reactivate' }
+            });
+
+            company.adminFields.reviewHistory.push({
+                action: status,
+                adminId: req.user.id,
+                comment: comment || 'Company reactivated (unsuspended) by admin'
+            });
+
+            await company.save();
+
+            const { createNotification } = await import('./notificationController.js');
+            const recruiterIds = company.recruiters || [];
+            for (const rid of recruiterIds) {
+                await createNotification({
+                    recipient: rid,
+                    type: 'company_verification_approved',
+                    category: 'company',
+                    title: 'Company reactivated',
+                    message: `Your company "${company.name}" is active again. You can post jobs as before.`,
+                    link: '/recruiter/company',
+                    metadata: { companyId: company._id },
+                    sender: req.user.id
+                });
+            }
+
+            await logActivity(
+                req.user.id,
+                'COMPANY_STATUS_UPDATE',
+                `Company '${company.name}' reactivated (unsuspended)`,
+                { companyId: company._id }
+            );
+
+            return res.json({
+                success: true,
+                message: 'Company reactivated successfully.',
+                company
             });
         }
 
-        company.adminFields.moderationStatus = (status === 'approved') ? 'approved' : (status === 'suspended' ? 'suspended' : 'rejected');
-        company.adminFields.reviewHistory.push({
-            action: status,
-            adminId: req.user.id,
-            comment: comment || (status === 'approved' ? 'Approved by admin' : `Status updated to ${status}`)
-        });
+        if (status === 'suspended') {
+            if (!comment || !comment.trim()) {
+                return res.status(400).json({ success: false, message: 'A reason is required to suspend a company.' });
+            }
 
-        await company.save();
+            company.status = 'suspended';
+            company.adminFeedback = comment.trim();
+            company.lastReviewedAt = new Date();
+            company.reviewedBy = req.user.id;
+            company.adminFields.moderationStatus = 'suspended';
 
-        const { createNotification } = await import('./notificationController.js');
-        const recruiterIds = company.recruiters || [];
-        for (const rid of recruiterIds) {
-            await createNotification({
-                recipient: rid,
-                type: status === 'approved' ? 'company_verification_approved' : 'company_verification_rejected',
-                category: 'company',
-                title: status === 'approved' ? 'Company Verified' : 'Company Rejected',
-                message: status === 'approved'
-                    ? `Your company "${company.name}" has been verified. You can now post jobs.`
-                    : `Your company "${company.name}" was rejected. ${comment || ''}`.trim(),
-                link: '/recruiter/company',
-                metadata: { companyId: company._id },
-                sender: req.user.id
+            company.adminFields.reviewHistory.push({
+                action: status,
+                adminId: req.user.id,
+                comment: comment.trim()
+            });
+
+            await company.save();
+
+            const { createNotification } = await import('./notificationController.js');
+            const recruiterIds = company.recruiters || [];
+            for (const rid of recruiterIds) {
+                await createNotification({
+                    recipient: rid,
+                    type: 'company_suspended',
+                    category: 'company',
+                    title: 'Company suspended',
+                    message: `Your company "${company.name}" has been suspended. Reason: ${comment.trim()}`,
+                    link: '/recruiter/company',
+                    metadata: { companyId: company._id },
+                    sender: req.user.id
+                });
+            }
+
+            await logActivity(
+                req.user.id,
+                'COMPANY_STATUS_UPDATE',
+                `Company '${company.name}' suspended`,
+                { companyId: company._id }
+            );
+
+            return res.json({
+                success: true,
+                message: 'Company suspended.',
+                company
             });
         }
 
-        await logActivity(
-            req.user.id,
-            'COMPANY_STATUS_UPDATE',
-            `Company '${company.name}' status updated to ${status}`,
-            { companyId: company._id }
-        );
-
-        res.json({ 
-            success: true,
-            message: status === 'approved' ? 'Company profile approved successfully.' : `Company status updated to ${status}.`,
-            company 
+        return res.status(400).json({
+            success: false,
+            message: 'This endpoint only supports suspend or reactivate (approve from suspended). Use the KYC panel for verification.'
         });
     } catch (error) {
         console.error('Admin updateCompanyStatus error:', error);

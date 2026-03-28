@@ -9,6 +9,7 @@ import {
     Wallet,
     MessageSquare,
     Building2,
+    RefreshCw,
 } from 'lucide-react';
 
 export const NOTIFICATION_TYPE_CONFIG = {
@@ -21,6 +22,7 @@ export const NOTIFICATION_TYPE_CONFIG = {
     promotion_expired: { icon: Megaphone, bg: 'bg-slate-100', color: 'text-slate-600' },
     promotion: { icon: Megaphone, bg: 'bg-indigo-100', color: 'text-indigo-600' },
     promotion_update: { icon: Megaphone, bg: 'bg-indigo-100', color: 'text-indigo-600' },
+    promotion_payment_request: { icon: Wallet, bg: 'bg-indigo-100', color: 'text-indigo-700' },
     // Payment
     payment_required: { icon: Wallet, bg: 'bg-amber-100', color: 'text-amber-600' },
     payment_submitted: { icon: Wallet, bg: 'bg-blue-100', color: 'text-blue-600' },
@@ -50,6 +52,10 @@ export const NOTIFICATION_TYPE_CONFIG = {
     recruiter_approved: { icon: ShieldCheck, bg: 'bg-emerald-100', color: 'text-emerald-600' },
     recruiter_rejected: { icon: XCircle, bg: 'bg-red-100', color: 'text-red-600' },
     recruiter_kyc_submitted: { icon: ShieldCheck, bg: 'bg-violet-100', color: 'text-violet-600' },
+    kyc_new_submission: { icon: ShieldCheck, bg: 'bg-violet-100', color: 'text-violet-600' },
+    kyc_resubmitted_after_rejection: { icon: RefreshCw, bg: 'bg-amber-100', color: 'text-amber-700' },
+    recruiter_kyc_new_submission: { icon: ShieldCheck, bg: 'bg-violet-100', color: 'text-violet-600' },
+    recruiter_kyc_resubmitted_after_rejection: { icon: RefreshCw, bg: 'bg-amber-100', color: 'text-amber-700' },
     company_verification_submitted: { icon: Building2, bg: 'bg-violet-100', color: 'text-violet-600' },
     company_verification_approved: { icon: Building2, bg: 'bg-emerald-100', color: 'text-emerald-600' },
     company_verification_rejected: { icon: Building2, bg: 'bg-red-100', color: 'text-red-600' },

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
     Building2, MapPin, Globe, Users, Calendar, Mail, Link as LinkIcon,
     Linkedin, Github, ExternalLink, CheckCircle, Clock, ShieldCheck,
     Briefcase, Cpu, Gift, TrendingUp, Info, Edit3, Save, X, Plus, Sparkles, ChevronDown, ShieldAlert
 } from 'lucide-react';
 import companyService from '../../services/companyService';
+import { getRecruiterKycVerificationDisplay } from '../../utils/recruiterVerificationDisplay';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { API_BASE_URL } from '../../config/api';
@@ -24,9 +25,6 @@ const CompanyProfile = () => {
     const [logoFile, setLogoFile] = useState(null);
     const [photoFiles, setPhotoFiles] = useState([]);
 
-    // Admin Actions
-    const [showRejectModal, setShowRejectModal] = useState(false);
-    const [rejectReason, setRejectReason] = useState('');
     const [resubmitting, setResubmitting] = useState(false);
     const [resubmitOnSave, setResubmitOnSave] = useState(false);
 
@@ -160,36 +158,33 @@ const CompanyProfile = () => {
         }
     };
 
-    const handleVerify = async (status) => {
-        if (!isAdmin) return;
-        if (status === 'approved') {
-            if (window.confirm("Are you sure you want to APPROVE this company?")) {
-                performStatusUpdate('approved', null);
-            }
-        } else if (status === 'rejected') {
-            setShowRejectModal(true);
-        }
-    };
-
-    const performStatusUpdate = async (status, comment) => {
-        try {
-            await companyService.adminUpdateCompanyStatus(company._id, status, comment);
-            toast.success(`Company ${status} successfully`);
-            fetchCompany();
-            setShowRejectModal(false);
-            setRejectReason('');
-        } catch (error) {
-            console.error(error);
-            toast.error(error.response?.data?.message || "Action failed");
-        }
-    };
-
-    const confirmReject = () => {
-        if (!rejectReason.trim()) {
-            toast.error("Rejection reason is mandatory");
+    const handleAdminSuspend = async () => {
+        if (!isAdmin || !company?._id) return;
+        const comment = prompt('Suspend this company?\n\nEnter a reason (required):');
+        if (comment === null) return;
+        if (!comment.trim()) {
+            toast.error('Suspension reason is required.');
             return;
         }
-        performStatusUpdate('rejected', rejectReason);
+        try {
+            await companyService.adminUpdateCompanyStatus(company._id, 'suspended', comment.trim());
+            toast.success('Company suspended.');
+            fetchCompany();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to suspend.');
+        }
+    };
+
+    const handleAdminReactivate = async () => {
+        if (!isAdmin || !company?._id) return;
+        if (!window.confirm('Reactivate this company?')) return;
+        try {
+            await companyService.adminUpdateCompanyStatus(company._id, 'approved', '');
+            toast.success('Company reactivated.');
+            fetchCompany();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Failed to reactivate.');
+        }
     };
 
     const handleResubmit = async () => {
@@ -311,46 +306,6 @@ const CompanyProfile = () => {
 
     return (
         <div className="flex-1 font-sans flex flex-col text-gray-900 relative bg-[#F3F4F6] pb-12">
-            {/* Rejection Modal */}
-            {showRejectModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="p-6 border-b border-gray-100 bg-red-50">
-                            <h3 className="text-lg font-bold text-red-800 flex items-center gap-2">
-                                <ShieldAlert className="w-5 h-5" /> Reject Company Application
-                            </h3>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <p className="text-sm text-gray-600">
-                                Please provide a detailed reason for rejection.
-                            </p>
-                            <textarea
-                                className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none resize-none text-sm"
-                                placeholder="e.g. Invalid business registration document..."
-                                value={rejectReason}
-                                onChange={(e) => setRejectReason(e.target.value)}
-                                autoFocus
-                            ></textarea>
-                        </div>
-                        <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-                            <button
-                                onClick={() => setShowRejectModal(false)}
-                                className="px-4 py-2 text-gray-700 font-bold text-sm hover:bg-gray-200 rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={confirmReject}
-                                disabled={!rejectReason.trim()}
-                                className="px-4 py-2 bg-red-600 text-white font-bold text-sm rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-none transition-all"
-                            >
-                                Confirm Rejection
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             <main className="py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
                 {/* Visual Header / Banner Area */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
@@ -373,6 +328,10 @@ const CompanyProfile = () => {
                                     ) : company.status === 'pending' ? (
                                         <span className="px-2.5 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold flex items-center gap-1">
                                             <Clock className="w-3.5 h-3.5" /> PENDING REVIEW
+                                        </span>
+                                    ) : company.status === 'suspended' ? (
+                                        <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs font-bold flex items-center gap-1">
+                                            <Clock className="w-3.5 h-3.5" /> SUSPENDED
                                         </span>
                                     ) : company.status === 'rejected' ? (
                                         <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1 ${
@@ -409,23 +368,38 @@ const CompanyProfile = () => {
                                 </div>
 
                                 {canReview && (
-                                    <div className="flex items-center gap-2">
-                                        {company.status !== 'approved' && (
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Link
+                                            to="/admin/kyc"
+                                            className="inline-flex items-center px-4 py-2 border border-indigo-200 rounded-lg shadow-sm text-sm font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors uppercase tracking-wide"
+                                        >
+                                            <ShieldCheck className="w-4 h-4 mr-2" />
+                                            KYC panel
+                                        </Link>
+                                        {(() => {
+                                            const kyc = getRecruiterKycVerificationDisplay(company.recruiters?.[0]);
+                                            return (
+                                                <span className="text-xs font-bold text-gray-600 px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200">
+                                                    Recruiter KYC: {kyc.label}
+                                                </span>
+                                            );
+                                        })()}
+                                        {company.status === 'approved' && (
                                             <button
-                                                onClick={() => handleVerify('approved')}
-                                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors uppercase tracking-wide"
+                                                type="button"
+                                                onClick={handleAdminSuspend}
+                                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 transition-colors uppercase tracking-wide"
                                             >
-                                                <ShieldCheck className="w-4 h-4 mr-2" />
-                                                Approve
+                                                Suspend
                                             </button>
                                         )}
-                                        {company.status !== 'rejected' && (
+                                        {company.status === 'suspended' && (
                                             <button
-                                                onClick={() => handleVerify('rejected')}
-                                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors uppercase tracking-wide"
+                                                type="button"
+                                                onClick={handleAdminReactivate}
+                                                className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors uppercase tracking-wide"
                                             >
-                                                <X className="w-4 h-4 mr-2" />
-                                                Reject
+                                                Reactivate
                                             </button>
                                         )}
                                     </div>

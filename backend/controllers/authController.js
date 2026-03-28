@@ -55,8 +55,8 @@ export const sendSignupOTP = async (req, res) => {
         const normalizedEmail = email.toLowerCase().trim();
         const normalizedRole = normalizeRole(role);
 
-        const existingUser = await User.findOne({ email: normalizedEmail }).select('_id').lean();
-        if (existingUser) {
+        const existingUser = await User.findOne({ email: normalizedEmail }).select('_id isDeleted').lean();
+        if (existingUser && !existingUser.isDeleted) {
             return res.status(409).json({ success: false, message: 'Email already exists.' });
         }
 
@@ -152,33 +152,55 @@ export const verifySignupOTP = async (req, res) => {
             });
         }
 
-        const existingUser = await User.findOne({ email: normalizedEmail }).select('_id').lean();
-        if (existingUser) {
+        const existingUser = await User.findOne({ email: normalizedEmail });
+        if (existingUser && !existingUser.isDeleted) {
             await PendingSignup.deleteOne({ _id: pending._id });
             return res.status(409).json({ success: false, message: 'Email already exists. Please login.' });
         }
 
-        const user = new User({
-            fullName: pending.fullName,
-            email: pending.email,
-            password: pending.passwordHash,
-            role: normalizeRole(pending.role),
-            kycStatus: 'not_submitted'
-        });
-        syncSeekerProfileScoresToUser(user);
-        await user.save();
+        let user;
+        let restored = false;
+        if (existingUser && existingUser.isDeleted) {
+            existingUser.fullName = pending.fullName;
+            existingUser.password = pending.passwordHash;
+            existingUser.role = normalizeRole(pending.role);
+            existingUser.isDeleted = false;
+            existingUser.deletedAt = null;
+            existingUser.deletedBy = null;
+            existingUser.isActive = true;
+            existingUser.provider = 'local';
+            existingUser.providerId = null;
+            syncSeekerProfileScoresToUser(existingUser);
+            await existingUser.save();
+            user = existingUser;
+            restored = true;
+        } else {
+            user = new User({
+                fullName: pending.fullName,
+                email: pending.email,
+                password: pending.passwordHash,
+                role: normalizeRole(pending.role),
+                kycStatus: 'not_submitted'
+            });
+            syncSeekerProfileScoresToUser(user);
+            await user.save();
+        }
         await PendingSignup.deleteOne({ _id: pending._id });
 
         await logActivity(
             user._id,
-            'USER_REGISTERED',
-            `New user '${user.fullName}' registered.`,
-            { role: user.role, via: 'signup_otp' }
+            restored ? 'USER_RESTORED' : 'USER_REGISTERED',
+            restored
+                ? `User '${user.fullName}' restored via registration (same email).`
+                : `New user '${user.fullName}' registered.`,
+            { role: user.role, via: restored ? 'signup_otp_restore' : 'signup_otp' }
         );
 
-        return res.status(201).json({
+        return res.status(restored ? 200 : 201).json({
             success: true,
-            message: 'Account created successfully. Please login.'
+            message: restored
+                ? 'Account restored successfully. Please login.'
+                : 'Account created successfully. Please login.'
         });
     } catch (error) {
         console.error('verifySignupOTP error:', error);
@@ -258,11 +280,17 @@ export const sendOtp = async (req, res) => {
     try {
         console.log(`🔍 Received OTP request for: ${email}`);
 
-        // Check if user exists
-        const user = await User.findOne({ email });
+        const normalizedEmail = email.toLowerCase().trim();
+        const user = await User.findOne({ email: normalizedEmail });
         if (!user) {
             console.warn(`⚠️ OTP request failed: User not found for ${email}`);
             return res.status(404).json({ success: false, message: "User not found with this email." });
+        }
+        if (user.isDeleted) {
+            return res.status(403).json({
+                success: false,
+                message: 'This account has been removed. Register again with the same email to restore it, or contact support.'
+            });
         }
 
         // Generate and hash OTP
@@ -324,9 +352,12 @@ export const verifyOtp = async (req, res) => {
     const { email, otp } = req.body;
 
     try {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: String(email).toLowerCase().trim() });
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found." });
+        }
+        if (user.isDeleted) {
+            return res.status(403).json({ success: false, message: 'This account has been removed.' });
         }
 
         // Check if OTP exists and is not expired
@@ -353,9 +384,12 @@ export const resetPassword = async (req, res) => {
     const { email, otp, newPassword } = req.body;
 
     try {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email: String(email).toLowerCase().trim() });
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found." });
+        }
+        if (user.isDeleted) {
+            return res.status(403).json({ success: false, message: 'This account has been removed.' });
         }
 
         // Verify again to ensure security (or check a "verified" flag in session/token)
@@ -402,6 +436,12 @@ export const googleLogin = async (req, res) => {
         let user = await User.findOne({ email: email.toLowerCase().trim() });
 
         if (user) {
+            if (user.isDeleted) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'This account has been removed. Use email registration with the same address to restore your account, or contact support.'
+                });
+            }
             if (user.role === 'admin') {
                 return res.status(403).json({ success: false, message: "Admin accounts cannot login via social providers." });
             }
@@ -481,6 +521,12 @@ export const facebookLogin = async (req, res) => {
         let user = await User.findOne({ email: email.toLowerCase().trim() });
 
         if (user) {
+            if (user.isDeleted) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'This account has been removed. Use email registration with the same address to restore your account, or contact support.'
+                });
+            }
             if (user.role === 'admin') {
                 return res.status(403).json({ success: false, message: "Admin accounts cannot login via social providers." });
             }

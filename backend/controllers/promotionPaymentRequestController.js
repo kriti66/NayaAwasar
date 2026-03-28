@@ -18,6 +18,7 @@ import {
 } from '../constants/promotionConfig.js';
 import * as promotionService from '../services/promotionService.js';
 import { createNotification, notifyAdmins } from './notificationController.js';
+import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
 
 const validDurations = [7, 15, 30];
 
@@ -118,7 +119,7 @@ export const submitPromotionPaymentRequest = async (req, res) => {
         });
 
         await notifyAdmins({
-            type: 'promotion_payment_request',
+            type: NOTIFICATION_TYPES.PROMOTION_PAYMENT_REQUEST,
             category: 'promotion',
             title: 'New paid promotion request',
             message: `${companyName} submitted a manual payment request for job "${jobTitle}".`,

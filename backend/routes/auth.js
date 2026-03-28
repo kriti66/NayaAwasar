@@ -43,6 +43,13 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ message: 'No account found with this email.' });
         }
 
+        if (user.isDeleted) {
+            return res.status(403).json({
+                code: 'ACCOUNT_REMOVED',
+                message: 'This account has been removed. You can register again with the same email to restore your account, or contact support.'
+            });
+        }
+
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
             return res.status(401).json({ message: 'Invalid credentials' });
@@ -85,9 +92,15 @@ router.post('/login', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id)
-            .select('fullName email role kycStatus isKycSubmitted isKycVerified kycRejectionReason kycCompletedAt profileImage')
+            .select('fullName email role kycStatus isKycSubmitted isKycVerified kycRejectionReason kycCompletedAt profileImage isDeleted')
             .lean();
         if (!user) return res.status(404).json({ message: 'User not found' });
+        if (user.isDeleted) {
+            return res.status(401).json({
+                code: 'ACCOUNT_REMOVED',
+                message: 'This account is no longer active.'
+            });
+        }
         res.json({
             id: user._id,
             fullName: user.fullName,

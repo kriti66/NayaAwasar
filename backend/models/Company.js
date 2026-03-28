@@ -39,7 +39,7 @@ const companySchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['draft', 'pending', 'waiting_for_recruiter_approval', 'approved', 'rejected'],
+        enum: ['draft', 'pending', 'waiting_for_recruiter_approval', 'approved', 'rejected', 'suspended'],
         default: 'draft'
     },
     verification_status: { // Added per prompt

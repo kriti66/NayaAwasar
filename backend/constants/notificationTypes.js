@@ -42,6 +42,14 @@ export const NOTIFICATION_TYPES = {
     INTERVIEW_RESCHEDULED: 'interview_rescheduled',
     RESCHEDULE_APPROVED: 'reschedule_approved',
     RESCHEDULE_DECLINED: 'reschedule_declined',
+    // KYC (admin alerts)
+    KYC_NEW_SUBMISSION: 'kyc_new_submission',
+    KYC_RESUBMITTED_AFTER_REJECTION: 'kyc_resubmitted_after_rejection',
+    RECRUITER_KYC_NEW_SUBMISSION: 'recruiter_kyc_new_submission',
+    RECRUITER_KYC_RESUBMITTED_AFTER_REJECTION: 'recruiter_kyc_resubmitted_after_rejection',
+    // Legacy aliases (older notifications may still use these)
+    KYC_SUBMITTED: 'kyc_submitted',
+    RECRUITER_KYC_SUBMITTED: 'recruiter_kyc_submitted',
     // Company / Recruiter
     RECRUITER_APPROVED: 'recruiter_approved',
     RECRUITER_REJECTED: 'recruiter_rejected',
@@ -50,6 +58,7 @@ export const NOTIFICATION_TYPES = {
     COMPANY_VERIFICATION_REJECTED: 'company_verification_rejected',
     COMPANY_PROFILE_UPDATED: 'company_profile_updated',
     // Contact / System
+    PROMOTION_PAYMENT_REQUEST: 'promotion_payment_request',
     NEW_CONTACT_MESSAGE: 'new_contact_message',
     ADMIN_REPLY_SENT: 'admin_reply_sent',
     PASSWORD_RESET_REQUESTED: 'password_reset_requested',
