@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import { getApiErrorMessage } from '../../utils/apiErrorMessage';
 import {
     Calendar,
     Clock,
@@ -23,6 +25,8 @@ const formatDate = (date) => {
 const formatTime = (time) => time || 'Time TBD';
 
 const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleAction }) => {
+    const { user } = useAuth();
+    const isJobseeker = user?.role === 'jobseeker' || user?.role === 'job_seeker';
     const [actionLoading, setActionLoading] = useState(false);
     const nextInterview = interviews && Array.isArray(interviews) && interviews.length > 0 ? interviews[0] : null;
     const interviewDoc = nextInterview?.interview?.interviewId;
@@ -31,14 +35,17 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
 
     const handleAcceptReschedule = async () => {
         if (!nextInterview?._id) return;
+        if (!localStorage.getItem('token')) {
+            toast.error('Please sign in again to respond to this reschedule.');
+            return;
+        }
         setActionLoading(true);
         try {
             await applicationService.acceptRecruiterReschedule(nextInterview._id);
             toast.success('Reschedule accepted. Your interview has been updated to the new date.');
             onRescheduleAction?.();
         } catch (err) {
-            const msg = err?.message || err?.response?.data?.message || 'Failed to accept reschedule';
-            toast.error(msg);
+            toast.error(getApiErrorMessage(err, 'Failed to accept reschedule'));
         } finally {
             setActionLoading(false);
         }
@@ -46,14 +53,17 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
 
     const handleDeclineReschedule = async () => {
         if (!nextInterview?._id) return;
+        if (!localStorage.getItem('token')) {
+            toast.error('Please sign in again to respond to this reschedule.');
+            return;
+        }
         setActionLoading(true);
         try {
             await applicationService.rejectRecruiterReschedule(nextInterview._id);
             toast.success('Reschedule declined. Your original schedule remains active.');
             onRescheduleAction?.();
         } catch (err) {
-            const msg = err?.message || err?.response?.data?.message || 'Failed to decline reschedule';
-            toast.error(msg);
+            toast.error(getApiErrorMessage(err, 'Failed to decline reschedule'));
         } finally {
             setActionLoading(false);
         }
@@ -167,11 +177,12 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
 
                         {/* Action buttons */}
                         <div className="flex gap-2 mt-5">
-                            {isReschedulePending ? (
+                            {isReschedulePending && isJobseeker ? (
                                 <>
                                     <button
+                                        type="button"
                                         onClick={handleAcceptReschedule}
-                                        disabled={actionLoading}
+                                        disabled={actionLoading || !nextInterview?._id}
                                         className="flex-1 py-2.5 bg-[#29a08e] text-white text-[10px] font-bold uppercase tracking-wider rounded-xl hover:bg-[#228377] transition-all flex items-center justify-center gap-1.5 disabled:opacity-70 disabled:cursor-not-allowed"
                                     >
                                         {actionLoading ? (
@@ -181,14 +192,20 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
                                         )}
                                     </button>
                                     <button
+                                        type="button"
                                         onClick={handleDeclineReschedule}
-                                        disabled={actionLoading}
+                                        disabled={actionLoading || !nextInterview?._id}
                                         className="flex-1 py-2.5 bg-white border border-amber-200 text-amber-700 text-[10px] font-bold uppercase tracking-wider rounded-xl hover:bg-amber-50 transition-all flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
                                     >
                                         Decline
                                     </button>
                                 </>
-                            ) : (
+                            ) : isReschedulePending && !isJobseeker ? (
+                                <p className="text-[10px] text-amber-800 font-semibold w-full text-center py-2">
+                                    Only the candidate can accept or decline this reschedule.
+                                </p>
+                            ) : null}
+                            {!isReschedulePending ? (
                                 <>
                                     {nextInterview.interview?.mode === 'Online' && nextInterview.interview?.roomId && (
                                         <Link
@@ -205,7 +222,7 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
                                         Details
                                     </Link>
                                 </>
-                            )}
+                            ) : null}
                         </div>
                     </div>
                 </div>

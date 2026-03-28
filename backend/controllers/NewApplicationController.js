@@ -8,6 +8,13 @@ import { logUserActivity } from '../utils/userActivityLogger.js';
 import { logActivity } from '../utils/activityLogger.js';
 import Interview from '../models/Interview.js';
 
+function getSeekerIdString(application) {
+    const s = application?.seeker_id;
+    if (s == null) return null;
+    if (typeof s === 'object' && s._id != null) return String(s._id);
+    return String(s);
+}
+
 // Get applications for a job (Recruiter view)
 export const getJobApplications = async (req, res) => {
     const { jobId } = req.params;
@@ -1006,7 +1013,7 @@ export const proposeRecruiterReschedule = async (req, res) => {
 // Jobseeker accepts recruiter-proposed reschedule
 export const acceptRecruiterReschedule = async (req, res) => {
     const { id } = req.params;
-    const seekerId = req.user.id;
+    const seekerId = String(req.user.id);
 
     try {
         const application = await Application.findById(id)
@@ -1015,7 +1022,20 @@ export const acceptRecruiterReschedule = async (req, res) => {
             .populate('interview.interviewId');
 
         if (!application) return res.status(404).json({ message: 'Application not found' });
-        if (application.seeker_id.toString() !== seekerId) return res.status(403).json({ message: 'Unauthorized' });
+
+        const role = req.user.role;
+        if (role !== 'jobseeker' && role !== 'job_seeker') {
+            return res.status(403).json({
+                message: 'Only jobseeker can accept recruiter reschedule'
+            });
+        }
+
+        const applicationSeekerId = getSeekerIdString(application);
+        if (!applicationSeekerId || applicationSeekerId !== seekerId) {
+            return res.status(403).json({
+                message: 'You can only accept your own interview reschedule'
+            });
+        }
         if (application.status !== 'interview') return res.status(400).json({ message: 'Cannot accept: application is not in interview stage' });
 
         const interviewDoc = application.interview?.interviewId;
@@ -1037,6 +1057,8 @@ export const acceptRecruiterReschedule = async (req, res) => {
         if (!interviewDoc.proposedDate || !interviewDoc.proposedTime) {
             return res.status(400).json({ message: 'Proposed date/time missing' });
         }
+
+        const recruiterReasonSnapshot = interviewDoc.rescheduleReason;
 
         // Apply proposal
         const newDate = new Date(interviewDoc.proposedDate);
@@ -1071,7 +1093,7 @@ export const acceptRecruiterReschedule = async (req, res) => {
         application.interviewHistory = Array.isArray(application.interviewHistory) ? application.interviewHistory : [];
         application.interviewHistory.push({
             action: 'Recruiter Reschedule Approved',
-            reason: interviewDoc.rescheduleReason,
+            reason: recruiterReasonSnapshot,
             timestamp: new Date()
         });
         await application.save();
@@ -1095,7 +1117,7 @@ export const acceptRecruiterReschedule = async (req, res) => {
 // Jobseeker rejects recruiter-proposed reschedule (keeps old date/time)
 export const rejectRecruiterReschedule = async (req, res) => {
     const { id } = req.params;
-    const seekerId = req.user.id;
+    const seekerId = String(req.user.id);
     const { reason } = req.body || {};
 
     try {
@@ -1105,7 +1127,20 @@ export const rejectRecruiterReschedule = async (req, res) => {
             .populate('interview.interviewId');
 
         if (!application) return res.status(404).json({ message: 'Application not found' });
-        if (application.seeker_id.toString() !== seekerId) return res.status(403).json({ message: 'Unauthorized' });
+
+        const role = req.user.role;
+        if (role !== 'jobseeker' && role !== 'job_seeker') {
+            return res.status(403).json({
+                message: 'Only jobseeker can reject recruiter reschedule'
+            });
+        }
+
+        const applicationSeekerId = getSeekerIdString(application);
+        if (!applicationSeekerId || applicationSeekerId !== seekerId) {
+            return res.status(403).json({
+                message: 'You can only respond to your own interview reschedule'
+            });
+        }
         if (application.status !== 'interview') return res.status(400).json({ message: 'Cannot reject: application is not in interview stage' });
 
         const interviewDoc = application.interview?.interviewId;

@@ -386,7 +386,10 @@ const RecruiterApplicants = () => {
                                 const applicantName = app.personalInfo?.fullName || app.seeker_id?.fullName || 'Anonymous';
                                 const applicantEmail = app.personalInfo?.email || app.seeker_id?.email;
                                 const interviewDoc = app.interview?.interviewId;
-                                const recruiterProposalPending = interviewDoc?.rescheduleStatus === 'PENDING' && interviewDoc?.rescheduleRequestedBy === 'recruiter';
+                                const recruiterProposalPending =
+                                    ['PENDING', 'PROPOSED'].includes(
+                                        String(interviewDoc?.rescheduleStatus || '').toUpperCase()
+                                    ) && interviewDoc?.rescheduleRequestedBy === 'recruiter';
                                 const jobseekerReschedulePending = app.reschedule?.requested && !app.reschedule?.reviewed;
 
                                 return (
@@ -473,6 +476,13 @@ const RecruiterApplicants = () => {
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {recruiterProposalPending && (
+                                            <div className="w-full rounded-2xl border border-teal-100 bg-teal-50/80 px-4 py-3 text-xs text-teal-900 font-semibold">
+                                                A new interview time is proposed. The candidate must accept or decline before it
+                                                applies. You cannot accept this on behalf of the candidate.
+                                            </div>
+                                        )}
 
                                         {/* Reschedule Request Banner */}
                                         {app.reschedule?.requested && (

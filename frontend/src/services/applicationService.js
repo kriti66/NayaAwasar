@@ -88,8 +88,12 @@ const applicationService = {
             const response = await api.put(`/applications/${id}/recruiter-reschedule/accept`);
             return response.data;
         } catch (error) {
-            const data = error.response?.data;
-            throw data && typeof data === 'object' ? data : { message: data?.message || 'Failed to accept reschedule request' };
+            const msg =
+                (typeof error.response?.data?.message === 'string' && error.response.data.message) ||
+                'Failed to accept reschedule request';
+            const err = new Error(msg);
+            err.response = error.response;
+            throw err;
         }
     },
     rejectRecruiterReschedule: async (id, payload = {}) => {
@@ -97,8 +101,12 @@ const applicationService = {
             const response = await api.put(`/applications/${id}/recruiter-reschedule/reject`, payload);
             return response.data;
         } catch (error) {
-            const data = error.response?.data;
-            throw data && typeof data === 'object' ? data : { message: data?.message || 'Failed to reject reschedule request' };
+            const msg =
+                (typeof error.response?.data?.message === 'string' && error.response.data.message) ||
+                'Failed to reject reschedule request';
+            const err = new Error(msg);
+            err.response = error.response;
+            throw err;
         }
     }
 };

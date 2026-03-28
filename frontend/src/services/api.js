@@ -12,6 +12,8 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else if (import.meta.env.DEV && typeof config.url === 'string' && config.url.includes('/zego/')) {
+      console.warn('[api] Zego request without token — user may see auth errors.');
     }
     return config;
   },

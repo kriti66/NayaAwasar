@@ -7,6 +7,7 @@ import {
     ChevronRight, CalendarDays, ExternalLink, XCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getApiErrorMessage } from '../../utils/apiErrorMessage';
 
 const SeekerInterviews = () => {
     const [searchParams] = useSearchParams();
@@ -63,28 +64,40 @@ const SeekerInterviews = () => {
     };
 
     const handleRecruiterRescheduleAccept = async (applicationId) => {
+        if (!applicationId) return;
+        if (!localStorage.getItem('token')) {
+            toast.error('Please sign in again to respond to this reschedule.');
+            return;
+        }
         setDecisionLoading(true);
         try {
             await applicationService.acceptRecruiterReschedule(applicationId);
             toast.success('Reschedule accepted. Your interview has been updated to the new date.');
             fetchInterviews();
         } catch (error) {
-            const msg = error?.message || error?.response?.data?.message || 'Failed to accept reschedule request';
-            toast.error(msg);
+            toast.error(
+                getApiErrorMessage(error, 'Failed to accept reschedule request')
+            );
         } finally {
             setDecisionLoading(false);
         }
     };
 
     const handleRecruiterRescheduleReject = async (applicationId) => {
+        if (!applicationId) return;
+        if (!localStorage.getItem('token')) {
+            toast.error('Please sign in again to respond to this reschedule.');
+            return;
+        }
         setDecisionLoading(true);
         try {
             await applicationService.rejectRecruiterReschedule(applicationId);
             toast.success('Reschedule declined. Your original schedule remains active.');
             fetchInterviews();
         } catch (error) {
-            const msg = error?.message || error?.response?.data?.message || 'Failed to decline reschedule request';
-            toast.error(msg);
+            toast.error(
+                getApiErrorMessage(error, 'Failed to decline reschedule request')
+            );
         } finally {
             setDecisionLoading(false);
         }
@@ -308,8 +321,9 @@ const SeekerInterviews = () => {
                         <div className="flex gap-3">
                             {recruiterReschedulePending ? (
                                 <button
+                                    type="button"
                                     onClick={() => handleRecruiterRescheduleAccept(app._id)}
-                                    disabled={decisionLoading}
+                                    disabled={decisionLoading || !app._id}
                                     className="px-6 py-2.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all active:scale-95 shadow-lg shadow-emerald-500/20 disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
                                     Accept
@@ -326,8 +340,9 @@ const SeekerInterviews = () => {
                             )}
                             {recruiterReschedulePending && (
                                 <button
+                                    type="button"
                                     onClick={() => handleRecruiterRescheduleReject(app._id)}
-                                    disabled={decisionLoading}
+                                    disabled={decisionLoading || !app._id}
                                     className="px-6 py-2.5 bg-white border border-amber-200 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-50 transition-all active:scale-95 shadow-sm shadow-amber-500/10 disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
                                     Reject
