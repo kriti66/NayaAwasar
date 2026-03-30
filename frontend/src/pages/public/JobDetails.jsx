@@ -19,6 +19,7 @@ import {
     Sparkles
 } from 'lucide-react';
 import CompanyLogo from '../../components/common/CompanyLogo';
+import SimilarJobs from '../../components/SimilarJobs';
 
 const normalizeSalaryValue = (value, fallbackLabel) => {
     if (value == null) return fallbackLabel;
@@ -339,6 +340,8 @@ const JobDetails = () => {
                                     ))}
                                 </div>
                             </section>
+
+                            <SimilarJobs jobId={id} />
                         </div>
                     </div>
 

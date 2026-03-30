@@ -11,47 +11,13 @@ import Profile from '../models/Profile.js';
 import { calculateRecruiterStrength } from '../utils/recruiterStrength.js';
 import {
     computeSeekerProfileMetrics,
-    getNormalizedSkills
+    getNormalizedSkills,
+    mergeSeekerDataForScoring
 } from '../utils/seekerProfileScoring.js';
+import { getRecommendedJobs } from '../services/recommendationService.js';
+import { applyUserJobLabels } from '../services/userJobLabelEnrichment.js';
 
 const router = express.Router();
-
-const mergeSeekerDataForScoring = (user, profile) => {
-    const expFromProfile = Array.isArray(profile?.experience)
-        ? profile.experience.map((e) => ({
-            title: e?.role || '',
-            company: e?.company || '',
-            duration:
-                e?.startDate || e?.endDate
-                    ? `${e?.startDate || ''} ${e?.endDate || ''}`.trim()
-                    : '',
-            description: e?.description || ''
-        }))
-        : [];
-
-    const eduFromProfile = Array.isArray(profile?.education)
-        ? profile.education.map((e) => ({
-            degree: e?.degree || '',
-            institution: e?.institute || '',
-            year: e?.endYear || e?.startYear || ''
-        }))
-        : [];
-
-    return {
-        ...user,
-        bio: user?.bio || profile?.summary || '',
-        professionalHeadline: user?.professionalHeadline || profile?.headline || '',
-        location: user?.location || profile?.location || '',
-        skills: Array.isArray(profile?.skills) && profile.skills.length ? profile.skills : user?.skills,
-        workExperience: expFromProfile.length ? expFromProfile : user?.workExperience,
-        education: eduFromProfile.length ? eduFromProfile : user?.education,
-        resume: profile?.resume?.fileUrl ? profile.resume : user?.resume,
-        jobPreferences:
-            profile?.jobPreferences && Object.keys(profile.jobPreferences).length
-                ? profile.jobPreferences
-                : user?.jobPreferences
-    };
-};
 
 router.get('/', async (req, res) => {
     const userId = req.user?.id;
@@ -169,40 +135,13 @@ router.get('/', async (req, res) => {
                 };
             });
 
-
-            // Recommended Jobs
-            // Simple algo: Match title or description with user skills
-            let recommendedJobs = [];
             const mergedProfileSource = mergeSeekerDataForScoring(user, profile);
             const normalizedSkills = getNormalizedSkills(mergedProfileSource.skills);
-            if (normalizedSkills.length > 0) {
-                const regexConditions = normalizedSkills.map((skill) => ({
-                    title: { $regex: skill, $options: 'i' }
-                }));
 
-                // Also match location preference if set
-                const query = {
-                    status: 'Active',
-                    $or: regexConditions
-                };
-
-                if (mergedProfileSource.jobPreferences?.location || mergedProfileSource.jobPreferences?.preferredLocation) {
-                    // Optional: boost or filter by location
-                    // For now, let's just use skills matching for wider results
-                }
-
-                recommendedJobs = await Job.find(query)
-                    .select('title company_name location salary_range type company_logo createdAt')
-                    .limit(3)
-                    .sort({ createdAt: -1 });
-            }
-            // Fallback if no skills or no matches: specific query or recent jobs
-            if (recommendedJobs.length === 0) {
-                recommendedJobs = await Job.find({ status: 'Active' })
-                    .select('title company_name location salary_range type company_logo createdAt')
-                    .limit(3)
-                    .sort({ createdAt: -1 });
-            }
+            // Recommended jobs: same pipeline as /api/recommendations + shared labels
+            const recPack = await getRecommendedJobs(userId, { limit: 3 });
+            let recommendedJobs = (recPack.jobs || []).slice(0, 3);
+            await applyUserJobLabels(userId, recommendedJobs);
 
 
             // Recommended Actions
@@ -365,10 +304,9 @@ router.get('/recruiter/stats', async (req, res) => {
         const recruiterJobs = await Job.find({ recruiter_id: recruiterId }).select('_id');
         const jobIds = recruiterJobs.map(j => j._id);
 
-        // Count only ACTIVE applications (exclude final states: hired, rejected, withdrawn)
+        // Inbound Talent: total applications across ALL jobs posted by this recruiter
         const applicantCount = await Application.countDocuments({
-            job_id: { $in: jobIds },
-            status: { $nin: ['hired', 'rejected', 'withdrawn'] }
+            job_id: { $in: jobIds }
         });
 
         // Fetch company for profile views and calculate growth

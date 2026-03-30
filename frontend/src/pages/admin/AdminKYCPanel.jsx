@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { toast } from 'react-hot-toast';
 import api from '../../services/api';
 import { API_BASE_URL } from '../../config/api';
 import {
@@ -15,7 +16,8 @@ import {
     ShieldQuestion,
     ImageOff,
     CheckCircle2,
-    CircleDot
+    CircleDot,
+    Loader2
 } from 'lucide-react';
 
 const resolveAssetUrl = (path) => {
@@ -191,6 +193,9 @@ function getRecruiterKycUiState(kyc) {
     };
 }
 
+const MIN_REJECTION_REASON_LENGTH = 10;
+const MAX_RESUBMISSION_ATTEMPTS = 3;
+
 function getProofCardsByRole(kyc) {
     const role = kyc?.role === 'recruiter' ? 'recruiter' : 'jobseeker';
 
@@ -216,6 +221,7 @@ function getIdentityDetailsByRole(kyc) {
     if (kyc?.role === 'recruiter') {
         const rep = kyc?.representative || {};
         return [
+            { label: 'Full Name', value: kyc?.fullName || kyc?.userId?.fullName || '—' },
             { label: 'ID Type', value: rep.idType || kyc.idType || '—' },
             { label: 'ID Number', value: rep.idNumber || kyc.idNumber || '—' },
             { label: 'Job Title', value: rep.jobTitle || kyc.jobTitle || '—' },
@@ -225,13 +231,15 @@ function getIdentityDetailsByRole(kyc) {
     }
 
     return [
+        { label: 'Full Name', value: kyc?.fullName || kyc?.userId?.fullName || '—' },
         { label: 'Type', value: kyc?.idType || '—' },
         { label: 'ID Number', value: kyc?.idNumber || '—' },
         {
             label: 'DOB',
-            value: kyc?.dateOfBirth ? new Date(kyc.dateOfBirth).toLocaleDateString() : '—'
+            value: kyc?.dob || kyc?.dateOfBirth ? new Date(kyc.dob || kyc.dateOfBirth).toLocaleDateString() : '—'
         },
-        { label: 'Nationality', value: kyc?.nationality || '—' }
+        { label: 'Nationality', value: kyc?.nationality || '—' },
+        { label: 'Address', value: kyc?.address || '—' }
     ];
 }
 
@@ -240,19 +248,30 @@ const AdminKYCPanel = () => {
     const [loading, setLoading] = useState(true);
     const [selectedKYC, setSelectedKYC] = useState(null);
     const [rejectionReason, setRejectionReason] = useState('');
-    const [reviewSection, setReviewSection] = useState('representative');
+    const [repRejectReason, setRepRejectReason] = useState('');
+    const [companyRejectReason, setCompanyRejectReason] = useState('');
     const [processing, setProcessing] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [rejectInlineError, setRejectInlineError] = useState('');
+    const [repRejectInlineError, setRepRejectInlineError] = useState('');
+    const [companyRejectInlineError, setCompanyRejectInlineError] = useState('');
+    const [rejectModalSection, setRejectModalSection] = useState(null);
+    const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false);
+    const rejectModalRef = useRef(null);
+    const rejectModalCancelRef = useRef(null);
 
     useEffect(() => {
         fetchPendingKYC();
     }, []);
 
     useEffect(() => {
-        if (selectedKYC?.role === 'recruiter') {
-            setReviewSection('representative');
-        }
-    }, [selectedKYC]);
+        setRejectConfirmOpen(false);
+        setRejectModalSection(null);
+        setRepRejectReason('');
+        setCompanyRejectReason('');
+        setRepRejectInlineError('');
+        setCompanyRejectInlineError('');
+    }, [selectedKYC?._id]);
 
     const fetchPendingKYC = async (opts = {}) => {
         const quiet = opts.quiet === true;
@@ -314,27 +333,45 @@ const AdminKYCPanel = () => {
         }
     };
 
-    const handleReject = async (kycRecord, section = 'representative') => {
-        if (!rejectionReason.trim()) {
-            alert('Please enter a reason for rejection.');
-            return;
-        }
+    const executeReject = async (kycRecord, section = 'representative') => {
         const userId = getUserId(kycRecord);
         const kycId = kycRecord._id;
+        const reason =
+            kycRecord.role === 'recruiter'
+                ? (section === 'company' ? companyRejectReason : repRejectReason).trim()
+                : rejectionReason.trim();
         setProcessing(true);
         try {
             if (kycRecord.role === 'recruiter') {
                 await api.put(`/admin/kyc/recruiter/review/${kycId}`, {
                     decision: 'rejected',
-                    reason: rejectionReason.trim(),
+                    reason,
                     section
                 });
             } else {
-                await api.patch(`/admin/kyc/${userId}/reject`, { rejectionReason: rejectionReason.trim() });
+                await api.patch(`/admin/kyc/${userId}/reject`, { rejectionReason: reason });
             }
 
             await fetchPendingKYC({ quiet: true, preserveSelection: true });
             setRejectionReason('');
+            setRejectInlineError('');
+            setRepRejectInlineError('');
+            setCompanyRejectInlineError('');
+            if (kycRecord.role === 'recruiter') {
+                if (section === 'company') setCompanyRejectReason('');
+                else setRepRejectReason('');
+            }
+            setRejectConfirmOpen(false);
+            setRejectModalSection(null);
+            if (kycRecord.role === 'recruiter') {
+                const msg =
+                    section === 'company'
+                        ? 'Company verification rejected. Recruiter has been notified.'
+                        : 'Representative verification rejected. Recruiter has been notified.';
+                toast.success(msg, { duration: 4000 });
+            } else {
+                toast.success('Verification rejected.', { duration: 4000 });
+            }
         } catch (err) {
             alert(err.response?.data?.message || 'Rejection failed');
         } finally {
@@ -342,10 +379,109 @@ const AdminKYCPanel = () => {
         }
     };
 
+    const onJobSeekerRejectClick = () => {
+        const trimmed = rejectionReason.trim();
+        if (trimmed.length < MIN_REJECTION_REASON_LENGTH) {
+            setRejectInlineError('A reason is required before rejecting.');
+            return;
+        }
+        setRejectInlineError('');
+        executeReject(selectedKYC, 'representative');
+    };
+
+    const openRecruiterRejectModal = (section) => {
+        const reason = section === 'company' ? companyRejectReason : repRejectReason;
+        const trimmed = reason.trim();
+        if (trimmed.length < MIN_REJECTION_REASON_LENGTH) {
+            if (section === 'company') setCompanyRejectInlineError('A reason is required before rejecting.');
+            else setRepRejectInlineError('A reason is required before rejecting.');
+            return;
+        }
+        if (section === 'company') setCompanyRejectInlineError('');
+        else setRepRejectInlineError('');
+        setRejectModalSection(section);
+        setRejectConfirmOpen(true);
+    };
+
+    const onConfirmRejectInModal = () => {
+        if (!selectedKYC || selectedKYC.role !== 'recruiter' || !rejectModalSection) return;
+        const reason = rejectModalSection === 'company' ? companyRejectReason : repRejectReason;
+        const trimmed = reason.trim();
+        if (trimmed.length < MIN_REJECTION_REASON_LENGTH) {
+            if (rejectModalSection === 'company') setCompanyRejectInlineError('A reason is required before rejecting.');
+            else setRepRejectInlineError('A reason is required before rejecting.');
+            setRejectConfirmOpen(false);
+            return;
+        }
+        executeReject(selectedKYC, rejectModalSection);
+    };
+
+    /** Modal: Escape = cancel; focus cancel on open; basic focus trap */
+    useEffect(() => {
+        if (!rejectConfirmOpen) return;
+        const modalEl = rejectModalRef.current;
+        const focusables = modalEl?.querySelectorAll(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        const list = focusables ? Array.from(focusables).filter((el) => !el.disabled) : [];
+        rejectModalCancelRef.current?.focus();
+
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                if (!processing) setRejectConfirmOpen(false);
+                return;
+            }
+            if (e.key !== 'Tab' || list.length === 0) return;
+            const first = list[0];
+            const last = list[list.length - 1];
+            if (e.shiftKey) {
+                if (document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                }
+            } else if (document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        };
+
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, [rejectConfirmOpen, rejectModalSection, processing]);
+
     const filteredKYC = pendingKYC.filter(kyc =>
         kyc.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         kyc.role.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const rejectionAttemptsUsed = selectedKYC?.rejectionHistory?.length ?? 0;
+    const attemptsExhausted =
+        selectedKYC?.role === 'recruiter' && rejectionAttemptsUsed >= MAX_RESUBMISSION_ATTEMPTS;
+    const nextRejectionAttemptNumber = Math.min(rejectionAttemptsUsed + 1, MAX_RESUBMISSION_ATTEMPTS);
+    const showFinalAttemptModalWarning =
+        selectedKYC?.role === 'recruiter' && nextRejectionAttemptNumber === MAX_RESUBMISSION_ATTEMPTS;
+    const repStatusNorm = normKycStatus(selectedKYC?.representativeStatus);
+    const compStatusNorm = normKycStatus(selectedKYC?.companyStatus);
+    const repRejectFormDisabled =
+        selectedKYC?.role === 'recruiter' &&
+        (attemptsExhausted ||
+            repStatusNorm === 'approved' ||
+            repStatusNorm === 'rejected' ||
+            processing);
+    const companyRejectFormDisabled =
+        selectedKYC?.role === 'recruiter' &&
+        (attemptsExhausted ||
+            repStatusNorm !== 'approved' ||
+            compStatusNorm === 'approved' ||
+            compStatusNorm === 'rejected' ||
+            processing);
+    const repReasonOk = repRejectReason.trim().length >= MIN_REJECTION_REASON_LENGTH;
+    const companyReasonOk = companyRejectReason.trim().length >= MIN_REJECTION_REASON_LENGTH;
+    const rejectControlsDisabled =
+        selectedKYC?.role !== 'recruiter' && (processing || attemptsExhausted);
+    const reasonLengthOk = rejectionReason.trim().length >= MIN_REJECTION_REASON_LENGTH;
+    const rejectSubmitDisabled = rejectControlsDisabled || !reasonLengthOk;
 
     const selectedRecruiterUi =
         selectedKYC?.role === 'recruiter' ? getRecruiterKycUiState(selectedKYC) : null;
@@ -431,6 +567,7 @@ const AdminKYCPanel = () => {
                             <div className="divide-y divide-gray-50">
                                 {filteredKYC.map((kyc) => {
                                     const recruiterState = kyc.role === 'recruiter' ? getRecruiterKycUiState(kyc) : null;
+                                    const rowName = kyc?.fullName || kyc?.userId?.fullName || 'Unknown User';
                                     const queueToneClass =
                                         recruiterState?.tone === 'partial'
                                             ? 'bg-sky-50 text-sky-800 border-sky-200/90'
@@ -448,10 +585,10 @@ const AdminKYCPanel = () => {
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="flex items-center gap-3 min-w-0">
                                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0 ${kyc.role === 'recruiter' ? 'bg-gradient-to-br from-purple-500 to-purple-600' : 'bg-gradient-to-br from-emerald-500 to-emerald-600'}`}>
-                                                    {kyc.fullName.charAt(0)}
+                                                    {rowName.charAt(0)}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <h3 className="text-sm font-semibold text-gray-900 truncate">{kyc.fullName}</h3>
+                                                    <h3 className="text-sm font-semibold text-gray-900 truncate">{rowName}</h3>
                                                     <p className="text-xs text-gray-400 truncate">{kyc.email}</p>
                                                 </div>
                                             </div>
@@ -477,7 +614,9 @@ const AdminKYCPanel = () => {
                                         )}
                                         <div className="mt-2 text-[10px] text-gray-400 flex items-center gap-1 pl-[52px]">
                                             <Clock className="w-3 h-3 shrink-0" />
-                                            {kyc.createdAt ? new Date(kyc.createdAt).toLocaleDateString() : '—'}
+                                            {(kyc.submittedAt || kyc.createdAt)
+                                                ? new Date(kyc.submittedAt || kyc.createdAt).toLocaleDateString()
+                                                : '—'}
                                         </div>
                                     </div>
                                     );
@@ -559,9 +698,13 @@ const AdminKYCPanel = () => {
                                                     </div>
                                                 )}
                                                 <p className="text-[11px] text-gray-400 font-medium">
-                                                    Submitted{' '}
-                                                    {selectedKYC.createdAt
-                                                        ? new Date(selectedKYC.createdAt).toLocaleString()
+                                                    Submitted:{' '}
+                                                    {(selectedKYC.submittedAt || selectedKYC.createdAt)
+                                                        ? new Date(selectedKYC.submittedAt || selectedKYC.createdAt).toLocaleDateString(undefined, {
+                                                            year: 'numeric',
+                                                            month: 'short',
+                                                            day: 'numeric'
+                                                        })
                                                         : '—'}
                                                 </p>
                                             </div>
@@ -617,99 +760,199 @@ const AdminKYCPanel = () => {
                                 <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6 lg:space-y-8">
                                     {selectedKYC.role === 'recruiter' && (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-5">
-                                            <div className="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm ring-1 ring-black/[0.02] flex flex-col min-h-[160px]">
-                                                <div className="flex items-start gap-3 mb-4">
-                                                    <div className="w-10 h-10 rounded-xl bg-[#29a08e]/10 flex items-center justify-center text-[#29a08e] shrink-0 border border-[#29a08e]/15">
-                                                        <User className="w-5 h-5" strokeWidth={2} />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <h3 className="text-sm font-bold text-gray-900 tracking-tight">
-                                                                Representative verification
-                                                            </h3>
-                                                            {normKycStatus(selectedKYC.representativeStatus) === 'approved' && (
-                                                                <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-100/80 border border-emerald-200/80 px-2 py-0.5 rounded-lg">
-                                                                    <Check className="w-3 h-3" aria-hidden />
-                                                                    Done
-                                                                </span>
-                                                            )}
+                                            <div className="space-y-4 min-w-0">
+                                                <div className="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm ring-1 ring-black/[0.02] flex flex-col min-h-[160px]">
+                                                    <div className="flex items-start gap-3 mb-4">
+                                                        <div className="w-10 h-10 rounded-xl bg-[#29a08e]/10 flex items-center justify-center text-[#29a08e] shrink-0 border border-[#29a08e]/15">
+                                                            <User className="w-5 h-5" strokeWidth={2} />
                                                         </div>
-                                                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                                                            {normKycStatus(selectedKYC.representativeStatus) === 'approved'
-                                                                ? 'This step is complete. Continue with company verification below.'
-                                                                : 'Verify identity of the authorized representative.'}
-                                                        </p>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <h3 className="text-sm font-bold text-gray-900 tracking-tight">
+                                                                    Representative verification
+                                                                </h3>
+                                                                {repStatusNorm === 'approved' && (
+                                                                    <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-100/80 border border-emerald-200/80 px-2 py-0.5 rounded-lg">
+                                                                        <Check className="w-3 h-3" aria-hidden />
+                                                                        Verified ✓
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                                                                {repStatusNorm === 'approved'
+                                                                    ? 'This step is complete. Continue with company verification below.'
+                                                                    : 'Verify identity of the authorized representative.'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2 mt-auto pt-1">
+                                                        <button
+                                                            type="button"
+                                                            disabled={processing || repStatusNorm === 'approved'}
+                                                            onClick={() => handleApprove(selectedKYC, 'representative')}
+                                                            className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-[#29a08e] to-[#228377] text-white shadow-sm disabled:opacity-50"
+                                                        >
+                                                            Approve representative
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <div className="flex flex-wrap gap-2 mt-auto pt-1">
+                                                <div className="rounded-2xl border border-red-100/90 bg-gradient-to-br from-red-50/80 to-white p-5 shadow-sm ring-1 ring-red-100/60">
+                                                    <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-3">
+                                                        Reject representative
+                                                    </p>
+                                                    <p className="text-xs font-semibold text-gray-700 mb-3">
+                                                        {rejectionAttemptsUsed}/{MAX_RESUBMISSION_ATTEMPTS} attempts used (shared with company)
+                                                    </p>
+                                                    {attemptsExhausted && (
+                                                        <p
+                                                            className="text-sm font-semibold text-red-900 mb-3 rounded-lg border border-red-200 bg-red-100/60 px-3 py-2"
+                                                            role="alert"
+                                                        >
+                                                            Maximum re-submission attempts reached. This recruiter can no longer
+                                                            re-submit verification.
+                                                        </p>
+                                                    )}
+                                                    <label htmlFor="rep-reject-reason" className="block text-xs font-bold text-gray-800 mb-2">
+                                                        Reason
+                                                    </label>
+                                                    <textarea
+                                                        id="rep-reject-reason"
+                                                        value={repRejectReason}
+                                                        onChange={(e) => {
+                                                            setRepRejectReason(e.target.value);
+                                                            if (repRejectInlineError) setRepRejectInlineError('');
+                                                        }}
+                                                        disabled={repRejectFormDisabled}
+                                                        className="w-full min-h-[88px] px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 bg-white border-2 border-red-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-400 resize-y disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        placeholder="Minimum 10 characters…"
+                                                        aria-invalid={!!repRejectInlineError}
+                                                        aria-describedby={repRejectInlineError ? 'rep-reject-error' : undefined}
+                                                    />
+                                                    {repRejectInlineError && (
+                                                        <p id="rep-reject-error" className="mt-2 text-sm font-medium text-red-600" role="alert">
+                                                            {repRejectInlineError}
+                                                        </p>
+                                                    )}
                                                     <button
                                                         type="button"
-                                                        disabled={
-                                                            processing ||
-                                                            normKycStatus(selectedKYC.representativeStatus) === 'approved'
-                                                        }
-                                                        onClick={() => handleApprove(selectedKYC, 'representative')}
-                                                        className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-[#29a08e] to-[#228377] text-white shadow-sm disabled:opacity-50"
-                                                    >
-                                                        Approve representative
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        disabled={processing}
-                                                        onClick={() => setReviewSection('representative')}
-                                                        className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition-colors ${reviewSection === 'representative' ? 'border-red-400 text-red-700 bg-red-50' : 'border-gray-200 text-gray-600 bg-gray-50 hover:bg-gray-100'}`}
+                                                        disabled={repRejectFormDisabled || !repReasonOk}
+                                                        onClick={() => openRecruiterRejectModal('representative')}
+                                                        className="mt-3 w-full bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         Reject representative
                                                     </button>
                                                 </div>
                                             </div>
-                                            <div className="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm ring-1 ring-black/[0.02] flex flex-col min-h-[160px]">
-                                                <div className="flex items-start gap-3 mb-4">
-                                                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600 shrink-0 border border-purple-200/60">
-                                                        <Building2 className="w-5 h-5" strokeWidth={2} />
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="flex items-start justify-between gap-2">
-                                                            <h3 className="text-sm font-bold text-gray-900 tracking-tight">
-                                                                Company verification
-                                                            </h3>
-                                                            {normKycStatus(selectedKYC.companyStatus) === 'approved' && (
-                                                                <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-100/80 border border-emerald-200/80 px-2 py-0.5 rounded-lg">
-                                                                    <Check className="w-3 h-3" aria-hidden />
-                                                                    Done
-                                                                </span>
-                                                            )}
+                                            <div className="space-y-4 min-w-0">
+                                                <div className="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm ring-1 ring-black/[0.02] flex flex-col min-h-[160px]">
+                                                    <div className="flex items-start gap-3 mb-4">
+                                                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600 shrink-0 border border-purple-200/60">
+                                                            <Building2 className="w-5 h-5" strokeWidth={2} />
                                                         </div>
-                                                        <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                                                            {normKycStatus(selectedKYC.representativeStatus) !== 'approved'
-                                                                ? 'Unlocks after representative verification is approved.'
-                                                                : normKycStatus(selectedKYC.companyStatus) === 'approved'
-                                                                  ? 'Company verification is complete.'
-                                                                  : 'Representative is approved — review company documents and approve when ready.'}
-                                                        </p>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <h3 className="text-sm font-bold text-gray-900 tracking-tight">
+                                                                    Company verification
+                                                                </h3>
+                                                                {compStatusNorm === 'approved' && (
+                                                                    <span className="inline-flex items-center gap-0.5 shrink-0 text-[10px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-100/80 border border-emerald-200/80 px-2 py-0.5 rounded-lg">
+                                                                        <Check className="w-3 h-3" aria-hidden />
+                                                                        Verified ✓
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                                                                {repStatusNorm !== 'approved'
+                                                                    ? 'Unlocks after representative verification is approved.'
+                                                                    : compStatusNorm === 'approved'
+                                                                      ? 'Company verification is complete.'
+                                                                      : 'Representative is approved — review company documents and approve when ready.'}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2 mt-auto pt-1">
+                                                        <button
+                                                            type="button"
+                                                            disabled={
+                                                                processing ||
+                                                                repStatusNorm !== 'approved' ||
+                                                                compStatusNorm === 'approved'
+                                                            }
+                                                            onClick={() => handleApprove(selectedKYC, 'company')}
+                                                            className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-[#29a08e] to-[#228377] text-white shadow-sm disabled:opacity-50"
+                                                        >
+                                                            Approve company
+                                                        </button>
                                                     </div>
                                                 </div>
-                                                <div className="flex flex-wrap gap-2 mt-auto pt-1">
-                                                    <button
-                                                        type="button"
-                                                        disabled={
-                                                            processing ||
-                                                            normKycStatus(selectedKYC.representativeStatus) !== 'approved' ||
-                                                            normKycStatus(selectedKYC.companyStatus) === 'approved'
-                                                        }
-                                                        onClick={() => handleApprove(selectedKYC, 'company')}
-                                                        className="px-3.5 py-2 text-xs font-bold rounded-xl bg-gradient-to-r from-[#29a08e] to-[#228377] text-white shadow-sm disabled:opacity-50"
-                                                    >
-                                                        Approve company
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        disabled={processing}
-                                                        onClick={() => setReviewSection('company')}
-                                                        className={`px-3.5 py-2 text-xs font-bold rounded-xl border transition-colors ${reviewSection === 'company' ? 'border-red-400 text-red-700 bg-red-50' : 'border-gray-200 text-gray-600 bg-gray-50 hover:bg-gray-100'}`}
-                                                    >
+                                                <div
+                                                    className={`rounded-2xl border p-5 shadow-sm ring-1 ${
+                                                        repStatusNorm === 'approved'
+                                                            ? 'border-red-100/90 bg-gradient-to-br from-red-50/80 to-white ring-red-100/60'
+                                                            : 'border-gray-200/90 bg-gray-50/90 ring-gray-100 opacity-80'
+                                                    }`}
+                                                >
+                                                    <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wide mb-3">
                                                         Reject company
-                                                    </button>
+                                                    </p>
+                                                    {repStatusNorm !== 'approved' ? (
+                                                        <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                                                            Company rejection will be available after representative is approved.
+                                                        </p>
+                                                    ) : (
+                                                        <>
+                                                            <p className="text-xs font-semibold text-gray-700 mb-3">
+                                                                {rejectionAttemptsUsed}/{MAX_RESUBMISSION_ATTEMPTS} attempts used (shared)
+                                                            </p>
+                                                            {attemptsExhausted && (
+                                                                <p
+                                                                    className="text-sm font-semibold text-red-900 mb-3 rounded-lg border border-red-200 bg-red-100/60 px-3 py-2"
+                                                                    role="alert"
+                                                                >
+                                                                    Maximum re-submission attempts reached. This recruiter can no longer
+                                                                    re-submit verification.
+                                                                </p>
+                                                            )}
+                                                            <label
+                                                                htmlFor="company-reject-reason"
+                                                                className="block text-xs font-bold text-gray-800 mb-2"
+                                                            >
+                                                                Reason
+                                                            </label>
+                                                            <textarea
+                                                                id="company-reject-reason"
+                                                                value={companyRejectReason}
+                                                                onChange={(e) => {
+                                                                    setCompanyRejectReason(e.target.value);
+                                                                    if (companyRejectInlineError) setCompanyRejectInlineError('');
+                                                                }}
+                                                                disabled={companyRejectFormDisabled}
+                                                                className="w-full min-h-[88px] px-3 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 bg-white border-2 border-red-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-400 resize-y disabled:opacity-60 disabled:cursor-not-allowed"
+                                                                placeholder="Minimum 10 characters…"
+                                                                aria-invalid={!!companyRejectInlineError}
+                                                                aria-describedby={
+                                                                    companyRejectInlineError ? 'company-reject-error' : undefined
+                                                                }
+                                                            />
+                                                            {companyRejectInlineError && (
+                                                                <p
+                                                                    id="company-reject-error"
+                                                                    className="mt-2 text-sm font-medium text-red-600"
+                                                                    role="alert"
+                                                                >
+                                                                    {companyRejectInlineError}
+                                                                </p>
+                                                            )}
+                                                            <button
+                                                                type="button"
+                                                                disabled={companyRejectFormDisabled || !companyReasonOk}
+                                                                onClick={() => openRecruiterRejectModal('company')}
+                                                                className="mt-3 w-full bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold py-2.5 rounded-xl text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            >
+                                                                Reject company
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -796,7 +1039,11 @@ const AdminKYCPanel = () => {
                                         <div className="space-y-4">
                                             <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
                                                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                                                Rejection History ({selectedKYC.resubmissionCount || 0}/3 used)
+                                                Rejection history (
+                                                {selectedKYC.role === 'recruiter'
+                                                    ? `${rejectionAttemptsUsed}/${MAX_RESUBMISSION_ATTEMPTS} attempts used`
+                                                    : `${selectedKYC.resubmissionCount || 0} resubmissions`}
+                                                )
                                             </h3>
                                             <div className="space-y-3">
                                                 {selectedKYC.rejectionHistory.map((hist, i) => (
@@ -812,40 +1059,59 @@ const AdminKYCPanel = () => {
                                         </div>
                                     )}
 
-                                    <div className="p-6 bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl border border-red-100">
-                                        <h3 className="text-sm font-black text-red-900 mb-2 flex items-center gap-2">
-                                            <ShieldX className="w-4 h-4 text-red-500" />
-                                            Reject Verification
-                                        </h3>
-                                        <p className="text-sm font-medium text-red-800 mb-4">
-                                            {selectedKYC.resubmissionCount >= 3 
-                                                ? "Note: User has reached max attempts and will be locked upon this rejection." 
-                                                : `User has used ${selectedKYC.resubmissionCount || 0}/3 allowed re-submissions.`}
-                                        </p>
-                                        <div className="space-y-4">
-                                            <div>
-                                                <label htmlFor="rejection-reason" className="block text-sm font-bold text-gray-900 mb-2">
-                                                    Rejection Reason
-                                                </label>
-                                                <textarea
-                                                    id="rejection-reason"
-                                                    value={rejectionReason}
-                                                    onChange={(e) => setRejectionReason(e.target.value)}
-                                                    className="w-full min-h-[100px] px-4 py-3 text-base text-gray-900 placeholder:text-gray-400 bg-white border-2 border-red-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-400 transition-all resize-y"
-                                                    placeholder="Provide a clear, specific reason for rejection..."
-                                                    rows="3"
-                                                    aria-required="true"
-                                                />
+                                    {selectedKYC.role !== 'recruiter' && (
+                                        <div className="p-6 bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl border border-red-100">
+                                            <h3 className="text-sm font-black text-red-900 mb-2 flex items-center gap-2">
+                                                <ShieldX className="w-4 h-4 text-red-500" />
+                                                Reject verification
+                                            </h3>
+                                            <p className="text-sm font-medium text-red-800 mb-4">
+                                                Provide a reason and reject this verification.
+                                            </p>
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <label
+                                                        htmlFor="rejection-reason"
+                                                        className="block text-sm font-bold text-gray-900 mb-2"
+                                                    >
+                                                        Rejection reason
+                                                    </label>
+                                                    <textarea
+                                                        id="rejection-reason"
+                                                        value={rejectionReason}
+                                                        onChange={(e) => {
+                                                            setRejectionReason(e.target.value);
+                                                            if (rejectInlineError) setRejectInlineError('');
+                                                        }}
+                                                        disabled={rejectControlsDisabled}
+                                                        className="w-full min-h-[100px] px-4 py-3 text-base text-gray-900 placeholder:text-gray-400 bg-white border-2 border-red-200 rounded-xl outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-400 transition-all resize-y disabled:opacity-60 disabled:cursor-not-allowed"
+                                                        placeholder="Provide a clear, specific reason for rejection..."
+                                                        rows={3}
+                                                        aria-required="true"
+                                                        aria-invalid={!!rejectInlineError}
+                                                        aria-describedby={rejectInlineError ? 'rejection-reason-error' : undefined}
+                                                    />
+                                                    {rejectInlineError && (
+                                                        <p
+                                                            id="rejection-reason-error"
+                                                            className="mt-2 text-sm font-medium text-red-600"
+                                                            role="alert"
+                                                        >
+                                                            {rejectInlineError}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    disabled={rejectSubmitDisabled}
+                                                    onClick={onJobSeekerRejectClick}
+                                                    className="w-full bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold py-2.5 rounded-xl hover:shadow-lg hover:shadow-red-500/20 transition-all text-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    Reject KYC
+                                                </button>
                                             </div>
-                                            <button
-                                                disabled={processing}
-                                                onClick={() => handleReject(selectedKYC, selectedKYC.role === 'recruiter' ? reviewSection : 'representative')}
-                                                className="w-full bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold py-2.5 rounded-xl hover:shadow-lg hover:shadow-red-500/20 transition-all text-sm active:scale-[0.98] disabled:opacity-50"
-                                            >
-                                                Reject {selectedKYC.role === 'recruiter' ? reviewSection : 'KYC'}
-                                            </button>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </div>
                         ) : (
@@ -860,6 +1126,80 @@ const AdminKYCPanel = () => {
                     </div>
                 </div>
             </main>
+
+            {rejectConfirmOpen && selectedKYC?.role === 'recruiter' && rejectModalSection && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="presentation">
+                    <div
+                        className="absolute inset-0 bg-black/50"
+                        aria-hidden
+                        onClick={() => !processing && setRejectConfirmOpen(false)}
+                    />
+                    <div
+                        ref={rejectModalRef}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="reject-confirm-title"
+                        className="relative z-[101] w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="text-center text-3xl mb-3" aria-hidden>
+                            ⚠️
+                        </div>
+                        <h2 id="reject-confirm-title" className="text-lg font-black text-gray-900 text-center mb-2">
+                            Confirm Rejection
+                        </h2>
+                        <p className="text-sm text-gray-600 text-center mb-4">
+                            {rejectModalSection === 'company'
+                                ? `You are about to reject ${selectedKYC.fullName}'s company verification.`
+                                : `You are about to reject ${selectedKYC.fullName}'s representative verification.`}
+                        </p>
+                        <div className="mb-3">
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Reason:</p>
+                            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 whitespace-pre-wrap max-h-36 overflow-y-auto">
+                                {(rejectModalSection === 'company' ? companyRejectReason : repRejectReason).trim()}
+                            </div>
+                        </div>
+                        <p className="text-sm text-gray-700 text-center mb-4 font-medium">
+                            This will use attempt {nextRejectionAttemptNumber} of {MAX_RESUBMISSION_ATTEMPTS}.
+                        </p>
+                        {showFinalAttemptModalWarning && (
+                            <div
+                                className="mb-4 rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 text-sm text-red-900 font-medium"
+                                role="alert"
+                            >
+                                ⚠️ This is the final re-submission attempt. Confirming will permanently block this
+                                recruiter from re-submitting any verification.
+                            </div>
+                        )}
+                        <div className="flex flex-wrap gap-2 justify-end">
+                            <button
+                                ref={rejectModalCancelRef}
+                                type="button"
+                                disabled={processing}
+                                onClick={() => setRejectConfirmOpen(false)}
+                                className="px-4 py-2.5 rounded-xl border-2 border-gray-300 text-sm font-bold text-gray-800 bg-white hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={processing}
+                                onClick={onConfirmRejectInModal}
+                                className="inline-flex items-center justify-center gap-2 min-w-[10rem] px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-50"
+                            >
+                                {processing ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin shrink-0" aria-hidden />
+                                        Working…
+                                    </>
+                                ) : (
+                                    'Confirm Rejection'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

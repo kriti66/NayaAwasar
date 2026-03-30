@@ -57,6 +57,32 @@ const interviewSchema = new mongoose.Schema({
     timezone: String, // Added timezone as requested
     startTime: Date,
     endTime: Date,
+    /** Scheduled slot length in minutes (UI + lifecycle end); default 30 in code when missing */
+    duration: {
+        type: Number,
+        default: 30,
+        min: 5,
+        max: 480
+    },
+    /** Seeker opened/joined the online interview at least once (PATCH mark-interview-joined) */
+    joined: {
+        type: Boolean,
+        default: false
+    },
+    /** Set by recruiter after interview; drives COMPLETED_* lifecycle */
+    result: {
+        type: String,
+        enum: {
+            values: ['passed', 'rejected'],
+            message: '{VALUE} is not a valid interview result'
+        }
+    },
+    /** Denormalized from application.interview for listing */
+    interviewer: {
+        type: String,
+        trim: true,
+        default: ''
+    },
     // Rescheduling (recruiter-initiated proposals + jobseeker decisions)
     rescheduleRequestedBy: {
         type: String,

@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import { Sparkles, Star, MapPin, Briefcase, Bookmark, ChevronRight, AlertCircle, ArrowUpRight, CheckCircle } from 'lucide-react';
 import useJobSaver from '../../hooks/useJobSaver';
 import CompanyLogo from '../common/CompanyLogo';
+import { applyVisibleBadgeLimits, BADGE_CONFIG, getJobDisplayReason } from '../../utils/jobLabelDisplay';
 
 const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, toggleSaveJob: propToggleSave }) => {
     const [jobs, setJobs] = useState([]);
     const [isCompleteProfile, setIsCompleteProfile] = useState(true);
+    const [hasPersonalizationData, setHasPersonalizationData] = useState(true);
     const [loading, setLoading] = useState(true);
     const hookSaver = useJobSaver();
     const savedJobIds = propSavedIds ?? hookSaver.savedJobIds;
@@ -20,9 +22,11 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
 
                 if (response.data && response.data.jobs) {
                     setJobs(response.data.jobs);
+                    setHasPersonalizationData(response.data.hasPersonalizationData !== false);
                     setIsCompleteProfile(response.data.isComplete !== false);
                 } else if (Array.isArray(response.data)) {
                     setJobs(response.data);
+                    setHasPersonalizationData(true);
                 }
             } catch (error) {
                 console.error("Failed to fetch recommendations:", error);
@@ -33,6 +37,8 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
 
         fetchRecommendations();
     }, []);
+
+    const jobsWithBadges = useMemo(() => applyVisibleBadgeLimits(jobs.slice(0, 5)), [jobs]);
 
     const timeAgo = (date) => {
         if (!date) return 'Just now';
@@ -105,12 +111,16 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
             </div>
 
             {/* Incomplete Profile Alert */}
-            {!isCompleteProfile && (
+            {(!isCompleteProfile || !hasPersonalizationData) && (
                 <div className="mx-6 mt-6 p-4 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                     <div>
                         <h4 className="text-sm font-bold text-gray-900">Improve your match quality</h4>
-                        <p className="text-xs text-gray-600 mt-1">Your profile is currently incomplete. Add more specific skills and preferences to get highly targeted recommendations.</p>
+                        <p className="text-xs text-gray-600 mt-1">
+                            {!hasPersonalizationData
+                                ? 'Complete your profile to get personalized job suggestions.'
+                                : 'Your profile is currently incomplete. Add more specific skills and preferences to get highly targeted recommendations.'}
+                        </p>
                         <Link to="/seeker/profile" className="inline-block mt-2 text-xs font-bold text-[#29a08e] hover:underline">
                             Update profile now →
                         </Link>
@@ -120,42 +130,23 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
 
             {/* Job List */}
             <div className={`p-6 space-y-4`}>
-                {jobs.slice(0, 5).map((job) => {
+                {jobsWithBadges.map((job) => {
                     const jobId = job._id?.toString?.() || job._id;
                     const isSaved = savedJobIds.some(sid => (sid?.toString?.() || sid) === jobId);
                     const hasApplied = appliedJobIds.includes(job._id);
-                    const recommendationType = job.recommendationType || (job.matchReason?.includes('platform trends') ? 'trending' : 'ai_match');
-                    const recommendationConfidence = job.recommendationConfidence || 'low';
-                    const matchScore = typeof job.matchScore === 'number' ? job.matchScore : Number(job.matchScore);
-                    const showPercentBadge = recommendationType === 'ai_match' && recommendationConfidence !== 'low' && matchScore >= 20;
-                    // Decide badge color based on matchScore
-                    const getMatchColor = (score) => {
-                        if (!score) return 'bg-gray-100 text-gray-600 border-gray-200';
-                        if (score >= 80) return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                        if (score >= 50) return 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20';
-                        return 'bg-blue-50 text-blue-600 border-blue-200';
-                    };
-                    
-                    const matchColorClass = getMatchColor(job.matchScore);
-                    const typeBadge = (() => {
-                        if (isSaved) return { label: 'Similar to Saved Jobs', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
-                        if (recommendationType === 'ai_match') {
-                            return {
-                                label: recommendationConfidence === 'low' ? 'AI Match (Low confidence)' : 'AI Match',
-                                className: matchColorClass
-                            };
-                        }
-                        if (recommendationType === 'trending') {
-                            return { label: 'Trending Near You', className: 'bg-blue-50 text-blue-600 border-blue-200' };
-                        }
-                        return { label: 'Fallback Recommendation', className: 'bg-gray-50 text-gray-600 border-gray-200' };
-                    })();
+                    const cfg = job.visibleLabel ? BADGE_CONFIG[job.visibleLabel] : null;
+                    const typeBadge = cfg
+                        ? { label: `${cfg.icon} ${cfg.label}`, className: cfg.className }
+                        : isSaved
+                          ? { label: 'Similar to Saved Jobs', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+                          : { label: 'Job listing', className: 'bg-gray-50 text-gray-600 border-gray-200' };
+                    const displayReason = getJobDisplayReason(job);
 
                     return (
                         <div key={job._id} className="p-5 rounded-xl border border-gray-100 hover:border-[#29a08e]/30 bg-white hover:shadow-md transition-all group relative overflow-hidden">
                             
                             {/* Decorative background gradient on high match */}
-                            {job.matchScore >= 80 && (
+                            {(job.matchScore >= 80 || job.visibleLabel === 'AI_SUGGESTED') && (
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
                             )}
 
@@ -186,30 +177,29 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                                     <div
                                         className={`px-3 py-1.5 rounded-lg border flex items-center gap-1.5 ${typeBadge.className}`}
                                         aria-label={`Recommendation: ${typeBadge.label}`}
+                                        title={displayReason ? `Why this job? ${displayReason}` : 'Why this job?'}
                                     >
-                                        {recommendationType === 'ai_match' ? <Sparkles size={12} className="text-[#29a08e]" /> : <Star size={12} className="text-blue-500" />}
-                                        {showPercentBadge && (
-                                            <span className="text-xs font-black">{matchScore}% Match</span>
+                                        {job.visibleLabel ? (
+                                            <Sparkles size={12} className="text-[#29a08e]" />
+                                        ) : (
+                                            <Star size={12} className="text-blue-500" />
                                         )}
-                                        {!showPercentBadge && (
-                                            <span className="text-xs font-black">{typeBadge.label}</span>
-                                        )}
+                                        <span className="text-xs font-black">{typeBadge.label}</span>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Recommendation reason */}
-                            {job.matchReason && (
-                                <div className="mb-4 text-xs font-medium text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                                    <span className="font-bold text-gray-800">
-                                        {recommendationType === 'ai_match' ? 'Why this job?' : 'Why recommended?'}
-                                    </span>{' '}
+                            {displayReason && (
+                                <div
+                                    className="mb-4 text-xs font-medium text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100"
+                                    title={`Why this job? ${displayReason}`}
+                                >
+                                    <span className="font-bold text-gray-800">Why this job?</span>{' '}
                                     {isSaved && (
-                                        <span className="font-bold text-[#29a08e]">
-                                            Similar to what you saved.{' '}
-                                        </span>
+                                        <span className="font-bold text-[#29a08e]">Similar to what you saved. </span>
                                     )}
-                                    {job.matchReason}
+                                    {displayReason}
                                 </div>
                             )}
 

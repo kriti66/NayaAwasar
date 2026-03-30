@@ -87,6 +87,12 @@ const ProfileManagement = () => {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
+        if (name === 'phoneNumber') {
+            // Allow only characters typically used in international numbers
+            const cleaned = value.replace(/[^0-9+\s-]/g, '');
+            setFormData(prev => ({ ...prev, [name]: cleaned }));
+            return;
+        }
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
@@ -231,14 +237,20 @@ const ProfileManagement = () => {
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Phone Number</label>
+                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">
+                                            Phone Number
+                                        </label>
                                         <input
                                             type="text"
                                             name="phoneNumber"
                                             value={formData.phoneNumber || ''}
                                             onChange={handleInputChange}
+                                            placeholder="e.g. +977 9800000000"
                                             className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-4 focus:ring-[#29a08e]/10 focus:border-[#29a08e] outline-none transition-all font-bold text-gray-800"
                                         />
+                                        <p className="text-[11px] text-gray-400 font-medium">
+                                            Optional. Must start with + and contain 7–15 digits.
+                                        </p>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Location</label>

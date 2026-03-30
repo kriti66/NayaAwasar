@@ -65,8 +65,8 @@ const jobSchema = new mongoose.Schema({
     },
     experience_level: {
         type: String,
-        enum: ['Entry Level', 'Associate', 'Mid-Senior Level', 'Director', 'Executive'],
-        default: 'Entry Level'
+        enum: ['Entry-level', 'Mid-level', 'Senior', 'Executive'],
+        default: null
     },
     company_logo: {
         type: String,
@@ -124,6 +124,11 @@ const jobSchema = new mongoose.Schema({
     promotionPriority: {
         type: Number,
         default: 0
+    },
+    /** Admin-only fixed badge label (AI_SUGGESTED | SPONSORED | FEATURED | GOOD_MATCH); null = automatic */
+    labelOverride: {
+        type: String,
+        default: null
     }
 }, { timestamps: true });
 

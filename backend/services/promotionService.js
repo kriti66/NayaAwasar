@@ -11,6 +11,7 @@ import {
     PROMOTION_TO_JOB_TYPE,
     PROMOTION_TYPES
 } from '../constants/promotionConfig.js';
+import { invalidateJobLabelCacheForJob } from './userJobLabelEnrichment.js';
 
 /**
  * Get free promotion count used by company (approved/active only)
@@ -176,6 +177,7 @@ export async function applyPromotionToJob(promotion) {
         promotionPriority: promotion.promotionType === PROMOTION_TYPES.HOMEPAGE_HIGHLIGHT ? 10 :
             promotion.promotionType === PROMOTION_TYPES.SPONSORED ? 5 : 1
     });
+    await invalidateJobLabelCacheForJob(promotion.jobId);
 }
 
 /**
@@ -189,4 +191,5 @@ export async function removePromotionFromJob(jobId) {
         promotionEndDate: null,
         promotionPriority: 0
     });
+    await invalidateJobLabelCacheForJob(jobId);
 }

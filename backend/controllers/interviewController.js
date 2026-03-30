@@ -1,8 +1,8 @@
 import Interview from '../models/Interview.js';
-import Application from '../models/Application.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose';
 import { createRequire } from 'module';
+import { getInterviewJoinWindow } from '../utils/interviewDateTime.js';
 
 const require = createRequire(import.meta.url);
 const { generateToken04 } = require('../utils/zegoServerAssistant.cjs');
@@ -67,25 +67,23 @@ export const getZegoToken = async (req, res) => {
             });
         }
 
-        // --- Time Window Access Control ---
-        // Combine date and time to get the scheduled interview start time
-        const scheduledTime = new Date(interview.date);
-        const [hours, minutes] = interview.time.split(':').map(Number);
-
-        // Adjust the scheduled time based on the stored time string
-        scheduledTime.setHours(hours);
-        scheduledTime.setMinutes(minutes);
-        scheduledTime.setSeconds(0);
-        scheduledTime.setMilliseconds(0);
-
+        const win = getInterviewJoinWindow(interview);
+        if (!win?.scheduledStart) {
+            return res.status(400).json({ message: 'Invalid interview schedule' });
+        }
         const now = new Date();
-        const tenMinutesInMs = 10 * 60 * 1000;
-        const sixtyMinutesInMs = 60 * 60 * 1000;
+        const { scheduledStart: scheduledTime, joinAllowedFrom: startTime, joinAllowedUntil: endTime } = win;
 
-        const startTime = new Date(scheduledTime.getTime() - tenMinutesInMs);
-        const endTime = new Date(scheduledTime.getTime() + sixtyMinutesInMs);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[interviewController zego-token] window', {
+                interviewId: String(interview._id),
+                parsedStartUtc: scheduledTime.toISOString(),
+                joinFrom: startTime.toISOString(),
+                joinUntil: endTime.toISOString(),
+                now: now.toISOString()
+            });
+        }
 
-        // Check 1: Too early
         if (now < startTime) {
             return res.status(400).json({
                 message: 'You can join 10 minutes before the interview time.',
@@ -94,7 +92,6 @@ export const getZegoToken = async (req, res) => {
             });
         }
 
-        // Check 2: Too late (Expired)
         if (now > endTime) {
             return res.status(400).json({
                 message: 'Interview session has expired.',
@@ -102,7 +99,6 @@ export const getZegoToken = async (req, res) => {
                 expiredAt: endTime
             });
         }
-        // ----------------------------------
 
         const effectiveTimeInSeconds = 3600;
         const payloadObject = {

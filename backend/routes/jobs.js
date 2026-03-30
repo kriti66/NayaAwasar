@@ -7,9 +7,16 @@ import User from '../models/User.js';
 import { requireAuth, requireRole, requireKycApproved, requireAdmin, requireCompanyApproved, requireKycVerified, requireRecruiterKycApproved } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getPromotedJobs } from '../controllers/promotedJobController.js';
-import { getRecommendedJobs } from '../services/recommendationService.js';
+import {
+    getRecommendedJobs,
+    recordUserInteraction,
+    triggerEmbeddingUpdate
+} from '../services/recommendationService.js';
+import { getSimilarJobsForJob } from '../controllers/recommendationController.js';
 import { getPublicJobsWithPromotionSort, getJobsForSeekerWithPromotion } from '../services/jobListingService.js';
+import { applyUserJobLabels, invalidateJobLabelCacheForJob } from '../services/userJobLabelEnrichment.js';
 import { normalizeTagsInput } from '../services/jobSearchFilter.js';
+import { normalizeLabelOverride } from '../utils/jobLabel.js';
 import { JOB_CATEGORIES } from '../constants/jobCategories.js';
 import { getValidSavedJobIds, cleanUserSavedJobs } from '../utils/savedJobsUtils.js';
 import { notDeletedFilter } from '../utils/userQueryHelpers.js';
@@ -123,6 +130,27 @@ router.get('/recommended', async (req, res) => {
     }
 });
 
+// Duplicate check for job title within last 24 hours for current recruiter
+router.get('/check-duplicate', requireAuth, requireRole('recruiter', 'admin'), async (req, res) => {
+    const { title } = req.query;
+    if (!title || String(title).trim().length < 3) {
+        return res.json({ duplicate: false });
+    }
+    const recruiter_id = req.user.id;
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    try {
+        const existing = await Job.findOne({
+            recruiter_id,
+            title: String(title).trim(),
+            createdAt: { $gte: since }
+        }).lean();
+        res.json({ duplicate: !!existing });
+    } catch (error) {
+        console.error('Duplicate job check error:', error);
+        res.status(500).json({ message: 'Error checking duplicates' });
+    }
+});
+
 // Post a job (KYC-approved recruiters only)
 router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruiterKycApproved, requireCompanyApproved, async (req, res) => {
     const {
@@ -163,6 +191,7 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
         });
 
         await job.save();
+        triggerEmbeddingUpdate(job._id.toString(), 'job');
 
         // Log job creation activity
         // Log job creation activity
@@ -203,8 +232,8 @@ router.get('/promoted', getPromotedJobs);
 router.get('/for-seeker', requireAuth, requireRole('jobseeker', 'job_seeker'), async (req, res) => {
     try {
         const userId = req.user.id;
-        const jobs = await getJobsForSeekerWithPromotion(userId, getRecommendedJobs, req.query);
-        res.json(jobs);
+        const payload = await getJobsForSeekerWithPromotion(userId, getRecommendedJobs, req.query);
+        res.json(payload);
     } catch (error) {
         console.error("Fetch jobs for seeker error:", error);
         res.status(500).json({ message: 'Error fetching jobs' });
@@ -242,6 +271,30 @@ router.get('/saved', requireAuth, requireKycVerified, async (req, res) => {
     }
 });
 
+router.get('/:id/similar', getSimilarJobsForJob);
+
+// Admin: fixed badge label override (invalidates per-job label cache)
+router.patch('/:id/label-override', requireAuth, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const raw = req.body?.labelOverride;
+    let labelOverride = null;
+    if (raw !== undefined && raw !== null && raw !== '') {
+        labelOverride = normalizeLabelOverride(raw);
+        if (!labelOverride) {
+            return res.status(400).json({ message: 'Invalid labelOverride' });
+        }
+    }
+    try {
+        const job = await Job.findByIdAndUpdate(id, { $set: { labelOverride } }, { new: true }).lean();
+        if (!job) return res.status(404).json({ message: 'Job not found' });
+        await invalidateJobLabelCacheForJob(id);
+        res.json({ success: true, job });
+    } catch (error) {
+        console.error('label-override error:', error);
+        res.status(500).json({ message: 'Error updating label override' });
+    }
+});
+
 // Get specific job
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
@@ -267,6 +320,7 @@ router.delete('/:id', requireAuth, requireKycApproved, requireCompanyApproved, a
     try {
         const job = await Job.findByIdAndDelete(id);
         if (!job) return res.status(404).json({ message: 'Job not found' });
+        await invalidateJobLabelCacheForJob(id);
 
         // Log job deletion activity
         // Log job deletion activity
@@ -329,6 +383,8 @@ router.put('/:id', requireAuth, requireKycApproved, requireCompanyApproved, asyn
         }
 
         const job = await Job.findByIdAndUpdate(id, updateData, { new: true });
+        triggerEmbeddingUpdate(id, 'job');
+        await invalidateJobLabelCacheForJob(id);
         res.json({ success: true, message: 'Job updated', job });
     } catch (error) {
         console.error("Update job error:", error);
@@ -376,6 +432,7 @@ router.patch('/:id/moderate', requireAuth, requireAdmin, async (req, res) => {
             { jobId: job._id }
         );
 
+        await invalidateJobLabelCacheForJob(id);
         res.json({ success: true, message: `Job moderation status updated to ${moderationStatus}`, job });
     } catch (error) {
         console.error("Job moderation error:", error);
@@ -455,6 +512,10 @@ router.post('/:id/save', requireAuth, requireKycVerified, async (req, res) => {
         const uniqueIds = [...new Set(user.savedJobs.map(sid => (sid?.toString?.() || String(sid))))];
         user.savedJobs = uniqueIds.map(id => (typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id));
         await user.save();
+
+        if (saved) {
+            recordUserInteraction(userId, idStr, 'saved');
+        }
 
         const validIds = await getValidSavedJobIds(userId);
         if (process.env.NODE_ENV === 'development') {

@@ -18,6 +18,7 @@ const CompanyProfile = () => {
 
     const [company, setCompany] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [statsLoading, setStatsLoading] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editData, setEditData] = useState({});
     const [stats, setStats] = useState({ totalJobs: 0, activeOpenings: 0, successfulHires: 0 });
@@ -46,6 +47,24 @@ const CompanyProfile = () => {
     useEffect(() => {
         fetchCompany();
     }, [id]);
+
+    useEffect(() => {
+        if (!isRecruiter || id) return;
+        const onAppsUpdated = async () => {
+            try {
+                setStatsLoading(true);
+                const s = await companyService.getCompanyStats();
+                setStats(s);
+            } catch (error) {
+                console.error('Error refreshing company stats:', error);
+            } finally {
+                setStatsLoading(false);
+            }
+        };
+
+        window.addEventListener('recruiter:applicationsUpdated', onAppsUpdated);
+        return () => window.removeEventListener('recruiter:applicationsUpdated', onAppsUpdated);
+    }, [isRecruiter, id]);
 
     const fetchCompany = async () => {
         try {
@@ -505,9 +524,9 @@ const CompanyProfile = () => {
                                 Company Statistics
                             </h3>
                             <div className="space-y-4">
-                                <StatItem label="Total Jobs Posted" value={stats.totalJobs} color="text-[#29a08e]" />
-                                <StatItem label="Active Openings" value={stats.activeOpenings} color="text-[#29a08e]" />
-                                <StatItem label="Successful Hires" value={stats.successfulHires} color="text-[#29a08e]" />
+                                <StatItem label="Total Jobs Posted" value={stats.totalJobs} color="text-[#29a08e]" loading={statsLoading} />
+                                <StatItem label="Active Openings" value={stats.activeOpenings} color="text-[#29a08e]" loading={statsLoading} />
+                                <StatItem label="Successful Hires" value={stats.successfulHires} color="text-[#29a08e]" loading={statsLoading} />
                             </div>
                         </div>
 
@@ -806,10 +825,14 @@ const HiringTagGroup = ({ label, value, isEditing, onChange, icon }) => (
     </div>
 );
 
-const StatItem = ({ label, value, color = "text-gray-900" }) => (
+const StatItem = ({ label, value, color = "text-gray-900", loading = false }) => (
     <div className="flex justify-between items-center py-4 border-b border-gray-50 last:border-0 hover:bg-gray-50 px-2 -mx-2 rounded transition-colors">
         <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</span>
-        <span className={`text-xl font-bold ${color}`}>{value}</span>
+        {loading ? (
+            <div className={`h-6 bg-gray-100 rounded-md animate-pulse`} style={{ width: '56px' }} aria-hidden />
+        ) : (
+            <span className={`text-xl font-bold ${color}`}>{value}</span>
+        )}
     </div>
 );
 

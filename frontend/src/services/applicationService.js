@@ -1,5 +1,14 @@
 import api from './api';
 
+/**
+ * @param {string} applicationId
+ * @returns {Promise<unknown>}
+ */
+export async function markInterviewJoined(applicationId) {
+    const response = await api.patch(`/applications/${applicationId}/mark-interview-joined`);
+    return response.data;
+}
+
 const applicationService = {
     apply: async (applicationData) => {
         try {
@@ -108,6 +117,23 @@ const applicationService = {
             err.response = error.response;
             throw err;
         }
+    },
+
+    getInterviewDetail: async (applicationId) => {
+        const response = await api.get(`/applications/${applicationId}/interview-detail`);
+        return response.data;
+    },
+
+    markInterviewJoined,
+
+    cancelRescheduleRequest: async (applicationId) => {
+        const response = await api.patch(`/applications/${applicationId}/cancel-reschedule-request`);
+        return response.data;
+    },
+
+    updateInterviewResult: async (applicationId, result) => {
+        const response = await api.patch(`/applications/${applicationId}/interview-result`, { result });
+        return response.data;
     }
 };
 

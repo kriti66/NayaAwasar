@@ -73,7 +73,15 @@ router.put('/profile', async (req, res) => {
 
         // Update fields if provided
         if (fullName !== undefined) user.fullName = fullName;
-        if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+        if (phoneNumber !== undefined) {
+            const trimmed = (phoneNumber || '').trim();
+            if (trimmed && !/^\+[0-9][0-9\s-]{6,14}$/.test(trimmed)) {
+                return res.status(400).json({
+                    message: 'Invalid phone number format. Must start with + and contain 7-15 digits.'
+                });
+            }
+            user.phoneNumber = trimmed;
+        }
         if (location !== undefined) user.location = location;
         if (professionalHeadline !== undefined) user.professionalHeadline = professionalHeadline;
         if (linkedinUrl !== undefined) user.linkedinUrl = linkedinUrl;

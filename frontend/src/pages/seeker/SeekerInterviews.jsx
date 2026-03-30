@@ -1,6 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import applicationService from '../../services/applicationService';
+import { useInterviews } from '../../hooks/useInterviews';
+import InterviewStatusBadge from '../../components/interviews/InterviewStatusBadge';
+import { msUntilInterviewStart } from '../../utils/interviewDateTime';
+import {
+    getInterviewBuckets,
+    getInterviewDisplayStatus,
+    getInterviewScheduledAtMs,
+    getTimeUntilInterviewFromApp
+} from '../../utils/seekerInterviewList';
 import {
     Calendar as CalendarIcon, Clock, MapPin, Video, User,
     Link as LinkIcon, X, AlertCircle, ArrowLeft, Sparkles,
@@ -12,36 +21,25 @@ import { getApiErrorMessage } from '../../utils/apiErrorMessage';
 const SeekerInterviews = () => {
     const [searchParams] = useSearchParams();
     const isFocused = searchParams.get('focused') === 'true';
+    const [activeTab, setActiveTab] = useState('upcoming');
 
-    const [interviews, setInterviews] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const { interviews, loading, refetch } = useInterviews();
+    const { upcomingInterviews, pastInterviews } = useMemo(
+        () => getInterviewBuckets(interviews),
+        [interviews]
+    );
+    const visibleInterviews = activeTab === 'upcoming' ? upcomingInterviews : pastInterviews;
     const [actionLoading, setActionLoading] = useState(false);
     const [decisionLoading, setDecisionLoading] = useState(false);
     const [rescheduleModal, setRescheduleModal] = useState({ show: false, application: null });
     const [rescheduleForm, setRescheduleForm] = useState({ reason: '', preferredDate: '', preferredTime: '' });
 
-    const fetchInterviews = async () => {
-        try {
-            const data = await applicationService.getMyInterviews();
-            setInterviews(data);
-        } catch (error) {
-            console.error("Error fetching upcoming interviews:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchInterviews();
-    }, []);
-
-    // Refetch when returning from notification (keeps page and notification in sync)
     useEffect(() => {
         if (!isFocused) return;
-        const handleFocus = () => fetchInterviews();
+        const handleFocus = () => refetch({ silent: true });
         window.addEventListener('focus', handleFocus);
         return () => window.removeEventListener('focus', handleFocus);
-    }, [isFocused]);
+    }, [isFocused, refetch]);
 
     const handleRescheduleSubmit = async () => {
         if (!rescheduleForm.reason) {
@@ -55,7 +53,7 @@ const SeekerInterviews = () => {
             toast.success('Reschedule request submitted. Recruiter will review and respond.');
             setRescheduleModal({ show: false, application: null });
             setRescheduleForm({ reason: '', preferredDate: '', preferredTime: '' });
-            fetchInterviews();
+            refetch({ silent: true });
         } catch (error) {
             toast.error(error.message || 'Failed to submit request');
         } finally {
@@ -73,7 +71,7 @@ const SeekerInterviews = () => {
         try {
             await applicationService.acceptRecruiterReschedule(applicationId);
             toast.success('Reschedule accepted. Your interview has been updated to the new date.');
-            fetchInterviews();
+            refetch({ silent: true });
         } catch (error) {
             toast.error(
                 getApiErrorMessage(error, 'Failed to accept reschedule request')
@@ -93,13 +91,27 @@ const SeekerInterviews = () => {
         try {
             await applicationService.rejectRecruiterReschedule(applicationId);
             toast.success('Reschedule declined. Your original schedule remains active.');
-            fetchInterviews();
+            refetch({ silent: true });
         } catch (error) {
             toast.error(
                 getApiErrorMessage(error, 'Failed to decline reschedule request')
             );
         } finally {
             setDecisionLoading(false);
+        }
+    };
+
+    const handleCancelReschedule = async (applicationId) => {
+        if (!applicationId) return;
+        setActionLoading(true);
+        try {
+            await applicationService.cancelRescheduleRequest(applicationId);
+            toast.success('Reschedule request cancelled.');
+            refetch({ silent: true });
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, 'Failed to cancel request'));
+        } finally {
+            setActionLoading(false);
         }
     };
 
@@ -112,23 +124,13 @@ const SeekerInterviews = () => {
 
     const backLink = getBackLink();
 
-    const getTimeUntilInterview = (date) => {
-        if (!date) return null;
-        const now = new Date();
-        const interviewDate = new Date(date);
-        const diffMs = interviewDate - now;
-        if (diffMs < 0) return 'Past';
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        if (diffDays > 0) return `${diffDays}d ${diffHours}h`;
-        if (diffHours > 0) return `${diffHours}h`;
-        return 'Today';
-    };
-
-    const InterviewCard = ({ app }) => {
-        const isFuture = app.interview?.date
-            ? new Date(new Date(app.interview.date).setHours(23, 59, 59, 999)) >= new Date()
-            : false;
+    const InterviewCard = ({ app, bucket }) => {
+        const lifecycle = app.lifecycleStatus || 'SCHEDULED';
+        const displayStatus = getInterviewDisplayStatus(app);
+        const scheduledAtMs = getInterviewScheduledAtMs(app);
+        const isFuture =
+            scheduledAtMs != null && Number.isFinite(scheduledAtMs) && scheduledAtMs > Date.now();
+        const isPastBucket = bucket === 'past';
         const hasPendingRequest = app.reschedule?.requested && !app.reschedule?.reviewed && app.reschedule?.reason;
         const recruiterReschedulePending =
             ['PENDING', 'PROPOSED'].includes(app.interview?.interviewId?.rescheduleStatus) &&
@@ -137,7 +139,21 @@ const SeekerInterviews = () => {
             app.interview?.interviewId?.rescheduleStatus === 'REJECTED' &&
             app.interview?.interviewId?.rescheduleRequestedBy === 'jobseeker';
         const rescheduleRejectedReason = app.interview?.interviewId?.rescheduleRejectedReason || app.reschedule?.rejectionReason;
-        const timeUntil = getTimeUntilInterview(app.interview?.date);
+        const timeUntil = getTimeUntilInterviewFromApp(app);
+        const msUntil = msUntilInterviewStart(app);
+        const showSoonBanner =
+            !isPastBucket &&
+            msUntil != null &&
+            msUntil > 0 &&
+            msUntil <= 30 * 60 * 1000 &&
+            (lifecycle === 'SCHEDULED' || lifecycle === 'LIVE');
+        const roomId = app.interview?.roomId;
+        const joinCallTo =
+            roomId && app._id
+                ? `/interview/call/${roomId}?applicationId=${app._id}`
+                : roomId
+                  ? `/interview/call/${roomId}`
+                  : '#';
 
         return (
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group">
@@ -168,22 +184,21 @@ const SeekerInterviews = () => {
                             </div>
                         </div>
                         <div className="flex items-center gap-3 flex-wrap">
-                            {timeUntil && timeUntil !== 'Past' && (
+                            {!isPastBucket && timeUntil && timeUntil !== 'Past' && (
                                 <span className="px-3 py-1.5 bg-orange-50 text-orange-600 rounded-lg text-[10px] font-black uppercase tracking-wider border border-orange-100">
                                     {timeUntil === 'Today' ? '⏰ Today' : `🗓 In ${timeUntil}`}
                                 </span>
                             )}
-                            {recruiterReschedulePending ? (
-                                <span className="px-4 py-1.5 bg-amber-100 text-amber-800 rounded-full text-[10px] font-bold uppercase tracking-widest border border-amber-200 flex items-center gap-1.5">
-                                    <AlertCircle size={12} /> Reschedule Pending
-                                </span>
-                            ) : (
-                                <span className="px-4 py-1.5 bg-[#29a08e] text-white rounded-full text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-[#29a08e]/20">
-                                    Scheduled
-                                </span>
-                            )}
+                            <InterviewStatusBadge status={displayStatus} />
                         </div>
                     </div>
+
+                    {showSoonBanner && (
+                        <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm font-semibold flex items-center gap-2">
+                            <AlertCircle className="w-5 h-5 shrink-0" />
+                            Your interview starts within 30 minutes. Please join on time.
+                        </div>
+                    )}
 
                     {/* Interview Details Grid */}
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8 p-6 bg-gray-50/70 rounded-xl border border-gray-100">
@@ -219,7 +234,10 @@ const SeekerInterviews = () => {
                             </p>
                             {app.interview?.mode === 'Online' ? (
                                 app.interview?.roomId ? (
-                                    <Link to={`/interview/call/${app.interview.roomId}`} className="text-sm font-bold text-[#29a08e] hover:underline flex items-center gap-1.5">
+                                    <Link
+                                        to={joinCallTo}
+                                        className="text-sm font-bold text-[#29a08e] hover:underline flex items-center gap-1.5"
+                                    >
                                         Join Interview <ExternalLink className="w-3 h-3" />
                                     </Link>
                                 ) : (
@@ -318,36 +336,95 @@ const SeekerInterviews = () => {
                             )}
                         </div>
 
-                        <div className="flex gap-3">
+                        <div className="flex flex-wrap gap-3">
                             {recruiterReschedulePending ? (
-                                <button
-                                    type="button"
-                                    onClick={() => handleRecruiterRescheduleAccept(app._id)}
-                                    disabled={decisionLoading || !app._id}
-                                    className="px-6 py-2.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all active:scale-95 shadow-lg shadow-emerald-500/20 disabled:opacity-70 disabled:cursor-not-allowed"
-                                >
-                                    Accept
-                                </button>
-                            ) : (
-                                isFuture && !hasPendingRequest && (
+                                <>
                                     <button
+                                        type="button"
+                                        onClick={() => handleRecruiterRescheduleAccept(app._id)}
+                                        disabled={decisionLoading || !app._id}
+                                        className="px-6 py-2.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all active:scale-95 shadow-lg shadow-emerald-500/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    >
+                                        Accept
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRecruiterRescheduleReject(app._id)}
+                                        disabled={decisionLoading || !app._id}
+                                        className="px-6 py-2.5 bg-white border border-amber-200 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-50 transition-all active:scale-95 shadow-sm shadow-amber-500/10 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    >
+                                        Reject
+                                    </button>
+                                </>
+                            ) : null}
+
+                            {lifecycle === 'SCHEDULED' &&
+                                !isPastBucket &&
+                                isFuture &&
+                                !hasPendingRequest &&
+                                !recruiterReschedulePending && (
+                                    <button
+                                        type="button"
                                         onClick={() => setRescheduleModal({ show: true, application: app })}
                                         className="px-6 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all active:scale-95 shadow-lg shadow-gray-900/10"
                                     >
                                         Request Reschedule
                                     </button>
-                                )
+                                )}
+
+                            {lifecycle === 'LIVE' &&
+                                app.interview?.mode === 'Online' &&
+                                roomId && (
+                                    <Link
+                                        to={joinCallTo}
+                                        className="px-6 py-2.5 bg-[#29a08e] text-white rounded-xl text-xs font-bold hover:bg-[#228377] transition-all text-center flex items-center justify-center gap-1.5 shadow-lg shadow-[#29a08e]/20"
+                                    >
+                                        Join now <ExternalLink className="w-3 h-3" />
+                                    </Link>
+                                )}
+
+                            {(lifecycle === 'MISSED' ||
+                                (displayStatus === 'MISSED' && lifecycle !== 'PENDING_RESULT')) && (
+                                <Link
+                                    to="/contact"
+                                    className="px-6 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all text-center flex items-center justify-center"
+                                >
+                                    Contact support
+                                </Link>
                             )}
-                            {recruiterReschedulePending && (
+
+                            {lifecycle === 'PENDING_RESULT' && (
                                 <button
                                     type="button"
-                                    onClick={() => handleRecruiterRescheduleReject(app._id)}
-                                    disabled={decisionLoading || !app._id}
-                                    className="px-6 py-2.5 bg-white border border-amber-200 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-50 transition-all active:scale-95 shadow-sm shadow-amber-500/10 disabled:opacity-70 disabled:cursor-not-allowed"
+                                    disabled
+                                    className="px-6 py-2.5 bg-gray-100 text-gray-400 rounded-xl text-xs font-bold cursor-not-allowed border border-gray-200"
                                 >
-                                    Reject
+                                    Awaiting result
                                 </button>
                             )}
+
+                            {lifecycle === 'COMPLETED_REJECTED' && (
+                                <Link
+                                    to="/seeker/jobs"
+                                    className="px-6 py-2.5 bg-gray-900 text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all text-center flex items-center justify-center"
+                                >
+                                    Find more jobs
+                                </Link>
+                            )}
+
+                            {lifecycle === 'RESCHEDULE_REQUESTED' &&
+                                hasPendingRequest &&
+                                !isPastBucket && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleCancelReschedule(app._id)}
+                                    disabled={actionLoading || !app._id}
+                                    className="px-6 py-2.5 bg-white border border-amber-300 text-amber-800 rounded-xl text-xs font-bold hover:bg-amber-50 transition-all disabled:opacity-60"
+                                >
+                                    Cancel request
+                                </button>
+                            )}
+
                             <Link
                                 to={`/jobseeker/jobs/${app.job_id?._id || app.job_id}`}
                                 className="px-6 py-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-50 transition-all text-center flex items-center justify-center gap-1.5"
@@ -390,17 +467,12 @@ const SeekerInterviews = () => {
                             <CalendarDays size={12} className="text-[#5eead4]" />
                             Interview Center
                         </span>
-                        {interviews.length > 0 && (
-                            <span className="inline-flex items-center gap-2 px-3 py-1 bg-[#29a08e]/20 backdrop-blur-md rounded-full text-[10px] font-semibold text-[#5eead4] border border-[#29a08e]/30">
-                                {interviews.length} scheduled
-                            </span>
-                        )}
                     </div>
                     <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2">
                         Upcoming <span className="bg-gradient-to-r from-[#5eead4] to-[#29a08e] bg-clip-text text-transparent">Interviews</span>
                     </h1>
                     <p className="text-gray-400 font-medium max-w-lg text-base">
-                        View your scheduled interviews, interview details, and preparation instructions.
+                        Switch between upcoming and past interviews. Details, join links, and recruiter notes stay in one place.
                     </p>
                 </div>
             </div>
@@ -413,25 +485,81 @@ const SeekerInterviews = () => {
                             <div key={i} className="h-64 bg-white border border-gray-100 rounded-2xl animate-pulse shadow-sm"></div>
                         ))}
                     </div>
-                ) : interviews.length > 0 ? (
-                    <div className="space-y-6">
-                        {interviews.map((app) => (
-                            <InterviewCard key={app._id} app={app} />
-                        ))}
-                    </div>
                 ) : (
-                    <div className="bg-white border border-gray-100 rounded-2xl py-24 text-center shadow-sm">
-                        <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
-                            <CalendarIcon className="w-10 h-10 text-gray-300" />
+                    <>
+                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-6 p-1.5 bg-gray-100 rounded-2xl border border-gray-200/80 shadow-sm">
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('upcoming')}
+                                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all ${
+                                    activeTab === 'upcoming'
+                                        ? 'bg-[#0f172a] text-white shadow-lg shadow-[#0f172a]/25'
+                                        : 'text-gray-600 hover:bg-white/80'
+                                }`}
+                            >
+                                Upcoming
+                                <span
+                                    className={`min-w-[1.5rem] px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                                        activeTab === 'upcoming' ? 'bg-[#29a08e] text-white' : 'bg-gray-200 text-gray-700'
+                                    }`}
+                                >
+                                    {upcomingInterviews.length}
+                                </span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setActiveTab('past')}
+                                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all ${
+                                    activeTab === 'past'
+                                        ? 'bg-[#0f172a] text-white shadow-lg shadow-[#0f172a]/25'
+                                        : 'text-gray-600 hover:bg-white/80'
+                                }`}
+                            >
+                                Past
+                                <span
+                                    className={`min-w-[1.5rem] px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                                        activeTab === 'past' ? 'bg-[#29a08e] text-white' : 'bg-gray-200 text-gray-700'
+                                    }`}
+                                >
+                                    {pastInterviews.length}
+                                </span>
+                            </button>
                         </div>
-                        <h3 className="text-2xl font-extrabold text-gray-900 mb-2">No Upcoming Interviews</h3>
-                        <p className="text-gray-500 font-medium max-w-sm mx-auto leading-relaxed mb-8">
-                            Your professional journey is just beginning. When recruiters schedule an appointment, they will appear here.
-                        </p>
-                        <Link to="/seeker/jobs" className="inline-flex items-center gap-2 px-6 py-3 bg-[#29a08e] text-white text-sm font-bold rounded-xl hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/20">
-                            Browse Open Positions <ChevronRight size={16} />
-                        </Link>
-                    </div>
+
+                        {visibleInterviews.length > 0 ? (
+                            <div className="space-y-6">
+                                {visibleInterviews.map((app) => (
+                                    <InterviewCard key={app._id} app={app} bucket={activeTab} />
+                                ))}
+                            </div>
+                        ) : activeTab === 'upcoming' ? (
+                            <div className="bg-white border border-gray-100 rounded-2xl py-24 text-center shadow-sm">
+                                <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                                    <CalendarIcon className="w-10 h-10 text-gray-300" />
+                                </div>
+                                <h3 className="text-2xl font-extrabold text-gray-900 mb-2">No upcoming interviews</h3>
+                                <p className="text-gray-500 font-medium max-w-md mx-auto leading-relaxed mb-8">
+                                    No upcoming interviews scheduled. Browse jobs to apply.
+                                </p>
+                                <Link
+                                    to="/seeker/jobs"
+                                    className="inline-flex items-center gap-2 px-6 py-3 bg-[#29a08e] text-white text-sm font-bold rounded-xl hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/20"
+                                >
+                                    Browse jobs <ChevronRight size={16} />
+                                </Link>
+                            </div>
+                        ) : (
+                            <div className="bg-white border border-gray-100 rounded-2xl py-24 text-center shadow-sm">
+                                <div className="w-20 h-20 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
+                                    <Clock className="w-10 h-10 text-gray-300" />
+                                </div>
+                                <h3 className="text-2xl font-extrabold text-gray-900 mb-2">No past interviews</h3>
+                                <p className="text-gray-500 font-medium max-w-md mx-auto leading-relaxed">
+                                    Completed and older interviews will show up here after their scheduled time.
+                                </p>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 

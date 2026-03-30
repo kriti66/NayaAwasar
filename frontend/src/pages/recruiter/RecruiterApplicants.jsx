@@ -38,6 +38,48 @@ const RecruiterApplicants = () => {
         rejected: 0
     });
 
+    const computePipelineStats = (apps) => {
+        const safeApps = Array.isArray(apps) ? apps : [];
+        const next = {
+            total: safeApps.length,
+            applied: 0,
+            inReview: 0,
+            interview: 0,
+            offered: 0,
+            hired: 0,
+            rejected: 0
+        };
+
+        safeApps.forEach((app) => {
+            const status = app?.status;
+            if (!status) return;
+            if (status === 'applied') next.applied++;
+            else if (status === 'in-review' || status === 'in_review') next.inReview++;
+            else if (status === 'interview') next.interview++;
+            else if (status === 'offered') next.offered++;
+            else if (status === 'hired') next.hired++;
+            else if (status === 'rejected') next.rejected++;
+        });
+
+        return next;
+    };
+
+    const refreshApplicantsAndStats = async () => {
+        if (!selectedJobId) return;
+        setLoading(true);
+        try {
+            const res = await api.get(`/applications/job/${selectedJobId}`);
+            setApplicants(res.data || []);
+            setStats(computePipelineStats(res.data || []));
+            window.dispatchEvent(new Event('recruiter:applicationsUpdated'));
+        } catch (error) {
+            console.error("[RecruiterApplicants] Error fetching applicants:", error);
+            toast.error(error.response?.data?.message || "Failed to load applicants");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         const fetchJobs = async () => {
             try {
@@ -72,32 +114,7 @@ const RecruiterApplicants = () => {
 
     useEffect(() => {
         if (!selectedJobId) return;
-
-        const fetchApplicants = async () => {
-            setLoading(true);
-            try {
-                console.log(`[RecruiterApplicants] Fetching applications for job: ${selectedJobId}`);
-                const res = await api.get(`/applications/job/${selectedJobId}`);
-                console.log(`[RecruiterApplicants] Received ${res.data.length} applications:`, res.data);
-                setApplicants(res.data);
-
-                const newStats = { total: res.data.length, applied: 0, inReview: 0, interview: 0, offered: 0, hired: 0, rejected: 0 };
-                res.data.forEach(app => {
-                    let statusKey = app.status;
-                    if (statusKey === 'in_review' || statusKey === 'in-review') statusKey = 'inReview';
-                    if (newStats[statusKey] !== undefined) newStats[statusKey]++;
-                });
-                console.log(`[RecruiterApplicants] Stats:`, newStats);
-                setStats(newStats);
-            } catch (error) {
-                console.error("[RecruiterApplicants] Error fetching applicants:", error);
-                console.error("[RecruiterApplicants] Error response:", error.response?.data);
-                toast.error(error.response?.data?.message || "Failed to load applicants");
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchApplicants();
+        refreshApplicantsAndStats();
     }, [selectedJobId]);
 
     const handleStatusChange = async (appId, newStatus) => {
@@ -154,9 +171,7 @@ const RecruiterApplicants = () => {
                 reason: reason || 'Declined'
             });
             toast.success("Reschedule request rejected.");
-
-            const res = await api.get(`/applications/job/${selectedJobId}`);
-            setApplicants(res.data);
+            await refreshApplicantsAndStats();
         } catch (error) {
             console.error("Reject reschedule error:", error);
             toast.error("Failed to reject reschedule request");
@@ -173,17 +188,7 @@ const RecruiterApplicants = () => {
             });
 
             toast.success(`Application status updated to ${status.replace('-', ' ')}`);
-
-            const res = await api.get(`/applications/job/${selectedJobId}`);
-            setApplicants(res.data);
-
-            const newStats = { total: res.data.length, applied: 0, inReview: 0, interview: 0, offered: 0, hired: 0, rejected: 0 };
-            res.data.forEach(a => {
-                let statusKey = a.status;
-                if (statusKey === 'in-review' || statusKey === 'in_review') statusKey = 'inReview';
-                if (newStats[statusKey] !== undefined) newStats[statusKey]++;
-            });
-            setStats(newStats);
+            await refreshApplicantsAndStats();
 
         } catch (error) {
             console.error("Status update error", error);
@@ -197,9 +202,7 @@ const RecruiterApplicants = () => {
             if (rescheduleModalData) {
                 await api.put(`/applications/${selectedApplicantId}/approve-reschedule-request`, interviewData);
                 toast.success("Reschedule request APPROVED and interview updated.");
-
-                const res = await api.get(`/applications/job/${selectedJobId}`);
-                setApplicants(res.data);
+                await refreshApplicantsAndStats();
             } else {
                 await updateApplicationStatus(selectedApplicantId, 'interview', { interviewDetails: interviewData });
             }
@@ -242,17 +245,7 @@ const RecruiterApplicants = () => {
             setIsRecruiterRescheduleModalOpen(false);
             setRecruiterRescheduleApplicationId(null);
             setRecruiterRescheduleInitialData(null);
-
-            const res = await api.get(`/applications/job/${selectedJobId}`);
-            setApplicants(res.data);
-
-            const newStats = { total: res.data.length, applied: 0, inReview: 0, interview: 0, offered: 0, hired: 0, rejected: 0 };
-            res.data.forEach(a => {
-                let statusKey = a.status;
-                if (statusKey === 'in-review' || statusKey === 'in_review') statusKey = 'inReview';
-                if (newStats[statusKey] !== undefined) newStats[statusKey]++;
-            });
-            setStats(newStats);
+            await refreshApplicantsAndStats();
         } catch (error) {
             console.error('[RecruiterApplicants] Recruiter proposal error:', error);
             toast.error(error?.message || 'Failed to send reschedule request');
@@ -360,7 +353,11 @@ const RecruiterApplicants = () => {
                             <div className={`w-9 h-9 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform`}>
                                 <stat.icon size={18} strokeWidth={2.5} />
                             </div>
-                            <h3 className="text-2xl font-black text-gray-900 tracking-tight leading-none mb-1">{stat.count}</h3>
+                            {loading ? (
+                                <div className="w-16 h-7 bg-gray-100 rounded-md animate-pulse mb-1" aria-hidden />
+                            ) : (
+                                <h3 className="text-2xl font-black text-gray-900 tracking-tight leading-none mb-1">{stat.count}</h3>
+                            )}
                             <span className="block text-[9px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</span>
                         </div>
                     ))}
@@ -557,10 +554,19 @@ const RecruiterApplicants = () => {
                                                                     <span className="text-gray-900 font-bold max-w-[120px] text-right truncate">{app.applicantExperienceLevel || 'Not specified'}</span>
                                                                 </div>
                                                                 <div className="flex flex-col gap-2 pt-3 border-t border-gray-50 mt-2">
-                                                                    <span className="text-gray-500 font-medium flex items-center gap-2 text-sm"><PhoneIncoming size={14} className="text-gray-400"/> Contact</span>
+                                                                    <span className="text-gray-500 font-medium flex items-center gap-2 text-sm">
+                                                                        <PhoneIncoming size={14} className="text-gray-400" /> Contact
+                                                                    </span>
                                                                     <div className="bg-white rounded-xl p-3 w-full border border-gray-100">
-                                                                        <div className="text-gray-900 font-bold text-sm">{app.personalInfo?.phone || 'No phone provided'}</div>
-                                                                        <div className="text-xs text-gray-500 font-medium mt-1 truncate" title={app.personalInfo?.email}>{app.personalInfo?.email || 'No email provided'}</div>
+                                                                        <div className="flex items-center justify-between gap-3 text-sm">
+                                                                            <span className="text-gray-500 font-medium">Email</span>
+                                                                            <span
+                                                                                className="text-xs text-gray-700 font-medium truncate max-w-[200px]"
+                                                                                title={app.personalInfo?.email}
+                                                                            >
+                                                                                {app.personalInfo?.email || 'No email provided'}
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>

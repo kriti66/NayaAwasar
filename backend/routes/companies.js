@@ -120,7 +120,7 @@ router.get('/my', requireAuth, async (req, res) => {
         const companyJobIds = await Job.find({ company_id: company._id }).select('_id');
         const successfulHires = await Application.countDocuments({
             job_id: { $in: companyJobIds.map(j => j._id) },
-            status: 'Offer Extended'
+            status: 'hired'
         });
 
         const companyObj = company.toObject();
@@ -223,7 +223,7 @@ router.get('/:id', async (req, res) => {
         const companyJobIds = await Job.find({ company_id: company._id }).select('_id');
         const successfulHires = await Application.countDocuments({
             job_id: { $in: companyJobIds.map(j => j._id) },
-            status: 'Offer Extended'
+            status: 'hired'
         });
 
         const companyObj = company.toObject();
@@ -255,7 +255,7 @@ router.get('/me/stats', requireAuth, async (req, res) => {
             activeOpenings: await Job.countDocuments({ company_id: company._id, status: 'Active' }),
             successfulHires: await Application.countDocuments({
                 job_id: { $in: await Job.find({ company_id: company._id }).distinct('_id') },
-                status: 'Offer Extended'
+                status: 'hired'
             })
         };
 

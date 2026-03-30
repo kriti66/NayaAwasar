@@ -33,7 +33,17 @@ const RecruiterDashboard = () => {
     const [recentJobs, setRecentJobs] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const NumberSkeleton = ({ w = 40 }) => (
+        <div
+            className="h-8 bg-white/15 rounded-md animate-pulse mx-auto"
+            style={{ width: `${w}px` }}
+            aria-hidden
+        />
+    );
+
     useEffect(() => {
+        if (!user) return;
+
         const fetchData = async () => {
             try {
                 const statsRes = await api.get('/dashboard/recruiter/stats');
@@ -46,7 +56,26 @@ const RecruiterDashboard = () => {
                 setLoading(false);
             }
         };
-        if (user) fetchData();
+
+        fetchData();
+    }, [user]);
+
+    useEffect(() => {
+        if (!user) return;
+        const onAppsUpdated = async () => {
+            try {
+                setLoading(true);
+                const statsRes = await api.get('/dashboard/recruiter/stats');
+                setStats(statsRes.data);
+            } catch (error) {
+                console.error("Error refreshing recruiter stats:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        window.addEventListener('recruiter:applicationsUpdated', onAppsUpdated);
+        return () => window.removeEventListener('recruiter:applicationsUpdated', onAppsUpdated);
     }, [user]);
 
     const quickActions = [
@@ -96,7 +125,7 @@ const RecruiterDashboard = () => {
                                 <div key={i} className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl p-5 text-center min-w-[120px] hover:bg-white/15 transition-all duration-300" style={{ animationDelay: `${i * 0.1}s` }}>
                                     <div className="text-2xl mb-2">{s.icon}</div>
                                     <p className="text-3xl font-black text-white mb-1">
-                                        <AnimatedCounter end={s.value} />
+                                        {loading ? <NumberSkeleton w={70} /> : <AnimatedCounter end={s.value} />}
                                     </p>
                                     <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">{s.label}</p>
                                 </div>
@@ -192,7 +221,11 @@ const RecruiterDashboard = () => {
                         <div className="flex justify-between items-start relative z-10">
                             <div>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Inbound Talent</p>
-                                <h3 className="text-4xl font-black text-gray-900">{stats.applicants}</h3>
+                                {loading ? (
+                                    <NumberSkeleton w={90} />
+                                ) : (
+                                    <h3 className="text-4xl font-black text-gray-900">{stats.applicants}</h3>
+                                )}
                             </div>
                             <div className="p-3 bg-gradient-to-br from-blue-50 to-blue-100/50 rounded-xl text-blue-500">
                                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">

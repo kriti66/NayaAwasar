@@ -61,8 +61,35 @@ export const submitRecruiterKyc = async (req, res) => {
 
         console.log(`[KYC] Received submission for user: ${userId}`);
 
-        const selfieUrl = representativePhoto || selfie || req.body.selfieWithId || '';
-        const taxDocUrl = req.body.taxDocument || '';
+        let existingKyc = await RecruiterKyc.findOne({ userId });
+        const repApprovedExisting = existingKyc?.representativeStatus === 'approved';
+        const existingRep = existingKyc?.representative || {};
+        const existingComp = existingKyc?.company || {};
+
+        const selfieUrl =
+            representativePhoto ||
+            selfie ||
+            req.body.selfieWithId ||
+            existingKyc?.selfieUrl ||
+            existingRep.selfieUrl ||
+            '';
+        const idFrontMerged =
+            idFront || existingKyc?.idFrontUrl || existingRep.idFrontUrl || '';
+        const idBackMerged =
+            idBack || existingKyc?.idBackUrl || existingRep.idBackUrl || '';
+        const taxDocUrl =
+            req.body.taxDocument ||
+            existingComp.taxDocUrl ||
+            existingKyc?.taxDocUrl ||
+            '';
+        const registrationMerged =
+            registrationDocument ||
+            existingComp.registrationDocUrl ||
+            existingKyc?.registrationDocUrl ||
+            '';
+        const companyLogoMerged =
+            companyLogo || existingComp.companyLogo || existingKyc?.companyLogo || '';
+
         const missingRepresentative = [];
         if (!fullName) missingRepresentative.push('Full Name');
         if (!jobTitle) missingRepresentative.push('Job Title');
@@ -71,15 +98,15 @@ export const submitRecruiterKyc = async (req, res) => {
         if (!selfieUrl) missingRepresentative.push('Representative Photo / Selfie');
         if (!idType) missingRepresentative.push('ID Type');
         if (!idNumber) missingRepresentative.push('ID Number');
-        if (!idFront) missingRepresentative.push('ID Front');
-        if (!idBack) missingRepresentative.push('ID Back');
+        if (!idFrontMerged) missingRepresentative.push('ID Front');
+        if (!idBackMerged) missingRepresentative.push('ID Back');
 
         const missingCompany = [];
         if (!companyName) missingCompany.push('Company Name');
         if (!registrationNumber) missingCompany.push('Registration Number');
         if (!companyAddress) missingCompany.push('Company Address');
         if (!industry) missingCompany.push('Industry');
-        if (!registrationDocument) missingCompany.push('Business Registration Document');
+        if (!registrationMerged) missingCompany.push('Business Registration Document');
         if (!taxDocUrl) missingCompany.push('Tax Registration Document');
 
         if (missingRepresentative.length || missingCompany.length) {
@@ -90,6 +117,9 @@ export const submitRecruiterKyc = async (req, res) => {
                 companyMissing: missingCompany
             });
         }
+
+        const representativeStatusNext = repApprovedExisting ? 'approved' : 'pending';
+        const companyStatusNext = 'pending';
 
         // data payload
         const kycData = {
@@ -105,20 +135,24 @@ export const submitRecruiterKyc = async (req, res) => {
             website,
             idType,
             idNumber,
-            idFrontUrl: idFront,
-            idBackUrl: idBack,
-            registrationDocUrl: registrationDocument,
+            idFrontUrl: idFrontMerged,
+            idBackUrl: idBackMerged,
+            registrationDocUrl: registrationMerged,
             taxDocUrl,
-            companyLogo: companyLogo || '', // Add logo
+            companyLogo: companyLogoMerged || '',
             selfieUrl,
-            status: 'pending',
-            representativeStatus: 'pending',
-            companyStatus: 'pending',
+            status: deriveOverallStatus(representativeStatusNext, companyStatusNext),
+            representativeStatus: representativeStatusNext,
+            companyStatus: companyStatusNext,
             representativeRejectionReason: '',
             companyRejectionReason: '',
-            representativeReviewedAt: null,
+            representativeReviewedAt: repApprovedExisting
+                ? existingKyc.representativeReviewedAt
+                : null,
             companyReviewedAt: null,
-            representativeReviewedBy: null,
+            representativeReviewedBy: repApprovedExisting
+                ? existingKyc.representativeReviewedBy
+                : null,
             companyReviewedBy: null,
             representative: {
                 fullName,
@@ -128,8 +162,8 @@ export const submitRecruiterKyc = async (req, res) => {
                 selfieUrl,
                 idType,
                 idNumber,
-                idFrontUrl: idFront,
-                idBackUrl: idBack
+                idFrontUrl: idFrontMerged,
+                idBackUrl: idBackMerged
             },
             company: {
                 companyName,
@@ -137,15 +171,12 @@ export const submitRecruiterKyc = async (req, res) => {
                 companyAddress,
                 industry,
                 website,
-                registrationDocUrl: registrationDocument,
+                registrationDocUrl: registrationMerged,
                 taxDocUrl,
-                companyLogo: companyLogo || ''
+                companyLogo: companyLogoMerged || ''
             },
             submissionDate: new Date()
         };
-
-        // Check if exists
-        let existingKyc = await RecruiterKyc.findOne({ userId });
         const priorRecruiterKycForNotify = existingKyc
             ? { status: existingKyc.status }
             : null;
@@ -289,13 +320,23 @@ export const reviewRecruiterKyc = async (req, res) => {
             });
         }
 
+        const MAX_SHARED_REJECTION_ATTEMPTS = 3;
+
         if (decision === 'rejected') {
+            if ((kyc.rejectionHistory?.length || 0) >= MAX_SHARED_REJECTION_ATTEMPTS) {
+                return res.status(400).json({
+                    message: 'Maximum re-submission attempts reached. No further rejections are allowed for this recruiter.'
+                });
+            }
             kyc.rejectionReason = reason || 'Rejected by admin';
             kyc.rejectionHistory.push({
                 reason: reason || `Rejected ${section} verification`,
                 rejectedAt: new Date(),
                 rejectedBy: req.user.id
             });
+            if (kyc.rejectionHistory.length >= MAX_SHARED_REJECTION_ATTEMPTS) {
+                kyc.status = 'resubmission_locked';
+            }
         }
 
         if (section === 'representative') {
@@ -314,20 +355,32 @@ export const reviewRecruiterKyc = async (req, res) => {
             kyc.companyReviewedBy = req.user.id;
         }
 
-        const finalDecision = deriveOverallStatus(kyc.representativeStatus, kyc.companyStatus);
-        kyc.status = finalDecision;
+        let finalDecision = deriveOverallStatus(kyc.representativeStatus, kyc.companyStatus);
+        if (kyc.status === 'resubmission_locked') {
+            finalDecision = 'rejected';
+        } else {
+            kyc.status = finalDecision;
+        }
         kyc.reviewedBy = req.user.id;
         kyc.reviewedAt = new Date();
         await kyc.save();
 
+        const userKycState =
+            finalDecision === 'approved'
+                ? 'approved'
+                : kyc.status === 'resubmission_locked'
+                  ? 'resubmission_locked'
+                  : 'rejected';
+
         // Update User
         const updatedUser = await User.findByIdAndUpdate(kyc.userId, {
-            recruiterKycStatus: finalDecision,
-            kycStatus: finalDecision, // Sync global status
+            recruiterKycStatus: userKycState,
+            kycStatus: userKycState,
             isKycVerified: finalDecision === 'approved',
-            kycRejectionReason: finalDecision === 'rejected'
-                ? (kyc.representativeRejectionReason || kyc.companyRejectionReason || reason || '')
-                : null,
+            kycRejectionReason:
+                finalDecision === 'approved'
+                    ? null
+                    : kyc.representativeRejectionReason || kyc.companyRejectionReason || reason || '',
             kycVerifiedAt: finalDecision === 'approved' ? new Date() : null
         });
 

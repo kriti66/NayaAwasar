@@ -4,7 +4,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getApiErrorMessage } from '../../utils/apiErrorMessage';
 import {
     Calendar,
-    Clock,
     Video,
     MapPin,
     AlertCircle,
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react';
 import applicationService from '../../services/applicationService';
 import toast from 'react-hot-toast';
+import InterviewStatusBadge from '../interviews/InterviewStatusBadge';
 
 const formatDate = (date) => {
     if (!date) return 'Date TBD';
@@ -32,6 +32,13 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
     const interviewDoc = nextInterview?.interview?.interviewId;
     const interviewStatus = interviewDoc?.interviewStatus || 'scheduled';
     const isReschedulePending = interviewStatus === 'reschedule_pending';
+    const roomId = nextInterview?.interview?.roomId;
+    const joinCallPath =
+        roomId && nextInterview?._id
+            ? `/interview/call/${roomId}?applicationId=${nextInterview._id}`
+            : roomId
+              ? `/interview/call/${roomId}`
+              : null;
 
     const handleAcceptReschedule = async () => {
         if (!nextInterview?._id) return;
@@ -112,13 +119,23 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
                             </div>
                         </div>
 
-                        {/* Status badge */}
-                        {isReschedulePending && (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider border border-amber-200 mb-4">
-                                <AlertCircle size={12} />
-                                Reschedule Pending
-                            </span>
-                        )}
+                        {/* Status: recruiter-proposed reschedule vs computed lifecycle */}
+                        <div className="mb-4 flex flex-wrap items-center gap-2">
+                            {isReschedulePending && (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider border border-amber-200">
+                                    <AlertCircle size={12} />
+                                    Reschedule Pending
+                                </span>
+                            )}
+                            {!isReschedulePending && nextInterview?.lifecycleStatus && (
+                                <InterviewStatusBadge status={nextInterview.lifecycleStatus} />
+                            )}
+                            {isReschedulePending &&
+                                nextInterview?.lifecycleStatus &&
+                                nextInterview.lifecycleStatus !== 'RESCHEDULE_REQUESTED' && (
+                                    <InterviewStatusBadge status={nextInterview.lifecycleStatus} />
+                                )}
+                        </div>
 
                         <div className="space-y-3">
                             {/* Original date/time */}
@@ -157,9 +174,9 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
                                     <MapPin className="w-4 h-4 shrink-0" />
                                 )}
                                 {nextInterview.interview?.mode === 'Online' ? (
-                                    nextInterview.interview?.roomId ? (
+                                    joinCallPath ? (
                                         <Link
-                                            to={`/interview/call/${nextInterview.interview.roomId}`}
+                                            to={joinCallPath}
                                             className="hover:text-[#228377] underline transition-colors inline-flex items-center gap-1"
                                         >
                                             Join Meeting <ExternalLink size={12} />
@@ -207,9 +224,9 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
                             ) : null}
                             {!isReschedulePending ? (
                                 <>
-                                    {nextInterview.interview?.mode === 'Online' && nextInterview.interview?.roomId && (
+                                    {nextInterview.interview?.mode === 'Online' && joinCallPath && (
                                         <Link
-                                            to={`/interview/call/${nextInterview.interview.roomId}`}
+                                            to={joinCallPath}
                                             className="flex-1 py-2.5 bg-[#29a08e] text-white text-[10px] font-bold uppercase tracking-wider rounded-xl hover:bg-[#228377] transition-all text-center flex items-center justify-center"
                                         >
                                             Join

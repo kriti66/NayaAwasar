@@ -140,6 +140,48 @@ export function computeSeekerProfileMetrics(userLike) {
  * Persist computed scores on a Mongoose User document (mutates in place).
  * @returns {ReturnType<computeSeekerProfileMetrics>}
  */
+/**
+ * Merge User + Profile documents into one object for scoring and job matching.
+ * @param {object|null} user
+ * @param {object|null} profile
+ */
+export function mergeSeekerDataForScoring(user, profile) {
+    const expFromProfile = Array.isArray(profile?.experience)
+        ? profile.experience.map((e) => ({
+              title: e?.role || '',
+              company: e?.company || '',
+              duration:
+                  e?.startDate || e?.endDate
+                      ? `${e?.startDate || ''} ${e?.endDate || ''}`.trim()
+                      : '',
+              description: e?.description || ''
+          }))
+        : [];
+
+    const eduFromProfile = Array.isArray(profile?.education)
+        ? profile.education.map((e) => ({
+              degree: e?.degree || '',
+              institution: e?.institute || '',
+              year: e?.endYear || e?.startYear || ''
+          }))
+        : [];
+
+    return {
+        ...user,
+        bio: user?.bio || profile?.summary || '',
+        professionalHeadline: user?.professionalHeadline || profile?.headline || '',
+        location: user?.location || profile?.location || '',
+        skills: Array.isArray(profile?.skills) && profile.skills.length ? profile.skills : user?.skills,
+        workExperience: expFromProfile.length ? expFromProfile : user?.workExperience,
+        education: eduFromProfile.length ? eduFromProfile : user?.education,
+        resume: profile?.resume?.fileUrl ? profile.resume : user?.resume,
+        jobPreferences:
+            profile?.jobPreferences && Object.keys(profile.jobPreferences).length
+                ? profile.jobPreferences
+                : user?.jobPreferences
+    };
+}
+
 export function syncSeekerProfileScoresToUser(userDoc) {
     if (!userDoc) return computeSeekerProfileMetrics(null);
     const plain =

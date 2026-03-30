@@ -3,6 +3,7 @@ import Job from '../models/Job.js';
 import User from '../models/User.js';
 import mongoose from 'mongoose';
 import { createRequire } from 'module';
+import { getInterviewJoinWindow } from '../utils/interviewDateTime.js';
 
 const require = createRequire(import.meta.url);
 const { generateToken04 } = require('../utils/zegoServerAssistant.cjs');
@@ -26,64 +27,6 @@ function expectedZegoUserIds(jwtUserId, jwtRole) {
     return set;
 }
 
-/**
- * Combine stored calendar date + wall-clock time into one instant.
- * Default: UTC calendar day from `date` + time (typical for ISO date strings / Mongo UTC midnight).
- * Set ZEGO_SCHEDULE_USE_LOCAL_DATE=1 to use server-local calendar components instead.
- */
-function buildSlotFromDateAndTime(dateValue, timeStr) {
-    const d = new Date(dateValue);
-    if (Number.isNaN(d.getTime())) return null;
-
-    const parts = String(timeStr || '0:0').split(':');
-    const hh = parseInt(parts[0], 10);
-    const mm = parseInt(parts[1], 10);
-    const ss = parseInt(parts[2], 10);
-    const h = Number.isFinite(hh) ? hh : 0;
-    const m = Number.isFinite(mm) ? mm : 0;
-    const s = Number.isFinite(ss) ? ss : 0;
-
-    const useLocal = String(process.env.ZEGO_SCHEDULE_USE_LOCAL_DATE || '').trim() === '1';
-    if (useLocal) {
-        return new Date(
-            d.getFullYear(),
-            d.getMonth(),
-            d.getDate(),
-            h,
-            m,
-            s,
-            0
-        );
-    }
-    return new Date(
-        Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h, m, s, 0)
-    );
-}
-
-/**
- * Effective slot: recruiter proposal with proposed date/time, else interview.startTime, else date+time.
- */
-function getEffectiveInterviewDateTime(interview) {
-    if (interview.startTime) {
-        const st = new Date(interview.startTime);
-        if (!Number.isNaN(st.getTime())) return st;
-    }
-
-    const rs = String(interview.rescheduleStatus || '').toUpperCase();
-    const reschedulePending =
-        interview.interviewStatus === 'reschedule_pending' &&
-        interview.proposedDate &&
-        interview.proposedTime &&
-        ['PROPOSED', 'PENDING'].includes(rs);
-
-    if (reschedulePending) {
-        const slot = buildSlotFromDateAndTime(interview.proposedDate, interview.proposedTime);
-        if (slot) return slot;
-    }
-
-    return buildSlotFromDateAndTime(interview.date, interview.time);
-}
-
 function parseTokenBody(req) {
     const b = req.body && typeof req.body === 'object' ? req.body : {};
     const uid = String(b.userID ?? b.userId ?? b.user_id ?? '').trim();
@@ -91,40 +34,14 @@ function parseTokenBody(req) {
     return { uid, rid, raw: b };
 }
 
-function logZegoEnv() {
-    const rawApp = process.env.ZEGO_APP_ID;
-    const rawSecret = process.env.ZEGO_SERVER_SECRET;
-    const appPresent = rawApp != null && String(rawApp).trim() !== '';
-    const secretPresent = rawSecret != null && String(rawSecret).trim() !== '';
-    const appParsed = Number(String(rawApp || '').trim());
-    console.log('[Zego] env:', {
-        ZEGO_APP_ID_present: appPresent,
-        ZEGO_APP_ID_numeric: Number.isInteger(appParsed) && appParsed > 0,
-        ZEGO_SERVER_SECRET_present: secretPresent,
-        ZEGO_SERVER_SECRET_length: secretPresent ? String(rawSecret).trim().length : 0
-    });
-}
-
 export const generateZegoToken = async (req, res) => {
     const jwtUserId = String(req.user.id || '').trim();
     const jwtRole = req.user.role;
 
     const parsedBody = parseTokenBody(req);
-    console.log('[Zego] POST /token body:', {
-        keys: Object.keys(parsedBody.raw || {}),
-        parsedUserID: parsedBody.uid || null,
-        parsedRoomID: parsedBody.rid || null
-    });
-
-    logZegoEnv();
-
     const { uid: userIdRaw, rid: roomIdRaw } = parsedBody;
 
     if (!userIdRaw || !roomIdRaw) {
-        console.log('[Zego] reject: missing userID or roomID', {
-            parsedUserId: userIdRaw || null,
-            parsedRoomId: roomIdRaw || null
-        });
         return res.status(400).json({
             code: 'ZEGO_MISSING_FIELDS',
             message: 'userID and roomID are required in the request body.',
@@ -158,30 +75,18 @@ export const generateZegoToken = async (req, res) => {
 
     try {
         let interview = await Interview.findOne({ roomId: roomIdRaw });
-        let lookupPath = interview ? 'roomId' : null;
 
         if (!interview && mongoose.Types.ObjectId.isValid(roomIdRaw)) {
             interview = await Interview.findById(roomIdRaw);
-            lookupPath = interview ? 'interviewId' : null;
         }
 
         if (!interview) {
-            console.log('[Zego] reject: interview not found for room lookup', { roomIdRaw });
             return res.status(404).json({
                 code: 'ZEGO_INTERVIEW_NOT_FOUND',
                 message: 'No interview matches this room ID.',
                 details: { roomID: roomIdRaw }
             });
         }
-
-        console.log('[Zego] interview resolved', {
-            lookupPath,
-            interviewId: String(interview._id),
-            storedRoomId: interview.roomId || null,
-            status: interview.status,
-            interviewStatus: interview.interviewStatus,
-            mode: interview.mode
-        });
 
         if (!interview.roomId) {
             interview.roomId = `interview_${interview.applicationId}_${Date.now()}`;
@@ -211,7 +116,6 @@ export const generateZegoToken = async (req, res) => {
         }
 
         if (interview.status !== 'Scheduled') {
-            console.log('[Zego] reject: interview status', { status: interview.status });
             return res.status(403).json({
                 code: 'ZEGO_INTERVIEW_NOT_SCHEDULED',
                 message: `This interview is ${interview.status} and cannot be joined.`,
@@ -220,7 +124,6 @@ export const generateZegoToken = async (req, res) => {
         }
 
         if (String(interview.mode || '').toLowerCase() !== 'online') {
-            console.log('[Zego] reject: not online interview', { mode: interview.mode });
             return res.status(400).json({
                 code: 'ZEGO_NOT_ONLINE',
                 message: 'Video token is only available for online interviews.',
@@ -228,15 +131,8 @@ export const generateZegoToken = async (req, res) => {
             });
         }
 
-        const scheduledTime = getEffectiveInterviewDateTime(interview);
-        if (!scheduledTime || Number.isNaN(scheduledTime.getTime())) {
-            console.log('[Zego] reject: could not parse schedule', {
-                date: interview.date,
-                time: interview.time,
-                proposedDate: interview.proposedDate,
-                proposedTime: interview.proposedTime,
-                startTime: interview.startTime
-            });
+        const win = getInterviewJoinWindow(interview);
+        if (!win || !win.scheduledStart || Number.isNaN(win.scheduledStart.getTime())) {
             return res.status(400).json({
                 code: 'ZEGO_INVALID_SCHEDULE',
                 message: 'Interview date or time is invalid; cannot verify join window.',
@@ -247,46 +143,45 @@ export const generateZegoToken = async (req, res) => {
             });
         }
 
+        const { scheduledStart: scheduledTime, joinAllowedFrom, joinAllowedUntil } = win;
         const now = new Date();
-        const earlyMin = parseInt(process.env.ZEGO_EARLY_JOIN_MINUTES || '10', 10);
-        const lateMin = parseInt(process.env.ZEGO_LATE_JOIN_MINUTES || '60', 10);
-        const earlyMs = (Number.isFinite(earlyMin) ? earlyMin : 10) * 60 * 1000;
-        const lateMs = (Number.isFinite(lateMin) ? lateMin : 60) * 60 * 1000;
 
-        const startWindow = new Date(scheduledTime.getTime() - earlyMs);
-        const endWindow = new Date(scheduledTime.getTime() + lateMs);
-
-        const windowMeta = {
-            now: now.toISOString(),
-            scheduledTime: scheduledTime.toISOString(),
-            startWindow: startWindow.toISOString(),
-            endWindow: endWindow.toISOString(),
-            earlyJoinMinutes: earlyMs / 60000,
-            lateJoinMinutes: lateMs / 60000,
-            scheduleUsesLocalCalendar: String(process.env.ZEGO_SCHEDULE_USE_LOCAL_DATE || '').trim() === '1',
-            interviewTimezone: interview.timezone || null
-        };
-
-        if (now < startWindow) {
-            console.log('[Zego] reject: join too early', windowMeta);
-            return res.status(400).json({
-                code: 'ZEGO_JOIN_TOO_EARLY',
-                message: `You can join up to ${earlyMs / 60000} minutes before the scheduled interview time.`,
-                details: {
-                    ...windowMeta,
-                    canJoinAfter: startWindow.toISOString()
-                }
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[Zego] join window debug', {
+                interviewId: String(interview._id),
+                rawDate: interview.date,
+                rawTime: interview.time,
+                rawStartTime: interview.startTime,
+                parsedStartUtc: scheduledTime.toISOString(),
+                joinAllowedFrom: joinAllowedFrom.toISOString(),
+                joinAllowedUntil: joinAllowedUntil.toISOString(),
+                serverNowUtc: now.toISOString()
             });
         }
-        if (now > endWindow) {
-            console.log('[Zego] reject: join too late', windowMeta);
+
+        if (now < joinAllowedFrom) {
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('[Zego] blocked: TOO_EARLY', { interviewId: String(interview._id) });
+            }
+            const minutesLeft = Math.ceil(
+                (joinAllowedFrom.getTime() - now.getTime()) / 60000
+            );
             return res.status(400).json({
-                code: 'ZEGO_JOIN_TOO_LATE',
-                message: 'This interview time slot has ended for video join.',
-                details: {
-                    ...windowMeta,
-                    expiredAt: endWindow.toISOString()
-                }
+                success: false,
+                code: 'TOO_EARLY',
+                message: `You can join in ${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}`,
+                joinAllowedFrom: joinAllowedFrom.toISOString(),
+                scheduledTime: scheduledTime.toISOString()
+            });
+        }
+        if (now > joinAllowedUntil) {
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('[Zego] blocked: EXPIRED', { interviewId: String(interview._id) });
+            }
+            return res.status(400).json({
+                success: false,
+                code: 'EXPIRED',
+                message: 'This interview session has expired'
             });
         }
 
@@ -323,11 +218,9 @@ export const generateZegoToken = async (req, res) => {
         }
 
         const effectiveTimeInSeconds = 3600;
-        const payload = JSON.stringify({
-            room_id: roomIdString,
-            privilege: { 1: 1, 2: 1 },
-            stream_id_list: null
-        });
+        // Empty payload matches ZEGOCLOUD Call Kit / UIKit web auth docs for server tokens used with
+        // generateKitTokenForProduction (room/user are enforced by the kit token + join params).
+        const payload = '';
 
         const token = generateToken04(
             appId,
@@ -337,15 +230,8 @@ export const generateZegoToken = async (req, res) => {
             payload
         );
 
-        console.log('[Zego] token OK', {
-            requestedRoom: roomIdRaw,
-            resolvedRoomId: roomIdString,
-            zegoUserId,
-            appId,
-            tokenLen: token?.length
-        });
-
         res.json({
+            success: true,
             appId,
             token,
             roomId: roomIdString,

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import CompanyLogo from '../common/CompanyLogo';
+import { applyVisibleBadgeLimits, BADGE_CONFIG, getJobDisplayReason } from '../../utils/jobLabelDisplay';
 
 const RecommendedJobs = () => {
     const [jobs, setJobs] = useState([]);
@@ -49,7 +50,11 @@ const RecommendedJobs = () => {
                         <svg className="w-3.5 h-3.5 text-[#29a08e]" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                         </svg>
-                        <p className="text-xs font-semibold text-gray-400">Based on your profile and preferences</p>
+                        <p className="text-xs font-semibold text-gray-400">
+                            {hasPersonalizationData
+                                ? 'Based on your profile and preferences'
+                                : 'Complete your profile to get personalized job suggestions'}
+                        </p>
                     </div>
                 </div>
                 <Link to="/jobs" className="text-sm font-bold text-[#29a08e] hover:text-[#228377] flex items-center gap-1 transition-colors">
@@ -79,47 +84,40 @@ const RecommendedJobs = () => {
                                         </p>
                                     </div>
                                         {(() => {
-                                            const type = job.recommendationType || (job.matchReason?.includes('platform trends') ? 'trending' : 'ai_match');
-                                            const confidence = job.recommendationConfidence || 'low';
-                                            const score = typeof job.matchScore === 'number' ? job.matchScore : Number(job.matchScore);
-                                            const showScoreBadge = type === 'ai_match' && confidence !== 'low' && Number.isFinite(score) && score >= 20;
-
-                                            if (type === 'ai_match') {
-                                                if (showScoreBadge) {
-                                                    return (
-                                                        <div className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-bold border border-emerald-200">
-                                                            {score}% Match
-                                                        </div>
-                                                    );
-                                                }
+                                            const cfg = job.visibleLabel ? BADGE_CONFIG[job.visibleLabel] : null;
+                                            if (cfg) {
                                                 return (
-                                                    <div className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-200">
-                                                        AI Match (Low confidence)
-                                                    </div>
-                                                );
-                                            }
-                                            if (type === 'trending') {
-                                                return (
-                                                    <div className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold border border-blue-200">
-                                                        Trending Near You
+                                                    <div
+                                                        className={`px-3 py-1 rounded-lg text-xs font-bold border ${cfg.className}`}
+                                                        title={
+                                                            getJobDisplayReason(job)
+                                                                ? `Why this job? ${getJobDisplayReason(job)}`
+                                                                : 'Why this job?'
+                                                        }
+                                                    >
+                                                        <span className="mr-1" aria-hidden>
+                                                            {cfg.icon}
+                                                        </span>
+                                                        {cfg.label}
                                                     </div>
                                                 );
                                             }
                                             return (
                                                 <div className="px-3 py-1 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold border border-gray-200">
-                                                    Recommendation
+                                                    Job listing
                                                 </div>
                                             );
                                         })()}
                                 </div>
 
-                                {job.matchReason && (
-                                        <p className="text-xs text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                            <span className="font-bold text-[#29a08e]">
-                                                {(job.recommendationType || '').toLowerCase() === 'ai_match' ? 'Why this role?' : 'Why recommended?'}
-                                            </span>{' '}
-                                            {job.matchReason}
-                                        </p>
+                                {getJobDisplayReason(job) && (
+                                    <p
+                                        className="text-xs text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100"
+                                        title={`Why this job? ${getJobDisplayReason(job)}`}
+                                    >
+                                        <span className="font-bold text-[#29a08e]">Why this job?</span>{' '}
+                                        {getJobDisplayReason(job)}
+                                    </p>
                                 )}
 
                                 <div className="flex flex-wrap gap-2 mb-6">
@@ -168,8 +166,15 @@ const RecommendedJobs = () => {
                     </div>
                 )) : (
                     <div className="bg-gray-50 rounded-3xl p-12 text-center border border-dashed border-gray-200">
-                        <p className="text-gray-500 font-medium">No recommended jobs found at this time.</p>
-                        <Link to="/jobs" className="text-[#29a08e] font-bold mt-4 inline-block hover:underline">Explore all jobs</Link>
+                        <p className="text-gray-600 font-medium">
+                            Complete your profile to get recommendations.
+                        </p>
+                        <Link
+                            to="/jobs"
+                            className="text-[#29a08e] font-bold mt-4 inline-block hover:underline"
+                        >
+                            Explore all jobs
+                        </Link>
                     </div>
                 )}
             </div>

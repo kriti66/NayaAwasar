@@ -54,6 +54,10 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
             if (!applicationData.personalInfo.fullName || !applicationData.personalInfo.email) {
                 return toast.error("Please fill in basic personal details");
             }
+            const phone = (applicationData.personalInfo.phone || '').trim();
+            if (phone && !/^\+[0-9][0-9\s-]{6,14}$/.test(phone)) {
+                return toast.error("Please enter a valid phone number with country code");
+            }
         }
         if (step === 2) {
             if (applicationData.coverLetter.length < 50) {
@@ -164,14 +168,21 @@ const JobApplicationFlow = ({ job, onClose, onApplySuccess }) => {
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Phone Number</label>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">
+                                        Phone Number <span className="font-normal lowercase text-slate-400">(optional)</span>
+                                    </label>
                                     <input
                                         type="tel"
                                         value={applicationData.personalInfo.phone}
                                         onChange={(e) => setApplicationData(p => ({ ...p, personalInfo: { ...p.personalInfo, phone: e.target.value } }))}
                                         className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-[#29a08e] font-bold text-slate-800"
-                                        placeholder="+977-XXXXXXXXXX"
+                                        placeholder="e.g. +977 9800000000"
                                     />
+                                    <p className="text-[11px] text-slate-400">
+                                        {profile?.phoneNumber
+                                            ? 'Using your saved phone number — you can adjust it for this application.'
+                                            : 'Include country code. Starts with + and 7–15 digits.'}
+                                    </p>
                                 </div>
                             </div>
                         </div>

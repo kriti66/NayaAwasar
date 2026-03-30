@@ -39,6 +39,15 @@ const upload = multer({
 // JOBSEEKER ROUTES
 router.get('/my', requireAuth, applicationController.getMyApplications);
 router.get('/my-interviews', requireAuth, applicationController.getMyInterviews);
+router.get('/:id/interview-detail', requireAuth, applicationController.getInterviewApplicationDetail);
+router.patch('/:id/mark-interview-joined', requireAuth, applicationController.markInterviewJoined);
+router.patch('/:id/cancel-reschedule-request', requireAuth, applicationController.cancelJobseekerRescheduleRequest);
+router.patch(
+    '/:id/interview-result',
+    requireKycApproved,
+    requireRole('recruiter', 'admin'),
+    applicationController.updateInterviewResult
+);
 router.post('/apply', requireKycVerified, upload.single('resume'), applicationController.applyForJob);
 router.patch('/:id/withdraw', requireAuth, applicationController.withdrawApplication);
 router.patch('/:id/accept-offer', requireAuth, applicationController.acceptOffer);

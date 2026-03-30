@@ -27,6 +27,8 @@ const AdminJobs = () => {
         reviewDeadline: '',
         adminComments: ''
     });
+    const [labelOverrideDraft, setLabelOverrideDraft] = useState('');
+    const [labelSaving, setLabelSaving] = useState(false);
 
     const fetchJobs = async () => {
         try {
@@ -63,7 +65,32 @@ const AdminJobs = () => {
             reviewDeadline: job.reviewDeadline ? new Date(job.reviewDeadline).toISOString().split('T')[0] : '',
             adminComments: job.adminComments || ''
         });
+        setLabelOverrideDraft(job.labelOverride || '');
         setShowModal(true);
+    };
+
+    const handleSaveLabelOverride = async (e) => {
+        e.preventDefault();
+        if (!selectedJob?._id) return;
+        setLabelSaving(true);
+        try {
+            const body =
+                labelOverrideDraft === '' || labelOverrideDraft === 'AUTO'
+                    ? { labelOverride: null }
+                    : { labelOverride: labelOverrideDraft };
+            const res = await api.patch(`/jobs/${selectedJob._id}/label-override`, body);
+            const updated = res.data?.job;
+            if (updated) {
+                setJobs((prev) => prev.map((j) => (j._id === updated._id ? { ...j, ...updated } : j)));
+                setSelectedJob((s) => (s && s._id === updated._id ? { ...s, ...updated } : s));
+            }
+            alert('Badge label override saved.');
+        } catch (err) {
+            console.error(err);
+            alert('Failed to save label override.');
+        } finally {
+            setLabelSaving(false);
+        }
     };
 
     const handleModerationSubmit = async (e) => {
@@ -326,6 +353,30 @@ const AdminJobs = () => {
                                     value={moderationData.adminComments}
                                     onChange={(e) => setModerationData({ ...moderationData, adminComments: e.target.value })}
                                 />
+                            </div>
+
+                            <div className="border-t border-gray-100 pt-5 space-y-2">
+                                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Job list badge (override)</label>
+                                <p className="text-xs text-gray-500">Auto uses promoted/AI rules. Override applies to all seekers until cleared.</p>
+                                <select
+                                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#29a08e]/30 focus:border-[#29a08e] outline-none"
+                                    value={labelOverrideDraft || 'AUTO'}
+                                    onChange={(e) => setLabelOverrideDraft(e.target.value === 'AUTO' ? '' : e.target.value)}
+                                >
+                                    <option value="AUTO">Auto (algorithm)</option>
+                                    <option value="SPONSORED">Sponsored</option>
+                                    <option value="AI_SUGGESTED">AI Suggested</option>
+                                    <option value="FEATURED">Featured Opportunity</option>
+                                    <option value="GOOD_MATCH">Good Match</option>
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={handleSaveLabelOverride}
+                                    disabled={labelSaving}
+                                    className="w-full py-2.5 bg-[#0f172a] text-white rounded-xl text-xs font-bold hover:bg-gray-800 transition-all disabled:opacity-60"
+                                >
+                                    {labelSaving ? 'Saving…' : 'Save badge override'}
+                                </button>
                             </div>
 
                             <div className="pt-2">

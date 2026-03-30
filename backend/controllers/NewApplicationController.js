@@ -7,6 +7,9 @@ import { createNotification } from './notificationController.js';
 import { logUserActivity } from '../utils/userActivityLogger.js';
 import { logActivity } from '../utils/activityLogger.js';
 import Interview from '../models/Interview.js';
+import { recordUserInteraction } from '../services/recommendationService.js';
+import { getEffectiveInterviewStart } from '../utils/interviewDateTime.js';
+import { computeInterviewLifecycle } from '../utils/interviewLifecycle.js';
 
 function getSeekerIdString(application) {
     const s = application?.seeker_id;
@@ -184,7 +187,7 @@ export const applyForJob = async (req, res) => {
                 application.personalInfo = {
                     fullName: user.fullName,
                     email: user.email,
-                    phone: user.phoneNumber || profile?.phoneNumber,
+                    phone: user.phoneNumber || profile?.phoneNumber || null,
                     address: user.location || profile?.location
                 };
 
@@ -216,6 +219,8 @@ export const applyForJob = async (req, res) => {
                     sender: seekerId
                 });
 
+                recordUserInteraction(seekerId, job_id, 'applied');
+
                 return res.status(200).json({
                     success: true,
                     message: 'Application successfully resubmitted',
@@ -239,7 +244,7 @@ export const applyForJob = async (req, res) => {
             personalInfo: {
                 fullName: user.fullName,
                 email: user.email,
-                phone: user.phoneNumber || profile?.phoneNumber,
+                phone: user.phoneNumber || profile?.phoneNumber || null,
                 address: user.location || profile?.location
             },
             applicantLocation: user.location || profile?.location || '',
@@ -269,6 +274,8 @@ export const applyForJob = async (req, res) => {
             link: `/recruiter/applications?jobId=${job_id}`,
             sender: seekerId
         });
+
+        recordUserInteraction(seekerId, job_id, 'applied');
 
         res.status(201).json({ success: true, message: 'Application submitted successfully', applicationId: application._id });
 
@@ -350,7 +357,7 @@ export const advanceApplication = async (req, res) => {
         const nextStatus = pipeline[currentIndex + 1];
 
         if (nextStatus === 'interview') {
-            const { date, time, mode, location, notes, timezone } = req.body;
+            const { date, time, mode, location, notes, timezone, duration, interviewer } = req.body;
             if (!date || !time || !mode) {
                 return res.status(400).json({ message: 'Date, time, and mode are required for interview.' });
             }
@@ -365,6 +372,7 @@ export const advanceApplication = async (req, res) => {
                 roomId = `interview_${application._id}_${Date.now()}`;
             }
 
+            const dur = Number(duration);
             const newInterview = await Interview.create({
                 applicationId: application._id,
                 jobId: application.job_id._id,
@@ -377,11 +385,15 @@ export const advanceApplication = async (req, res) => {
                 roomId,
                 notes,
                 timezone,
-                status: 'Scheduled'
+                status: 'Scheduled',
+                duration: Number.isFinite(dur) && dur > 0 ? dur : 30,
+                interviewer: interviewer ? String(interviewer).trim() : ''
             });
 
             application.interview = {
                 date, time, mode, location, roomId, notes, timezone,
+                duration: newInterview.duration,
+                interviewer: newInterview.interviewer,
                 scheduledAt: new Date(),
                 interviewId: newInterview._id
             };
@@ -481,7 +493,7 @@ export const updateApplicationStatus = async (req, res) => {
 
         // 1. Interview
         if (normalizedStatus === 'interview' && interviewDetails) {
-            const { date, time, mode, location, notes, timezone } = interviewDetails;
+            const { date, time, mode, location, notes, timezone, duration, interviewer } = interviewDetails;
 
             if (mode === 'Onsite' && !location) {
                 return res.status(400).json({ message: 'Location is required for Onsite interviews.' });
@@ -492,6 +504,7 @@ export const updateApplicationStatus = async (req, res) => {
                 roomId = `interview_${application._id}_${Date.now()}`;
             }
 
+            const dur = Number(duration);
             const newInterview = await Interview.create({
                 applicationId: application._id,
                 jobId: application.job_id._id,
@@ -504,7 +517,9 @@ export const updateApplicationStatus = async (req, res) => {
                 roomId: roomId,
                 notes: notes,
                 timezone: timezone,
-                status: 'Scheduled'
+                status: 'Scheduled',
+                duration: Number.isFinite(dur) && dur > 0 ? dur : 30,
+                interviewer: interviewer ? String(interviewer).trim() : ''
             });
 
             application.interview = {
@@ -638,14 +653,9 @@ export const getMyInterviews = async (req, res) => {
     const seekerId = req.user.id;
 
     try {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-
-        // Fetch from Interview model: scheduled, reschedule_pending, confirmed
         const interviewDocs = await Interview.find({
             seekerId,
-            status: 'Scheduled',
-            date: { $gte: startOfToday },
+            status: { $in: ['Scheduled', 'Completed', 'Missed'] },
             $or: [
                 { interviewStatus: { $in: ['scheduled', 'reschedule_pending', 'confirmed'] } },
                 { interviewStatus: { $exists: false } },
@@ -654,19 +664,21 @@ export const getMyInterviews = async (req, res) => {
         })
             .populate('applicationId')
             .populate('jobId', 'title company_name location')
-            .sort({ date: 1 })
             .lean();
 
-        // Build response in Application-like shape for frontend compatibility
-        const result = interviewDocs
+        const rows = interviewDocs
             .filter((inv) => inv.applicationId && inv.applicationId.status === 'interview')
             .map((inv) => {
                 const app = inv.applicationId;
                 const appObj = app?.toObject ? app.toObject() : app;
+                const life = computeInterviewLifecycle(inv);
+                const effectiveStart = getEffectiveInterviewStart(inv);
                 return {
                     ...appObj,
                     _id: app._id,
                     job_id: inv.jobId,
+                    lifecycleStatus: life.status,
+                    effectiveStartMs: effectiveStart ? effectiveStart.getTime() : null,
                     interview: {
                         date: inv.date,
                         time: inv.time,
@@ -675,8 +687,8 @@ export const getMyInterviews = async (req, res) => {
                         roomId: inv.roomId,
                         notes: inv.notes,
                         timezone: inv.timezone,
-                        duration: app?.interview?.duration,
-                        interviewer: app?.interview?.interviewer,
+                        duration: inv.duration ?? app?.interview?.duration ?? 30,
+                        interviewer: inv.interviewer || app?.interview?.interviewer,
                         interviewId: {
                             _id: inv._id,
                             interviewStatus: inv.interviewStatus || 'scheduled',
@@ -689,16 +701,166 @@ export const getMyInterviews = async (req, res) => {
                             requestedDate: inv.requestedDate,
                             requestedTime: inv.requestedTime,
                             recruiterDecisionAt: inv.recruiterDecisionAt,
-                            rescheduleRejectedReason: inv.rescheduleRejectedReason
+                            rescheduleRejectedReason: inv.rescheduleRejectedReason,
+                            joined: inv.joined === true,
+                            result: inv.result,
+                            mongoStatus: inv.status,
+                            startTime: inv.startTime,
+                            endTime: inv.endTime
                         }
                     }
                 };
             });
 
-        res.json(result);
+        rows.sort((a, b) => {
+            const ta = a.effectiveStartMs != null ? a.effectiveStartMs : Number.MAX_SAFE_INTEGER;
+            const tb = b.effectiveStartMs != null ? b.effectiveStartMs : Number.MAX_SAFE_INTEGER;
+            return ta - tb;
+        });
+
+        res.json(rows);
     } catch (error) {
         console.error("Fetch interviews error:", error);
         res.status(500).json({ message: 'Error fetching interviews' });
+    }
+};
+
+/** GET /applications/:id/interview-detail — seeker or recruiter for that application */
+export const getInterviewApplicationDetail = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    try {
+        const application = await Application.findById(id).populate('job_id').populate('interview.interviewId');
+        if (!application) return res.status(404).json({ message: 'Application not found' });
+
+        const isSeeker = application.seeker_id.toString() === userId;
+        const isRecruiter =
+            application.job_id?.recruiter_id?.toString() === userId || req.user.role === 'admin';
+        if (!isSeeker && !isRecruiter) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        const inv = application.interview?.interviewId;
+        if (!inv) return res.status(404).json({ message: 'No interview on this application' });
+
+        const invPlain = inv.toObject ? inv.toObject() : inv;
+        const life = computeInterviewLifecycle(invPlain);
+        res.json({
+            application,
+            interview: invPlain,
+            lifecycleStatus: life.status,
+            effectiveStart: life.effectiveStart ? life.effectiveStart.toISOString() : null,
+            effectiveEnd: life.effectiveEnd ? life.effectiveEnd.toISOString() : null
+        });
+    } catch (e) {
+        console.error('getInterviewApplicationDetail', e);
+        res.status(500).json({ message: 'Error loading interview' });
+    }
+};
+
+/** PATCH seeker: mark joined when lifecycle is LIVE */
+export const markInterviewJoined = async (req, res) => {
+    const { id } = req.params;
+    const seekerId = req.user.id;
+    try {
+        const application = await Application.findById(id).populate('interview.interviewId');
+        if (!application) return res.status(404).json({ message: 'Application not found' });
+        if (application.seeker_id.toString() !== seekerId) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+        const interviewDoc = application.interview?.interviewId;
+        if (!interviewDoc) return res.status(404).json({ message: 'Interview not found' });
+
+        const plain = interviewDoc.toObject ? interviewDoc.toObject() : interviewDoc;
+        const life = computeInterviewLifecycle(plain);
+        if (life.status !== 'LIVE') {
+            return res.status(400).json({
+                message: 'You can only mark joined during the live interview window.',
+                lifecycleStatus: life.status
+            });
+        }
+
+        interviewDoc.joined = true;
+        await interviewDoc.save();
+        res.json({ success: true, joined: true });
+    } catch (e) {
+        console.error('markInterviewJoined', e);
+        res.status(500).json({ message: 'Error updating interview' });
+    }
+};
+
+/** PATCH seeker: cancel own pending reschedule (PENDING + jobseeker) */
+export const cancelJobseekerRescheduleRequest = async (req, res) => {
+    const { id } = req.params;
+    const seekerId = req.user.id;
+    try {
+        const application = await Application.findById(id).populate('job_id').populate('interview.interviewId');
+        if (!application) return res.status(404).json({ message: 'Application not found' });
+        if (application.seeker_id.toString() !== seekerId) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        const interviewDoc = application.interview?.interviewId;
+        if (!interviewDoc) return res.status(404).json({ message: 'Interview not found' });
+
+        const rs = String(interviewDoc.rescheduleStatus || '').toUpperCase();
+        if (
+            interviewDoc.rescheduleRequestedBy !== 'jobseeker' ||
+            rs !== 'PENDING' ||
+            interviewDoc.interviewStatus !== 'reschedule_pending'
+        ) {
+            return res.status(400).json({ message: 'No active jobseeker reschedule request to cancel' });
+        }
+
+        interviewDoc.rescheduleStatus = 'NONE';
+        interviewDoc.interviewStatus = 'scheduled';
+        interviewDoc.rescheduleRequestedAt = undefined;
+        interviewDoc.requestedDate = undefined;
+        interviewDoc.requestedTime = undefined;
+        interviewDoc.rescheduleReason = undefined;
+        await interviewDoc.save();
+
+        application.reschedule = application.reschedule || {};
+        application.reschedule.requested = false;
+        application.reschedule.reviewed = false;
+        application.reschedule.reason = undefined;
+        await application.save();
+
+        res.json({ success: true, message: 'Reschedule request cancelled' });
+    } catch (e) {
+        console.error('cancelJobseekerRescheduleRequest', e);
+        res.status(500).json({ message: 'Error cancelling reschedule' });
+    }
+};
+
+/** PATCH recruiter: interview outcome (does not advance application stage — use existing flows for offer/reject) */
+export const updateInterviewResult = async (req, res) => {
+    const { id } = req.params;
+    const { result } = req.body;
+    const recruiterId = req.user.id;
+
+    if (!['passed', 'rejected'].includes(result)) {
+        return res.status(400).json({ message: 'result must be passed or rejected' });
+    }
+
+    try {
+        const application = await Application.findById(id).populate('job_id').populate('interview.interviewId');
+        if (!application) return res.status(404).json({ message: 'Application not found' });
+        if (application.job_id.recruiter_id.toString() !== recruiterId && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        const interviewDoc = application.interview?.interviewId;
+        if (!interviewDoc) return res.status(404).json({ message: 'Interview not found' });
+
+        interviewDoc.result = result;
+        interviewDoc.status = 'Completed';
+        await interviewDoc.save();
+
+        res.json({ success: true, interview: interviewDoc });
+    } catch (e) {
+        console.error('updateInterviewResult', e);
+        res.status(500).json({ message: 'Error saving interview result' });
     }
 };
 
@@ -790,6 +952,7 @@ export const approveReschedule = async (req, res) => {
             interviewDoc = await Interview.findById(application.interview.interviewId);
         }
 
+        const durApprove = Number(duration);
         if (interviewDoc) {
             interviewDoc.date = date;
             interviewDoc.time = time;
@@ -801,6 +964,8 @@ export const approveReschedule = async (req, res) => {
             interviewDoc.status = 'Scheduled';
             interviewDoc.interviewStatus = 'scheduled';
             interviewDoc.rescheduleStatus = 'NONE';
+            if (Number.isFinite(durApprove) && durApprove > 0) interviewDoc.duration = durApprove;
+            if (interviewer != null) interviewDoc.interviewer = String(interviewer).trim();
             await interviewDoc.save();
         } else {
             interviewDoc = await Interview.create({
@@ -813,7 +978,9 @@ export const approveReschedule = async (req, res) => {
                 roomId,
                 notes,
                 timezone,
-                status: 'Scheduled'
+                status: 'Scheduled',
+                duration: Number.isFinite(durApprove) && durApprove > 0 ? durApprove : 30,
+                interviewer: interviewer ? String(interviewer).trim() : ''
             });
         }
 

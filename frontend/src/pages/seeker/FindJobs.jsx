@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 import {
     Search, MapPin, Briefcase, Clock,
     Filter, X, ChevronDown, Bookmark, Star,
-    ArrowRight, LayoutGrid, List, Sparkles,
+    ArrowRight, LayoutGrid, List,
     SlidersHorizontal, Compass, TrendingUp, Building2
 } from 'lucide-react';
 import CompanyLogo from '../../components/common/CompanyLogo';
@@ -15,12 +15,14 @@ import Pagination from '../../components/common/Pagination';
 import FeaturedJobs from '../../components/jobs/FeaturedJobs';
 import PromotionBadge from '../../components/jobs/PromotionBadge';
 import { JOB_CATEGORIES } from '../../constants/jobCategories';
+import { applyVisibleBadgeLimits, BADGE_CONFIG, getJobDisplayReason } from '../../utils/jobLabelDisplay';
 
-/** Sidebar experience labels → Job.experience_level values */
+/** Sidebar experience labels → Job.experience_level values (exact match) */
 const SEEKER_EXP_TO_API = {
-    Fresher: ['Entry Level'],
-    Intermediate: ['Associate', 'Mid-Senior Level'],
-    Expert: ['Mid-Senior Level', 'Director', 'Executive']
+    'Entry-level': ['Entry-level'],
+    'Mid-level': ['Mid-level'],
+    Senior: ['Senior'],
+    Executive: ['Executive']
 };
 
 const JobCardSkeleton = () => (
@@ -147,7 +149,9 @@ function matchesSavedJobFilters(job, ctx) {
     
     if (filters.experienceLevel.length) {
         const allowed = filters.experienceLevel.flatMap((l) => SEEKER_EXP_TO_API[l] || []);
-        if (!allowed.includes(job.experience_level)) return false;
+        const exp = job.experience_level;
+        if (!exp) return false; // Old jobs without experience_level should not appear when filter is active
+        if (!allowed.includes(exp)) return false;
     }
     
     if (selectedTags.length) {
@@ -169,31 +173,29 @@ const timeAgo = (date) => {
     return 'Just now';
 };
 
-const getMatchBadgeLabel = (job) => {
-    const score = job.matchScore;
-    if (score != null && score >= 10) return `${score}% Match`;
-    if (job.isRecommended) return 'AI Suggested';
-    return null;
-};
-
 const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
-    const matchLabel = getMatchBadgeLabel(job);
-    const isRecommended = !!matchLabel;
+    const badgeCfg = job.visibleLabel ? BADGE_CONFIG[job.visibleLabel] : null;
+    const displayReason = getJobDisplayReason(job);
+    const isAiStyle = ['AI_SUGGESTED', 'GOOD_MATCH'].includes(job.visibleLabel || '');
     const isPromoted = job?.activePromotion || (job?.isPromoted && job?.promotionType && job.promotionType !== 'NONE');
     const salaryValue = normalizeSalaryRangeToNrsValue(job.salary_range || 'Negotiable');
     const salaryHasDigits = /\d/.test(salaryValue);
     return (
     <div className={`group rounded-2xl border transition-all duration-300 hover:shadow-xl p-6 relative ${
-        isPromoted
+        isPromoted && job.visibleLabel === 'SPONSORED'
             ? 'bg-gradient-to-br from-white to-amber-50/30 border-amber-200/50 ring-1 ring-amber-200/30 shadow-sm'
-            : isRecommended
+            : isAiStyle
                 ? 'bg-white border-[#29a08e]/20 ring-1 ring-[#29a08e]/10'
-                : 'bg-white border-gray-100 shadow-sm hover:border-[#29a08e]/20'
+                : isPromoted
+                    ? 'bg-gradient-to-br from-white to-amber-50/30 border-amber-200/50 ring-1 ring-amber-200/30 shadow-sm'
+                    : 'bg-white border-gray-100 shadow-sm hover:border-[#29a08e]/20'
     }`}>
-        {matchLabel && (
-            <div className="absolute -top-3 right-6">
-                <span className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-[#29a08e] to-[#22877a] text-white rounded-full text-[10px] font-bold uppercase tracking-wider shadow-lg shadow-[#29a08e]/20">
-                    <Sparkles size={10} /> {matchLabel}
+        {badgeCfg && (
+            <div className="absolute -top-3 right-6 z-[1]" title={displayReason ? `Why this job? ${displayReason}` : 'Why this job?'}>
+                <span
+                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md ${badgeCfg.className}`}
+                >
+                    <span aria-hidden>{badgeCfg.icon}</span> {badgeCfg.label}
                 </span>
             </div>
         )}
@@ -206,7 +208,7 @@ const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
                     <div>
                         <div className="flex flex-wrap items-center gap-2 mb-0.5">
                             <h3 className="text-base font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors line-clamp-1">{job.title}</h3>
-                            <PromotionBadge job={job} />
+                            {!job.visibleLabel && <PromotionBadge job={job} />}
                         </div>
                         <p className="text-sm font-medium text-gray-500 flex items-center gap-1.5">
                             <Building2 size={12} className="text-gray-400" />
@@ -231,9 +233,12 @@ const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
                     ))}
                 </div>
 
-                {job.matchReason && (
-                    <div className="mb-4 text-xs font-medium text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                        <span className="font-bold text-gray-800">Why this job?</span> {job.matchReason}
+                {displayReason && (
+                    <div
+                        className="mb-4 text-xs font-medium text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100"
+                        title={`Why this job? ${displayReason}`}
+                    >
+                        <span className="font-bold text-gray-800">Why this job?</span> {displayReason}
                     </div>
                 )}
 
@@ -365,6 +370,7 @@ const FindJobs = () => {
     const [searchParams] = useSearchParams();
     const showSavedOnly = searchParams.get('saved') === 'true';
     const [jobs, setJobs] = useState([]);
+    const [hasPersonalizationData, setHasPersonalizationData] = useState(true);
     /** List fetch in progress (scoped to results — does not unmount the page). */
     const [listLoading, setListLoading] = useState(true);
     const listFetchGen = useRef(0);
@@ -423,6 +429,7 @@ const FindJobs = () => {
                 if (cancelled || gen !== listFetchGen.current) return;
                 const jobList = savedRes.data?.jobs || [];
                 setJobs(Array.isArray(jobList) ? jobList : []);
+                setHasPersonalizationData(true);
                 setSavedJobIds(normalizeIds(savedRes.data?.savedJobIds));
             } catch (error) {
                 if (!cancelled && gen === listFetchGen.current) {
@@ -461,7 +468,14 @@ const FindJobs = () => {
                     api.get('/jobs/saved', { signal: ctrl.signal })
                 ]);
                 if (ctrl.signal.aborted || gen !== listFetchGen.current) return;
-                setJobs(Array.isArray(jobsRes.data) ? jobsRes.data : []);
+                const payload = jobsRes.data;
+                const list = Array.isArray(payload?.jobs)
+                    ? payload.jobs
+                    : Array.isArray(payload)
+                      ? payload
+                      : [];
+                setJobs(list);
+                setHasPersonalizationData(payload?.hasPersonalizationData !== false);
                 setSavedJobIds(normalizeIds(savedRes.data?.savedJobIds));
             } catch (error) {
                 if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return;
@@ -552,6 +566,10 @@ const FindJobs = () => {
     const indexOfLastJob = currentPage * jobsPerPage;
     const indexOfFirstJob = indexOfLastJob - jobsPerPage;
     const currentJobs = filteredJobs.slice(indexOfFirstJob, indexOfLastJob);
+    const currentJobsWithBadges = useMemo(
+        () => applyVisibleBadgeLimits(currentJobs),
+        [currentJobs]
+    );
     const totalPages = Math.ceil(filteredJobs.length / jobsPerPage);
 
 
@@ -682,6 +700,14 @@ const FindJobs = () => {
 
                     {/* Right Content - Job Listings */}
                     <div className="lg:col-span-9 space-y-5 order-1 lg:order-2">
+                        {user &&
+                            (user.role === 'jobseeker' || user.role === 'job_seeker') &&
+                            !showSavedOnly &&
+                            hasPersonalizationData === false && (
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 font-medium">
+                                    Complete your profile to get personalized job suggestions.
+                                </div>
+                            )}
                         {/* Results Header */}
                         <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center justify-between shadow-sm">
                             <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
@@ -708,13 +734,13 @@ const FindJobs = () => {
                                     ))}
                                 </>
                             )}
-                            {!listLoading && currentJobs.length > 0 &&
-                                currentJobs.map((job) => (
+                            {!listLoading && currentJobsWithBadges.length > 0 &&
+                                currentJobsWithBadges.map((job) => (
                                     <JobCard key={job._id || job.id} job={job} savedJobIds={savedJobIds} toggleSaveJob={toggleSaveJob} viewMode={viewMode} />
                                 ))}
                             {listLoading && jobs.length > 0 && (
                                 <>
-                                    {currentJobs.map((job) => (
+                                    {currentJobsWithBadges.map((job) => (
                                         <JobCard key={job._id || job.id} job={job} savedJobIds={savedJobIds} toggleSaveJob={toggleSaveJob} viewMode={viewMode} />
                                     ))}
                                     <div
@@ -728,7 +754,7 @@ const FindJobs = () => {
                                     </div>
                                 </>
                             )}
-                            {!listLoading && currentJobs.length === 0 && (
+                            {!listLoading && currentJobsWithBadges.length === 0 && (
                                 <div className="col-span-full bg-white rounded-2xl border border-gray-100 p-16 text-center shadow-sm">
                                     <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-300 shadow-inner">
                                         {showSavedOnly ? <Star size={24} /> : <Search size={24} />}

@@ -4,7 +4,12 @@ import Activity from '../models/Activity.js'; // For public view logging
 import { calculateProfileStrength } from '../utils/profileStrength.js';
 import { logUserActivity } from '../utils/userActivityLogger.js';
 import { autoRegenerateCV } from './cvController.js';
+import { triggerEmbeddingUpdate } from '../services/recommendationService.js';
+import { invalidateUserJobLabelCache } from '../services/userJobLabelEnrichment.js';
 
+const refreshSeekerJobLabels = (userId) => {
+    invalidateUserJobLabelCache(userId).catch(() => {});
+};
 
 // Helper to ensure profile exists
 const getOrCreateProfile = async (userId) => {
@@ -76,6 +81,7 @@ export const updateProfile = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        triggerEmbeddingUpdate(userId, 'user');
 
         // Auto-regenerate CV if needed
         autoRegenerateCV(userId).catch(err => console.error("BG CV update failed", err));
@@ -116,6 +122,8 @@ export const updateSkills = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        triggerEmbeddingUpdate(req.user.id, 'user');
+        refreshSeekerJobLabels(req.user.id);
         if (profile.resume && profile.resume.source === 'generated') {
             autoRegenerateCV(req.user.id).catch(e => console.error(e));
         }
@@ -136,6 +144,8 @@ export const addExperience = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        triggerEmbeddingUpdate(req.user.id, 'user');
+        refreshSeekerJobLabels(req.user.id);
         res.json(profile.experience);
     } catch (error) {
         res.status(500).json({ message: 'Error adding experience' });
@@ -155,6 +165,7 @@ export const updateExperience = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        triggerEmbeddingUpdate(req.user.id, 'user');
         res.json(profile.experience);
     } catch (error) {
         res.status(500).json({ message: 'Error updating experience' });
@@ -171,6 +182,8 @@ export const deleteExperience = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        triggerEmbeddingUpdate(req.user.id, 'user');
+        refreshSeekerJobLabels(req.user.id);
         res.json(profile.experience);
     } catch (error) {
         res.status(500).json({ message: 'Error deleting experience' });
@@ -187,6 +200,7 @@ export const addEducation = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        refreshSeekerJobLabels(req.user.id);
         res.json(profile.education);
     } catch (error) {
         res.status(500).json({ message: 'Error adding education' });
@@ -206,6 +220,7 @@ export const updateEducation = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        refreshSeekerJobLabels(req.user.id);
         res.json(profile.education);
     } catch (error) {
         res.status(500).json({ message: 'Error updating education' });
@@ -222,6 +237,7 @@ export const deleteEducation = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        refreshSeekerJobLabels(req.user.id);
         res.json(profile.education);
     } catch (error) {
         res.status(500).json({ message: 'Error deleting education' });
@@ -245,6 +261,8 @@ export const uploadResume = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        refreshSeekerJobLabels(req.user.id);
+        triggerEmbeddingUpdate(req.user.id, 'user');
         res.json(profile.resume);
     } catch (error) {
         console.error('Resume upload error:', error);
@@ -270,6 +288,8 @@ export const deleteResume = async (req, res) => {
         profile.profileStrength = score;
 
         await profile.save();
+        refreshSeekerJobLabels(req.user.id);
+        triggerEmbeddingUpdate(req.user.id, 'user');
         res.json({ message: 'Resume deleted' });
     } catch (error) {
         res.status(500).json({ message: 'Error deleting resume' });

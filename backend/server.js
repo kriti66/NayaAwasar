@@ -128,8 +128,11 @@ import interviewRoutes from './routes/interviewRoutes.js';
 import zegoRoutes from './routes/zegoRoutes.js';
 import recommendationRoutes from './routes/recommendations.js';
 import contactRoutes from './routes/contact.js';
+import chatbotRoutes from './routes/chatbotRoutes.js';
 import promotionRoutes from './routes/promotions.js';
 import promotionPaymentRequestRoutes from './routes/promotionPaymentRequests.js';
+import identityKycRoutes from './routes/kycRoutes.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 import aiRoutes from './routes/ai.js';
 
@@ -155,21 +158,17 @@ app.use('/api/zego', zegoRoutes);
 app.use('/api/notifications', requireAuth, notificationRoutes);
 
 app.use('/api/kyc', requireAuth, kycRoutes);
+app.use('/api/kyc/identity', requireAuth, identityKycRoutes);
 app.use('/api/location', locationRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/recruiter', recruiterRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/promotions', promotionRoutes);
 app.use('/api/promotion-payment-requests', promotionPaymentRequestRoutes);
 
-// Global Error Handler
-app.use((err, req, res, next) => {
-    console.error("🔥 Global Error Handler:", err);
-    res.status(500).json({
-        message: 'Internal Server Error',
-        error: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-});
+// Global Error Handler (always last)
+app.use(errorHandler);
 
 app.listen(PORT, () => {
     console.log(`\n========================================`);

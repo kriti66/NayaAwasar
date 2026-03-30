@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Building2, AlertTriangle, Briefcase, MapPin, DollarSign, FileText, List, Tag } from 'lucide-react';
 import { JOB_CATEGORIES } from '../../constants/jobCategories';
+import { toast } from 'react-hot-toast';
 
 const PostJob = () => {
     const { user } = useAuth();
@@ -16,18 +17,39 @@ const PostJob = () => {
         title: '',
         company_name: '',
         category: '',
-        type: 'Full-time',
+        type: '',
+        experience_level: '',
         location: '',
         description: '',
         salary_range: '',
         requirements: '',
         tags: ''
     });
+    const [errors, setErrors] = useState({});
+    const [loadingSubmit, setLoadingSubmit] = useState(false);
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+    const [pendingSubmitData, setPendingSubmitData] = useState(null);
+    const [profileError, setProfileError] = useState(false);
+    const DRAFT_KEY = 'post_job_draft';
 
     useEffect(() => {
         if (user.kycStatus !== 'approved' && user.role === 'recruiter') {
             return;
         }
+
+        const loadDraftIfAny = () => {
+            try {
+                const raw = window.localStorage.getItem(DRAFT_KEY);
+                if (!raw) return;
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') {
+                    setFormData((prev) => ({ ...prev, ...parsed }));
+                }
+            } catch {
+                // ignore corrupt draft
+            }
+        };
+
         const fetchRecruiterCompany = async () => {
             try {
                 const myCompany = await companyService.getMyCompany();
@@ -38,13 +60,16 @@ const PostJob = () => {
                         company_name: myCompany.name,
                         location: myCompany.headquarters
                     }));
+                    setProfileError(false);
                 }
             } catch (error) {
                 console.error("Failed to load company profile", error);
+                setProfileError(true);
             } finally {
                 setLoadingCompany(false);
             }
         };
+        loadDraftIfAny();
         fetchRecruiterCompany();
     }, [user.kycStatus, user.role]);
 
@@ -172,23 +197,118 @@ const PostJob = () => {
     }
 
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        const next = { ...formData, [name]: value };
+        setFormData(next);
+        setErrors((prev) => ({ ...prev, [name]: undefined }));
+        try {
+            window.localStorage.setItem(DRAFT_KEY, JSON.stringify(next));
+        } catch {
+            // ignore storage errors
+        }
+    };
+
+    const validateForm = () => {
+        const nextErrors = {};
+        const title = (formData.title || '').trim();
+        if (title.length < 3 || title.length > 100) {
+            nextErrors.title = 'Job title must be between 3 and 100 characters';
+        }
+        if (!formData.category) {
+            nextErrors.category = 'Please select a category';
+        }
+        if (!formData.experience_level) {
+            nextErrors.experience_level = 'Please select an experience level';
+        }
+        if (!formData.type) {
+            nextErrors.type = 'Please select a job type';
+        }
+        const salary = (formData.salary_range || '').trim();
+        if (salary && !/\d/.test(salary)) {
+            nextErrors.salary_range_warning = 'Please check your salary format';
+        }
+        const desc = (formData.description || '').trim();
+        if (desc.length < 50) {
+            nextErrors.description = 'Job description must be at least 50 characters';
+        }
+        const reqs = (formData.requirements || '').trim();
+        if (reqs.length < 20) {
+            nextErrors.requirements = 'Requirements must be at least 20 characters';
+        }
+        const tagsRaw = (formData.tags || '').trim();
+        if (tagsRaw) {
+            const tagsArr = tagsRaw.split(',').map(t => t.trim()).filter(Boolean);
+            if (tagsArr.length > 10) {
+                nextErrors.tags = 'Maximum 10 tags allowed';
+            } else if (tagsArr.some(t => t.length > 30)) {
+                nextErrors.tags = 'Each tag must be under 30 characters';
+            }
+        }
+        setErrors(nextErrors);
+        // treat warnings as non-blocking
+        const { salary_range_warning, ...hard } = nextErrors;
+        return Object.keys(hard).length === 0;
+    };
+
+    const performPostJob = async (payload) => {
+        try {
+            setLoadingSubmit(true);
+            const res = await api.post('/jobs', payload);
+            try {
+                window.localStorage.removeItem(DRAFT_KEY);
+            } catch {
+                // ignore
+            }
+            toast.success('Job posted successfully!', { duration: 4000 });
+            navigate('/recruiter/jobs');
+            return res;
+        } catch (error) {
+            const status = error?.response?.status;
+            if (status === 401) {
+                // Session expired
+                toast.error('Your session has expired. Please log in again.', { duration: 4000 });
+                navigate('/login');
+            } else if (status === 403) {
+                toast.error('You must complete recruiter verification before posting jobs.', { duration: 4000 });
+                navigate('/kyc/recruiter');
+            } else if (status === 422) {
+                const fieldErrors = error?.response?.data?.errors || {};
+                setErrors((prev) => ({ ...prev, ...fieldErrors }));
+            } else if (status === 429) {
+                toast.error('You are posting too frequently. Please wait a moment and try again.', { duration: 4000 });
+            } else if (error?.name === 'NetworkError' || error?.code === 'ECONNABORTED') {
+                toast.error('Connection lost. Please check your internet and try again.', { duration: 4000 });
+            } else {
+                toast.error('Something went wrong. Please try again.', { duration: 4000 });
+                console.error('Post job error:', error);
+            }
+            throw error;
+        } finally {
+            setLoadingSubmit(false);
+        }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!formData.category) {
-            alert('Please select a job category.');
-            return;
-        }
+        if (!validateForm()) return;
+
+        const payload = { ...formData };
+
         try {
-            await api.post('/jobs', { ...formData, recruiter_id: user.id });
-            alert('Job posted successfully!');
-            navigate('/recruiter/dashboard');
-        } catch (error) {
-            console.error('Error posting job', error);
-            alert('Failed to post job');
+            const dupRes = await api.get('/jobs/check-duplicate', {
+                params: { title: formData.title }
+            });
+            if (dupRes.data?.duplicate) {
+                setPendingSubmitData(payload);
+                setShowDuplicateModal(true);
+                return;
+            }
+        } catch (err) {
+            // if duplicate check fails, fall back to normal submission
+            console.warn('Duplicate check failed', err);
         }
+
+        await performPostJob(payload);
     };
 
     return (
@@ -263,6 +383,11 @@ const PostJob = () => {
                                     readOnly
                                     className="block w-full rounded-xl border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed shadow-sm focus:ring-0 sm:text-sm px-4 py-3.5 border"
                                 />
+                                <p className="mt-1 text-xs text-gray-500">
+                                    {profileError
+                                        ? 'Could not load company details. Please refresh the page.'
+                                        : 'Auto-filled from your verified company profile'}
+                                </p>
                             </div>
                             <div>
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
@@ -276,6 +401,11 @@ const PostJob = () => {
                                     readOnly
                                     className="block w-full rounded-xl border-gray-200 bg-gray-100 text-gray-500 cursor-not-allowed shadow-sm focus:ring-0 sm:text-sm px-4 py-3.5 border"
                                 />
+                                <p className="mt-1 text-xs text-gray-500">
+                                    {profileError
+                                        ? 'Could not load company details. Please refresh the page.'
+                                        : 'Auto-filled from your verified company profile'}
+                                </p>
                             </div>
                             <div>
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
@@ -307,11 +437,36 @@ const PostJob = () => {
                                     onChange={handleChange}
                                     className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
                                 >
-                                    <option>Full-time</option>
-                                    <option>Part-time</option>
-                                    <option>Contract</option>
-                                    <option>Internship</option>
+                                    <option value="">Select job type</option>
+                                    <option value="Full-time">Full-time</option>
+                                    <option value="Part-time">Part-time</option>
+                                    <option value="Contract">Contract</option>
+                                    <option value="Internship">Internship</option>
                                 </select>
+                                {errors.type && (
+                                    <p className="mt-1 text-xs text-red-600 font-medium">{errors.type}</p>
+                                )}
+                            </div>
+                            <div>
+                                <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
+                                    <List size={14} className="text-[#29a08e]" />
+                                    Experience Level <span className="text-red-500">*</span>
+                                </label>
+                                <select
+                                    name="experience_level"
+                                    value={formData.experience_level}
+                                    onChange={handleChange}
+                                    className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
+                                >
+                                    <option value="">Select experience level</option>
+                                    <option value="Entry-level">Entry-level</option>
+                                    <option value="Mid-level">Mid-level</option>
+                                    <option value="Senior">Senior</option>
+                                    <option value="Executive">Executive</option>
+                                </select>
+                                {errors.experience_level && (
+                                    <p className="mt-1 text-xs text-red-600 font-medium">{errors.experience_level}</p>
+                                )}
                             </div>
                             <div>
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
@@ -326,6 +481,12 @@ const PostJob = () => {
                                     placeholder="e.g. NRs. 50,000 - 80,000"
                                     className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
                                 />
+                                <p className="mt-1 text-xs text-gray-500">Use format like: NRs. 50,000 - 80,000</p>
+                                {errors.salary_range_warning && (
+                                    <p className="mt-1 text-xs text-amber-600 font-medium">
+                                        {errors.salary_range_warning}
+                                    </p>
+                                )}
                             </div>
                             <div className="col-span-2">
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
@@ -341,6 +502,12 @@ const PostJob = () => {
                                     placeholder="Describe the role and responsibilities..."
                                     className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
                                 ></textarea>
+                                <p className={`mt-1 text-xs font-medium ${ (formData.description || '').trim().length >= 50 ? 'text-emerald-600' : 'text-gray-500' }`}>
+                                    {(formData.description || '').trim().length} / 50 minimum characters
+                                </p>
+                                {errors.description && (
+                                    <p className="mt-1 text-xs text-red-600 font-medium">{errors.description}</p>
+                                )}
                             </div>
                             <div className="col-span-2">
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
@@ -355,6 +522,9 @@ const PostJob = () => {
                                     placeholder="List the required skills and qualifications..."
                                     className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
                                 ></textarea>
+                                {errors.requirements && (
+                                    <p className="mt-1 text-xs text-red-600 font-medium">{errors.requirements}</p>
+                                )}
                             </div>
                             <div className="col-span-2">
                                 <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-2">
@@ -370,17 +540,30 @@ const PostJob = () => {
                                     className="block w-full rounded-xl border-gray-200 shadow-sm focus:border-[#29a08e] focus:ring-[#29a08e] sm:text-sm px-4 py-3.5 border bg-gray-50/50 hover:bg-white transition-colors"
                                 />
                                 <p className="mt-1 text-xs text-gray-500">Stored lowercase; improves keyword search.</p>
+                                {errors.tags && (
+                                    <p className="mt-1 text-xs text-red-600 font-medium">{errors.tags}</p>
+                                )}
                             </div>
                         </div>
                         <div className="pt-6 border-t border-gray-100 flex justify-end">
                             <button
                                 type="submit"
-                                className="inline-flex items-center gap-2 px-8 py-3.5 bg-[#29a08e] text-white rounded-2xl font-bold text-sm hover:bg-[#228377] shadow-lg shadow-[#29a08e]/20 hover:shadow-[#29a08e]/30 transition-all active:scale-95"
+                                disabled={loadingSubmit}
+                                className="inline-flex items-center gap-2 px-8 py-3.5 bg-[#29a08e] text-white rounded-2xl font-bold text-sm hover:bg-[#228377] shadow-lg shadow-[#29a08e]/20 hover:shadow-[#29a08e]/30 transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-                                </svg>
-                                Post Job
+                                {loadingSubmit ? (
+                                    <>
+                                        <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                        Posting...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        + Post Job
+                                    </>
+                                )}
                             </button>
                         </div>
                     </form>

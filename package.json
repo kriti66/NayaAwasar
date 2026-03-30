@@ -1,0 +1,11 @@
+{
+  "name": "nayaawasar",
+  "private": true,
+  "scripts": {
+    "dev:ai": "cd recommendation-service && python -m uvicorn main:app --reload --port 8000",
+    "dev:all": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\" \"npm run dev:ai\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

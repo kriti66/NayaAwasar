@@ -1,190 +1,156 @@
+import axios from 'axios';
+import mongoose from 'mongoose';
 import Job from '../models/Job.js';
-import Profile from '../models/Profile.js';
-import Application from '../models/Application.js';
-import { preprocessText, computeTF, computeIDF, computeTFIDF, cosineSimilarity } from '../utils/recommendationEngine.js';
-import { inferCategoriesFromSearch } from './jobSearchFilter.js';
 
-export const getRecommendedJobs = async (userId) => {
+const PYTHON_URL = (process.env.PYTHON_SERVICE_URL || 'http://localhost:8000').replace(
+    /\/+$/,
+    ''
+);
+const PYTHON_TIMEOUT_MS = 90000;
+
+/**
+ * Fire-and-forget: refresh cached embedding in the Python service.
+ */
+export function triggerEmbeddingUpdate(docId, docType) {
+    if (!docId || !docType) return;
+    axios
+        .post(
+            `${PYTHON_URL}/recompute-embeddings`,
+            { doc_id: String(docId), doc_type: docType },
+            { timeout: 8000 }
+        )
+        .catch(() => {});
+}
+
+export async function recordUserInteraction(userId, jobId, action) {
     try {
-        // 1. Fetch user profile
-        const userProfile = await Profile.findOne({ userId }).lean();
-        if (!userProfile) {
-            return { jobs: [], message: 'Profile incomplete. Please add skills to get recommendations.', isComplete: false };
+        await mongoose.connection.db.collection('user_interactions').insertOne({
+            user_id: new mongoose.Types.ObjectId(userId),
+            job_id: new mongoose.Types.ObjectId(jobId),
+            action,
+            timestamp: new Date()
+        });
+    } catch (err) {
+        if (process.env.NODE_ENV !== 'test') {
+            console.warn('[recommendations] user_interactions insert failed', err?.message);
         }
-
-        // 2. Fetch applied jobs to exclude them
-        const applications = await Application.find({ seeker_id: userId }).select('job_id').lean();
-        const appliedJobIds = new Set(applications.map(app => app.job_id.toString()));
-
-        // 3. Fetch all active/open jobs
-        // In a very large scale app, you'd add pagination or pre-filtering. Fine for FYP.
-        const activeJobs = await Job.find({ 
-            status: 'Active', 
-            // Only include non-expired jobs (if deadline exists, must be in future)
-            $or: [
-                { application_deadline: { $exists: false } },
-                { application_deadline: { $gte: new Date() } }
-            ]
-        })
-            .populate('company_id', 'name logo location')
-            .lean();
-
-        // If no active jobs, return early
-        if (!activeJobs.length) return { jobs: [], message: 'No active jobs available right now.', isComplete: true };
-
-        // 4. Combine user profile text for content-based matching
-        const userTextContent = [
-            userProfile.headline || '',
-            userProfile.summary || '',
-            (userProfile.skills || []).join(' '),
-            // Map experience roles
-            ...(userProfile.experience || []).map(exp => `${exp.role} ${exp.description || ''}`),
-            // Map education degrees
-            ...(userProfile.education || []).map(edu => edu.degree),
-            // Preferences
-            userProfile.location || '',
-            userProfile.jobPreferences?.preferredLocation || '',
-            (userProfile.jobPreferences?.jobTypes || []).join(' '),
-            userProfile.jobPreferences?.seniority || ''
-        ].join(' ');
-
-        const userTokens = preprocessText(userTextContent);
-        const userSkills = (userProfile.skills || []).map(s => s.toLowerCase());
-        const userPreferredLocation = (userProfile.location || userProfile.jobPreferences?.preferredLocation || '').toLowerCase();
-        const userExperienceLevel = (userProfile.jobPreferences?.seniority || '').toLowerCase();
-        const preferredCategories = inferCategoriesFromSearch(userTextContent).map((c) => c.toLowerCase());
-
-        // 5. Build corpus and TF-IDF vectors
-        // Job document texts
-        const jobsDocsTokens = activeJobs.map(job => {
-            const jobTextContent = [
-                job.title || '',
-                job.job_title || '',
-                job.type || '',
-                job.description || '',
-                job.job_description || '',
-                job.requirements || '',
-                job.location || '',
-                job.experience_level || ''
-            ].join(' ');
-            return preprocessText(jobTextContent);
-        });
-
-        // Add user profile to corpus to generate unified IDF
-        const corpusTokens = [...jobsDocsTokens, userTokens];
-        
-        // Generate vocabulary
-        const vocabulary = [...new Set(corpusTokens.flat())];
-        const idf = computeIDF(corpusTokens);
-        const userTf = computeTF(userTokens);
-        const userVector = computeTFIDF(userTf, idf, vocabulary);
-
-        // 6. Score each job
-        const scoredJobs = [];
-
-        activeJobs.forEach((job, index) => {
-            // Check if already applied
-            if (appliedJobIds.has(job._id.toString())) return;
-
-            // A) TF-IDF Content Similarity (Textual Match) -> 0.0 to 1.0 -> 50% weight
-            const jobTokens = jobsDocsTokens[index];
-            const jobTf = computeTF(jobTokens);
-            const jobVector = computeTFIDF(jobTf, idf, vocabulary);
-            
-            const textSimScore = cosineSimilarity(userVector, jobVector);
-            const contentScore = textSimScore * 0.50; // max 0.50
-
-            // B) Rule-based Weighting: Skills (Title/Description keyword match) -> 20% weight
-            let skillsScore = 0;
-            const matchedSkills = [];
-            const missingSkills = [];
-            
-            // Convert job text heavily into array of words for skill matching
-            const jobWordsRaw = (job.title + ' ' + job.requirements + ' ' + (job.job_description || '')).toLowerCase();
-            
-            if (userSkills.length > 0) {
-                userSkills.forEach(skill => {
-                    if (jobWordsRaw.includes(skill)) {
-                        matchedSkills.push(skill);
-                    } else {
-                        missingSkills.push(skill);
-                    }
-                });
-                skillsScore = (matchedSkills.length / userSkills.length) * 0.20; // max 0.20
-            }
-
-            // C) Rule-based Weighting: Location -> 15% weight
-            let locationScore = 0;
-            const jobLoc = (job.location || '').toLowerCase();
-            if (userPreferredLocation && jobLoc && (userPreferredLocation.includes(jobLoc) || jobLoc.includes(userPreferredLocation))) {
-                locationScore = 0.15; // max 0.15
-            }
-
-            // D) Rule-based Weighting: Experience Level -> 15% weight
-            let experienceScore = 0;
-            const jobExp = (job.experience_level || '').toLowerCase();
-            if (userExperienceLevel && jobExp && (userExperienceLevel.includes(jobExp) || jobExp.includes(userExperienceLevel))) {
-                experienceScore = 0.15; // max 0.15
-            }
-
-            // Calculate final probability (0 to 100 final percentage scale)
-            const jobCategory = (job.category || '').toLowerCase();
-            const categoryMatched = !!jobCategory && preferredCategories.includes(jobCategory);
-            const categoryScore = categoryMatched ? 0.08 : 0; // small nudge for belief in relevance
-
-            const finalScoreRaw = contentScore + skillsScore + locationScore + experienceScore + categoryScore;
-            const finalPercentage = Math.round(finalScoreRaw * 100);
-
-            // Generate a factor-based explanation so the UI feels trustworthy.
-            const explanationParts = [];
-            const showLocation = locationScore > 0;
-            const showExperience = experienceScore > 0;
-
-            if (matchedSkills.length > 0) {
-                explanationParts.push(`Matched your skills: ${matchedSkills.slice(0, 3).join(', ')}`);
-            } else if (textSimScore > 0.1) {
-                explanationParts.push(`This role's content matches your profile summary`);
-            }
-            if (categoryMatched) explanationParts.push(`Fits your preferred category: ${job.category}`);
-            if (showLocation) explanationParts.push(`Matches your preferred location`);
-            if (showExperience) explanationParts.push(`Matches your experience level preference`);
-
-            const explanation =
-                explanationParts.length > 0
-                    ? explanationParts.join('. ') + '.'
-                    : userTokens.length < 5
-                        ? 'Recommended from platform trends. Add more skills and preferences to unlock stronger AI matches.'
-                        : 'Recommended from platform trends. This is a lower-confidence match based on limited profile signals.';
-
-            const recommendationType =
-                explanationParts.length > 0 ? 'ai_match' : (finalPercentage > 0 ? 'trending' : 'fallback');
-            const recommendationConfidence =
-                finalPercentage >= 30 ? 'high' : finalPercentage >= 15 ? 'medium' : 'low';
-
-            // Only recommend if the score is somewhat decent (e.g. at least 5% match or 0% but user profile is extremely empty)
-            if (finalPercentage > 0 || userTokens.length < 5) {
-                scoredJobs.push({
-                    ...job,
-                    matchScore: finalPercentage > 100 ? 100 : finalPercentage,
-                    matchReason: explanation.trim(),
-                    matchedSkills: matchedSkills,
-                    missingSkills: missingSkills,
-                    recommendationType,
-                    recommendationConfidence
-                });
-            }
-        });
-
-        // 7. Sort jobs by highest match score
-        scoredJobs.sort((a, b) => b.matchScore - a.matchScore);
-
-        return {
-            jobs: scoredJobs.slice(0, 50), // Return top 50
-            isComplete: userTokens.length > 10
-        };
-
-    } catch (error) {
-        console.error('Built-in Recommendation Service Error:', error);
-        throw error;
     }
-};
+}
+
+async function fetchPythonRecommendations(userId, limit) {
+    const { data } = await axios.post(
+        `${PYTHON_URL}/recommend`,
+        { user_id: String(userId), limit },
+        { timeout: PYTHON_TIMEOUT_MS }
+    );
+    return data;
+}
+
+export async function getSimilarJobs(jobId, limit = 5) {
+    try {
+        const { data } = await axios.post(
+            `${PYTHON_URL}/similar-jobs`,
+            { job_id: String(jobId), limit },
+            { timeout: PYTHON_TIMEOUT_MS }
+        );
+        return data;
+    } catch {
+        return { job_id: String(jobId), similar_jobs: [], total: 0 };
+    }
+}
+
+async function hydratePythonJobCards(recs) {
+    if (!recs?.length) return [];
+    const ids = recs.map((r) => r.job_id).filter(Boolean);
+    const oids = ids.map((id) => new mongoose.Types.ObjectId(id));
+    const jobs = await Job.find({ _id: { $in: oids } })
+        .populate('company_id', 'name logo location')
+        .lean();
+    const byId = new Map(jobs.map((j) => [j._id.toString(), j]));
+    return recs
+        .map((r) => {
+            const j = byId.get(r.job_id);
+            if (!j) return null;
+            const raw = r.similarity_score ?? 0;
+            const numRaw = Number(raw);
+            const clamped = Number.isFinite(numRaw) ? Math.min(1, Math.max(0, numRaw)) : 0;
+            const pct = Math.round(clamped * 100);
+            return {
+                ...j,
+                aiScore: clamped,
+                matchScore: pct,
+                matchReason: r.reason,
+                recommendationType: 'ai_match',
+                recommendationConfidence:
+                    clamped >= 0.6 ? 'high' : clamped >= 0.35 ? 'medium' : 'low'
+            };
+        })
+        .filter(Boolean);
+}
+
+async function fallbackLatestJobs(limit = 10) {
+    const jobs = await Job.find({
+        status: 'Active',
+        moderationStatus: 'Approved',
+        $or: [
+            { application_deadline: { $exists: false } },
+            { application_deadline: { $gte: new Date() } }
+        ]
+    })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .populate('company_id', 'name logo location')
+        .lean();
+    return {
+        jobs: jobs.map((j) => ({
+            ...j,
+            aiScore: null,
+            matchScore: null,
+            matchReason: 'Trending new listings on the platform.',
+            recommendationType: 'fallback',
+            recommendationConfidence: 'low'
+        })),
+        isComplete: true,
+        source: 'fallback'
+    };
+}
+
+/**
+ * Primary entry: hybrid recommendations from the Python sentence-transformers service.
+ * On failure, returns the latest active jobs (up to 10).
+ */
+export async function getRecommendedJobs(userId, options = {}) {
+    const limit = Math.min(Number(options.limit) || 50, 100);
+    try {
+        const data = await fetchPythonRecommendations(userId, limit);
+        const recs = data?.recommendations || [];
+        const hydrated = await hydratePythonJobCards(recs);
+        return {
+            jobs: hydrated,
+            isComplete: hydrated.length > 0,
+            message:
+                hydrated.length === 0
+                    ? 'Complete your profile to get recommendations.'
+                    : undefined,
+            source: 'python'
+        };
+    } catch (err) {
+        if (process.env.NODE_ENV !== 'test') {
+            console.warn(
+                '[recommendations] Python service unavailable, using fallback.',
+                err?.message
+            );
+        }
+        return fallbackLatestJobs(Math.min(limit, 10));
+    }
+}
+
+export async function hydrateSimilarJobsResponse(pythonPayload) {
+    const recs = pythonPayload?.similar_jobs || [];
+    const hydrated = await hydratePythonJobCards(recs);
+    return {
+        job_id: pythonPayload?.job_id,
+        similar_jobs: hydrated,
+        total: hydrated.length
+    };
+}

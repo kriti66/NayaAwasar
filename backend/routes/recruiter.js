@@ -41,10 +41,10 @@ router.get('/profile-summary', requireAuth, async (req, res) => {
 
         const totalApplications = await Application.countDocuments({ job_id: { $in: jobIds } });
 
-        // Successful Hires: applications with status 'Offer Extended' linked to recruiter jobs
+        // Successful Hires: applications with status 'hired' linked to recruiter jobs
         const successfulHires = await Application.countDocuments({
             job_id: { $in: jobIds },
-            status: 'Offer Extended'
+            status: 'hired'
         });
 
         res.json({

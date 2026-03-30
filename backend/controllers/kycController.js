@@ -1,10 +1,13 @@
 import KYC from '../models/KYC.js';
+import IdentityKyc from '../models/kycModel.js';
 import User from '../models/User.js';
 import Company from '../models/Company.js';
 import { validateJobSeekerKYC, validateRecruiterKYC } from '../services/kycValidation.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { createNotification, notifyAdmins } from './notificationController.js';
 import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * POST /api/kyc/submit
@@ -224,6 +227,11 @@ export const getPendingKYC = async (req, res) => {
             .sort({ updatedAt: -1 })
             .lean();
 
+        const identityList = await IdentityKyc.find({ status: 'pending' })
+            .populate('user', 'fullName email role')
+            .sort({ updatedAt: -1 })
+            .lean();
+
         const pending = list.map((doc) => ({
             ...doc, // Spread all fields from the document first
             _id: doc._id,
@@ -231,13 +239,36 @@ export const getPendingKYC = async (req, res) => {
             user: doc.userId, // Populated object for full context
             fullName: doc.fullName || doc.userId?.fullName,
             email: doc.userId?.email,
+            submittedAt: doc.createdAt,
             submittedDate: doc.createdAt,
             documentFront: doc.documentFront || doc.idFront,
             documentBack: doc.documentBack || doc.idBack,
             documentType: doc.documentType || doc.idType,
         }));
 
-        return res.json(pending);
+        const identityPending = identityList.map((doc) => ({
+            _id: doc._id,
+            userId: doc.user?._id || doc.user,
+            user: doc.user,
+            role: doc.user?.role || 'jobseeker',
+            fullName: doc.fullName || doc.user?.fullName,
+            email: doc.user?.email,
+            submittedAt: doc.submittedAt || doc.createdAt,
+            submittedDate: doc.submittedAt || doc.createdAt,
+            status: doc.status,
+            address: doc.address,
+            nationality: doc.nationality,
+            idType: doc.idType,
+            idNumber: doc.idNumber,
+            dateOfBirth: doc.dob,
+            dob: doc.dob,
+            documentFront: doc.frontDoc,
+            documentBack: doc.backDoc,
+            selfieWithId: doc.selfie,
+            isIdentityKyc: true
+        }));
+
+        return res.json([...pending, ...identityPending]);
     } catch (error) {
         console.error('Get Pending KYC Error:', error);
         return res.status(500).json({ message: 'Error fetching pending KYC' });
@@ -251,7 +282,7 @@ export const approveKYCByUserId = async (req, res) => {
     try {
         const { userId } = req.params;
         // Search by either the associated userId OR the KYC record's own _id for maximum resilience
-        const kyc = await KYC.findOneAndUpdate(
+        let kyc = await KYC.findOneAndUpdate(
             {
                 $or: [
                     { userId: userId },
@@ -264,7 +295,21 @@ export const approveKYCByUserId = async (req, res) => {
         );
 
         if (!kyc) {
-            return res.status(404).json({ message: 'KYC record not found or not pending' });
+            const identityKyc = await IdentityKyc.findOneAndUpdate(
+                {
+                    $or: [
+                        { user: userId },
+                        { _id: userId }
+                    ],
+                    status: 'pending'
+                },
+                { status: 'verified', adminNote: null },
+                { new: true }
+            );
+            if (!identityKyc) {
+                return res.status(404).json({ message: 'KYC record not found or not pending' });
+            }
+            kyc = identityKyc;
         }
 
         await User.findByIdAndUpdate(userId, {
@@ -334,7 +379,7 @@ export const rejectKYCByUserId = async (req, res) => {
 
         const reason = rejectionReason.trim();
         // Search by either the associated userId OR the KYC record's own _id
-        const kyc = await KYC.findOne({
+        let kyc = await KYC.findOne({
             $or: [
                 { userId: userId },
                 { _id: userId }
@@ -343,7 +388,38 @@ export const rejectKYCByUserId = async (req, res) => {
         });
 
         if (!kyc) {
-            return res.status(404).json({ message: 'KYC record not found or not pending' });
+            const identityKyc = await IdentityKyc.findOne({
+                $or: [
+                    { user: userId },
+                    { _id: userId }
+                ],
+                status: 'pending'
+            });
+            if (!identityKyc) {
+                return res.status(404).json({ message: 'KYC record not found or not pending' });
+            }
+            identityKyc.status = 'rejected';
+            identityKyc.adminNote = reason;
+            await identityKyc.save();
+
+            await User.findByIdAndUpdate(userId, {
+                kycStatus: 'rejected',
+                isKycVerified: false,
+                kycRejectionReason: reason
+            });
+
+            await createNotification({
+                recipient: userId,
+                type: 'kyc_rejected',
+                category: 'application',
+                title: 'KYC Application Rejected',
+                message: `Your identity KYC application was rejected. Reason: ${reason}.`,
+                link: '/kyc/status',
+                metadata: { userId },
+                sender: req.user.id
+            });
+
+            return res.json({ success: true, message: 'KYC rejected successfully' });
         }
 
         const nextStatus = kyc.resubmissionCount >= 3 ? 'resubmission_locked' : 'rejected';
@@ -401,5 +477,128 @@ export const rejectKYCByUserId = async (req, res) => {
     } catch (error) {
         console.error('Reject KYC By UserId Error:', error);
         return res.status(500).json({ message: 'Error rejecting KYC' });
+    }
+};
+
+const getIdentityFilePath = (file) => {
+    if (!file) return null;
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const rel = path.relative(path.join(__dirname, '..'), file.path).replace(/\\/g, '/');
+    return `/${rel}`;
+};
+
+const isAdult = (dobValue) => {
+    const dob = new Date(dobValue);
+    if (Number.isNaN(dob.getTime())) return false;
+    const now = new Date();
+    const minAgeDate = new Date(now.getFullYear() - 18, now.getMonth(), now.getDate());
+    return dob <= minAgeDate;
+};
+
+const idPatterns = {
+    Citizenship: /^[0-9]{7,9}$/,
+    Passport: /^(?:[A-Za-z]{1,2}[0-9]{6,7}|[0-9]{8,9})$/,
+    'Driving License': /^[A-Za-z0-9]+$/,
+    'Voter ID': /^[0-9]{10,11}$/,
+    'PAN Card': /^[0-9]{9}$/
+};
+
+export const getIdentityKycStatus = async (req, res, next) => {
+    try {
+        const kyc = await IdentityKyc.findOne({ user: req.user.id }).lean();
+        if (!kyc) {
+            return res.json({ status: 'not_submitted', data: null });
+        }
+        return res.json({ status: kyc.status, adminNote: kyc.adminNote || null, data: kyc });
+    } catch (err) {
+        return next(err);
+    }
+};
+
+export const submitIdentityKyc = async (req, res, next) => {
+    try {
+        const existing = await IdentityKyc.findOne({ user: req.user.id }).lean();
+        if (existing && (existing.status === 'pending' || existing.status === 'verified')) {
+            return res.status(409).json({ message: 'KYC already submitted. Please wait for review.' });
+        }
+
+        if (!req.files?.frontDoc?.[0] || !req.files?.selfie?.[0]) {
+            return res.status(400).json({ message: 'Front document and selfie are required.' });
+        }
+
+        const fullName = String(req.body.fullName || '').trim();
+        const dob = req.body.dob;
+        const nationality = String(req.body.nationality || 'Nepali').trim();
+        const address = String(req.body.address || '').trim();
+        const idType = String(req.body.idType || '').trim();
+        const idNumber = String(req.body.idNumber || '').trim();
+
+        if (!fullName || /[0-9]/.test(fullName)) {
+            return res.status(400).json({ message: 'Full name is required and must not contain numbers.' });
+        }
+        if (!address) {
+            return res.status(400).json({ message: 'Current address is required.' });
+        }
+        if (!isAdult(dob)) {
+            return res.status(400).json({ message: 'You must be at least 18 years old.' });
+        }
+        if (!idPatterns[idType] || !idPatterns[idType].test(idNumber)) {
+            return res.status(400).json({ message: `Invalid ${idType || 'ID'} number format.` });
+        }
+
+        const payload = {
+            user: req.user.id,
+            fullName,
+            dob,
+            nationality: nationality || 'Nepali',
+            address,
+            idType,
+            idNumber,
+            frontDoc: getIdentityFilePath(req.files.frontDoc[0]),
+            backDoc: req.files.backDoc?.[0] ? getIdentityFilePath(req.files.backDoc[0]) : null,
+            selfie: getIdentityFilePath(req.files.selfie[0]),
+            status: 'pending',
+            adminNote: null,
+            submittedAt: new Date()
+        };
+
+        const saved = await IdentityKyc.findOneAndUpdate(
+            { user: req.user.id },
+            { $set: payload },
+            { upsert: true, new: true, runValidators: true }
+        );
+
+        const submitter = await User.findById(req.user.id).select('fullName email').lean();
+        const displayName = submitter?.fullName?.trim() || submitter?.email || 'A user';
+        await notifyAdmins({
+            type: NOTIFICATION_TYPES.KYC_NEW_SUBMISSION,
+            category: 'application',
+            title: 'New KYC Submission',
+            message: `${displayName} submitted identity verification. Review in KYC Panel.`,
+            link: '/admin/kyc',
+            metadata: { userId: req.user.id, identityKycId: saved._id, flow: 'identity_kyc' }
+        });
+
+        return res.status(201).json({
+            message: 'KYC submitted successfully. Your documents are under review.',
+            data: saved
+        });
+    } catch (err) {
+        if (err.code === 11000) {
+            return res.status(409).json({ message: 'KYC already submitted.' });
+        }
+        if (err.name === 'ValidationError') {
+            return res.status(400).json({ message: err.message });
+        }
+        if (!req.files?.frontDoc || !req.files?.selfie) {
+            return res.status(400).json({ message: 'Front document and selfie are required.' });
+        }
+        if (err.code === 'LIMIT_FILE_SIZE') {
+            return res.status(413).json({ message: 'File too large. Max 5MB allowed.' });
+        }
+        if (err.message === 'INVALID_FILE_TYPE') {
+            return res.status(415).json({ message: 'Only PDF, JPG, PNG allowed.' });
+        }
+        return next(err);
     }
 };

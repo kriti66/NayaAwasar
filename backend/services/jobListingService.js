@@ -7,6 +7,8 @@ import Promotion from '../models/Promotion.js';
 import { PROMOTION_STATUSES } from '../constants/promotionConfig.js';
 import * as promotionService from './promotionService.js';
 import { mergeWithBaseFilter } from './jobSearchFilter.js';
+import { isJobActivelyPromoted } from '../utils/jobPromotionUtils.js';
+import { applyUserJobLabels } from './userJobLabelEnrichment.js';
 
 /** Maps Job promotionType to display label */
 export const PROMOTION_LABELS = {
@@ -33,17 +35,6 @@ export async function expireOverduePromotions() {
         await p.save();
         await promotionService.removePromotionFromJob(p.jobId);
     }
-}
-
-/**
- * Compute if a job has an active promotion (valid date range).
- */
-export function isJobActivelyPromoted(job, now = new Date()) {
-    if (!job?.isPromoted || !job.promotionType || job.promotionType === 'NONE') return false;
-    const start = job.promotionStartDate ? new Date(job.promotionStartDate) : null;
-    const end = job.promotionEndDate ? new Date(job.promotionEndDate) : null;
-    if (!start || !end) return false;
-    return now >= start && now < end;
 }
 
 /**
@@ -114,12 +105,18 @@ export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn
 
     const recJobs = recResult?.jobs || [];
     const recMap = new Map();
-    recJobs.forEach(rj => {
+    recJobs.forEach((rj) => {
         const id = (rj._id || rj.id)?.toString();
-        if (id) recMap.set(id, { matchScore: rj.matchScore ?? 0, matchReason: rj.matchReason });
+        if (id) {
+            recMap.set(id, {
+                matchScore: rj.matchScore ?? null,
+                matchReason: rj.matchReason,
+                aiScore: typeof rj.aiScore === 'number' && Number.isFinite(rj.aiScore) ? rj.aiScore : null
+            });
+        }
     });
 
-    const enriched = jobsRaw.map(job => {
+    const enriched = jobsRaw.map((job) => {
         const id = (job._id || job.id)?.toString();
         const recData = recMap.get(id);
         const base = enrichJobWithPromotion(job, now);
@@ -127,7 +124,7 @@ export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn
             ...base,
             matchScore: recData?.matchScore ?? null,
             matchReason: recData?.matchReason ?? null,
-            isRecommended: !!recData
+            aiScore: recData?.aiScore ?? null
         };
     });
 
@@ -144,5 +141,6 @@ export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn
         return bDate - aDate;
     });
 
-    return enriched;
+    const { jobs: labeled, hasPersonalizationData } = await applyUserJobLabels(userId, enriched);
+    return { jobs: labeled, hasPersonalizationData };
 }
