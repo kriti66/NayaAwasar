@@ -9,6 +9,7 @@ const RecruiterKYC = () => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [idError, setIdError] = useState('');
     const [statusMeta, setStatusMeta] = useState({
         representativeStatus: 'not_submitted',
         companyStatus: 'not_submitted',
@@ -47,6 +48,31 @@ const RecruiterKYC = () => {
         taxDocument: '',
         companyLogo: ''
     });
+    const ID_HINTS = {
+        citizenship: {
+            placeholder: 'e.g. 12-34-56-78901',
+            hint: 'Numeric only · 7 to 9 digits',
+            error: 'Citizenship number must be 7–9 digits (numbers only).',
+            example: 'Example: 1234567 or 123456789'
+        },
+        passport: {
+            placeholder: 'e.g. AB1234567',
+            hint: 'Starts with 2 letters + 7 numbers',
+            error: 'Passport must start with 2 letters followed by 7 numbers.',
+            example: 'Example: AB1234567'
+        },
+        national_id: {
+            placeholder: 'e.g. 1234-5678-9012',
+            hint: 'Numeric only · 12 digits',
+            error: 'National ID must be 12 digits (numbers only).',
+            example: 'Example: 123456789012'
+        }
+    };
+    const ID_PATTERNS = {
+        citizenship: /^[0-9]{7,9}$/,
+        passport: /^[A-Za-z]{2}[0-9]{7}$/,
+        national_id: /^[0-9]{12}$/
+    };
 
     useEffect(() => {
         if (user) {
@@ -104,7 +130,15 @@ const RecruiterKYC = () => {
     }, [user]);
 
     const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+        const next = { ...formData, [name]: value };
+        setFormData(next);
+        if (name === 'idType') {
+            setIdError('');
+        }
+        if (name === 'idNumber' && idError) {
+            setIdError('');
+        }
     };
 
     const handleFileChange = (e) => {
@@ -117,8 +151,19 @@ const RecruiterKYC = () => {
         e.preventDefault();
         setLoading(true);
         setError('');
+        setIdError('');
 
         try {
+            const rawId = (formData.idNumber || '').trim();
+            const normalizedId = formData.idType === 'passport' ? rawId : rawId.replace(/-/g, '');
+            const idPattern = ID_PATTERNS[formData.idType];
+            if (!rawId || !idPattern?.test(normalizedId)) {
+                const message = ID_HINTS[formData.idType]?.error || 'Invalid ID number format.';
+                setIdError(message);
+                setLoading(false);
+                return;
+            }
+
             const hasAnyNewFile = Object.values(files).some(Boolean);
             let fileUrls = {};
             if (hasAnyNewFile) {
@@ -191,6 +236,10 @@ const RecruiterKYC = () => {
         `${base} ${repSectionLocked ? lockedInputClass : ''}`;
     const companyInputClass = (base) =>
         `${base} ${!companyFieldsEditable ? lockedInputClass : ''}`;
+    const idMeta = ID_HINTS[formData.idType] || ID_HINTS.citizenship;
+    const idRaw = (formData.idNumber || '').trim();
+    const idNormalized = formData.idType === 'passport' ? idRaw : idRaw.replace(/-/g, '');
+    const isIdValid = !!idRaw && !idError && ID_PATTERNS[formData.idType]?.test(idNormalized);
 
     return (
         <div className="w-full sm:px-6 lg:px-8 max-w-6xl mx-auto pb-8">
@@ -373,18 +422,39 @@ const RecruiterKYC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-1">ID Number</label>
-                                    <input
-                                        type="text"
-                                        name="idNumber"
-                                        required={!repSectionLocked}
-                                        disabled={repSectionLocked}
-                                        value={formData.idNumber}
-                                        onChange={handleChange}
-                                        placeholder="Enter ID Number"
-                                        className={repInputClass(
-                                            'w-full border rounded-xl border-gray-300 focus:border-[#29a08e] focus:ring-[#29a08e] shadow-sm py-3 px-4 transition-all bg-white'
+                                    <div className="relative">
+                                        <input
+                                            type="text"
+                                            name="idNumber"
+                                            required={!repSectionLocked}
+                                            disabled={repSectionLocked}
+                                            value={formData.idNumber}
+                                            onChange={handleChange}
+                                            placeholder={idMeta.placeholder}
+                                            className={repInputClass(
+                                                `w-full border rounded-xl shadow-sm py-3 px-4 pr-10 transition-all bg-white ${
+                                                    idError
+                                                        ? 'border-red-400 focus:border-red-500 focus:ring-red-200'
+                                                        : 'border-gray-300 focus:border-[#0a9e8f] focus:ring-[#0a9e8f]'
+                                                }`
+                                            )}
+                                        />
+                                        {isIdValid && (
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-green-600" aria-hidden>
+                                                <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
+                                                    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm4.59 7.59-5.5 5.5a1 1 0 0 1-1.42 0l-2.26-2.26a1 1 0 1 1 1.42-1.42l1.55 1.55 4.79-4.79a1 1 0 0 1 1.42 1.42Z" />
+                                                </svg>
+                                            </span>
                                         )}
-                                    />
+                                    </div>
+                                    {idError ? (
+                                        <>
+                                            <p className="mt-1 text-xs text-red-600">{idError}</p>
+                                            <p className="mt-0.5 text-xs text-red-500">{idMeta.example}</p>
+                                        </>
+                                    ) : (
+                                        <p className="mt-1 text-xs text-gray-500">{idMeta.hint}</p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-semibold text-gray-700 mb-2">Upload ID Front</label>

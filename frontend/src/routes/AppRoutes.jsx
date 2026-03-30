@@ -47,6 +47,7 @@ import RecruiterApplicants from '../pages/recruiter/RecruiterApplicants';
 import RecruiterPromotions from '../pages/recruiter/RecruiterPromotions';
 import PromotionPayment from '../pages/recruiter/PromotionPayment';
 import JobAnalytics from '../pages/recruiter/JobAnalytics';
+import RecruiterChangePassword from '../pages/recruiter/RecruiterChangePassword';
 import AdminDashboard from '../pages/admin/AdminDashboard';
 import AdminUsers from '../pages/admin/AdminUsers';
 import AdminKYCPanel from '../pages/admin/AdminKYCPanel';
@@ -171,6 +172,7 @@ const AppRoutes = () => {
                         <Route path="/recruiter/jobs/:jobId/analytics" element={<JobAnalytics />} />
                         <Route path="/recruiter/promotions" element={<RecruiterPromotions />} />
                         <Route path="/promotion-payment" element={<PromotionPayment />} />
+                        <Route path="/recruiter/change-password" element={<RecruiterChangePassword />} />
                         <Route path="/recruiter/notifications" element={<Notifications />} />
                     </Route>
                 </Route>

@@ -6,9 +6,11 @@ import { Mail, MapPin, Phone, Building, Calendar, User, CheckCircle, Shield, Edi
 import EditProfileModal from '../../components/profile/EditProfileModal';
 import ChangePasswordModal from '../../components/profile/ChangePasswordModal';
 import { resolveAssetUrl } from '../../utils/assetUrl';
+import { useNavigate } from 'react-router-dom';
 
 const RecruiterProfile = () => {
     const { user: authUser } = useAuth();
+    const navigate = useNavigate();
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -184,6 +186,24 @@ const RecruiterProfile = () => {
                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{stat.label}</div>
                         </div>
                     ))}
+                </div>
+
+                <div className="mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div>
+                            <h3 className="text-lg font-black text-gray-900">Password & Security</h3>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Update your password regularly to keep your account safe.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => navigate('/recruiter/change-password')}
+                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#0a9e8f] text-white font-semibold hover:bg-[#088579] transition-colors"
+                        >
+                            <Lock size={16} />
+                            Change Password
+                        </button>
+                    </div>
                 </div>
             </main>
 

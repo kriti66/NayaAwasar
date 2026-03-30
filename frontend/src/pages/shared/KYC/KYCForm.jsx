@@ -12,13 +12,11 @@ const allowedFileTypes = ['image/jpeg', 'image/png', 'application/pdf'];
 
 const idValidation = {
     Citizenship: /^[0-9]{7,9}$/,
-    Passport: /^(?:[A-Za-z]{1,2}[0-9]{6,7}|[0-9]{8,9})$/,
-    'Driving License': /^[A-Za-z0-9-]+$/,
-    'Voter ID': /^[0-9]{10,11}$/,
-    'PAN Card': /^[0-9]{9}$/
+    Passport: /^[A-Za-z]{2}[0-9]{7}$/,
+    'National ID': /^[0-9]{12}$/
 };
 
-const idTypeMeta = {
+const idHints = {
     Citizenship: {
         placeholder: 'e.g. 12-34-56-78901',
         hint: 'Numeric only · 7 to 9 digits',
@@ -28,26 +26,14 @@ const idTypeMeta = {
     Passport: {
         placeholder: 'e.g. AB1234567',
         hint: 'Starts with 2 letters + 7 numbers',
-        error: 'Passport must start with letters followed by numbers (8–9 chars).',
+        error: 'Passport must start with 2 letters followed by 7 numbers.',
         example: 'Example: AB1234567'
     },
-    'Driving License': {
-        placeholder: 'e.g. DL-123-456789',
-        hint: 'Alphanumeric · issued by DOTM Nepal',
-        error: 'Invalid Driving License format.',
-        example: 'Example: DL-123-456789'
-    },
-    'Voter ID': {
-        placeholder: 'e.g. 12345678901',
-        hint: 'Numeric only · 10 to 11 digits',
-        error: 'Voter ID must be 10–11 digits (numbers only).',
-        example: 'Example: 12345678901'
-    },
-    'PAN Card': {
-        placeholder: 'e.g. 123456789',
-        hint: 'Numeric only · exactly 9 digits',
-        error: 'PAN Card must be exactly 9 digits.',
-        example: 'Example: 123456789'
+    'National ID': {
+        placeholder: 'e.g. 1234-5678-9012',
+        hint: 'Numeric only · 12 digits',
+        error: 'National ID must be 12 digits (numbers only).',
+        example: 'Example: 123456789012'
     }
 };
 
@@ -57,7 +43,7 @@ const formSchema = z
         dob: z.string().min(1, 'Date of Birth is required'),
         nationality: z.string().min(1, 'Nationality is required'),
         address: z.string().min(1, 'Current Address is required'),
-        idType: z.enum(['Citizenship', 'Passport', 'Driving License', 'Voter ID', 'PAN Card']),
+        idType: z.enum(['Citizenship', 'Passport', 'National ID']),
         idNumber: z.string().min(1, 'ID Number is required')
     })
     .superRefine((data, ctx) => {
@@ -66,9 +52,15 @@ const formSchema = z
         if (new Date(data.dob) > minAgeDate) {
             ctx.addIssue({ code: 'custom', path: ['dob'], message: 'You must be 18+ years old.' });
         }
+        const rawId = (data.idNumber || '').trim();
+        const normalized = data.idType === 'Passport' ? rawId : rawId.replace(/-/g, '');
         const pattern = idValidation[data.idType];
-        if (pattern && !pattern.test(data.idNumber.trim())) {
-            ctx.addIssue({ code: 'custom', path: ['idNumber'], message: `Invalid ${data.idType} format.` });
+        if (pattern && !pattern.test(normalized)) {
+            ctx.addIssue({
+                code: 'custom',
+                path: ['idNumber'],
+                message: idHints[data.idType].error
+            });
         }
     });
 
@@ -88,6 +80,8 @@ const KYCForm = () => {
         register,
         handleSubmit,
         setValue,
+        clearErrors,
+        trigger,
         watch,
         formState: { errors }
     } = useForm({
@@ -219,12 +213,23 @@ const KYCForm = () => {
 
     const currentIdType = watch('idType') || 'Citizenship';
     const currentIdNumber = (watch('idNumber') || '').trim();
-    const currentIdMeta = idTypeMeta[currentIdType] || idTypeMeta.Citizenship;
+    const currentIdMeta = idHints[currentIdType] || idHints.Citizenship;
     const hasIdError = Boolean(errors.idNumber);
     const isIdValid =
         !!currentIdNumber &&
         !hasIdError &&
-        Boolean(idValidation[currentIdType]?.test(currentIdNumber));
+        Boolean(
+            idValidation[currentIdType]?.test(
+                currentIdType === 'Passport' ? currentIdNumber : currentIdNumber.replace(/-/g, '')
+            )
+        );
+
+    useEffect(() => {
+        clearErrors('idNumber');
+        if (currentIdNumber) {
+            trigger('idNumber');
+        }
+    }, [currentIdType, currentIdNumber, clearErrors, trigger]);
 
     if (loadingStatus) {
         return <div className="p-6 text-sm text-gray-500">Loading KYC form...</div>;
@@ -271,9 +276,7 @@ const KYCForm = () => {
                     <select {...register('idType')} disabled={isReadOnly} className="w-full border rounded-lg p-3 bg-white">
                         <option value="Citizenship">Citizenship</option>
                         <option value="Passport">Passport</option>
-                        <option value="Driving License">Driving License</option>
-                        <option value="Voter ID">Voter ID</option>
-                        <option value="PAN Card">PAN Card</option>
+                        <option value="National ID">National ID</option>
                     </select>
                     {errors.idType && <p className="text-xs text-red-600">{errors.idType.message}</p>}
                     <div className="relative">

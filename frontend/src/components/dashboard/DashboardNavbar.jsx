@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LogOut, Menu, X, User, Building2, Plus } from 'lucide-react';
+import { LogOut, Menu, X, User, Building2, Plus, Lock } from 'lucide-react';
 import api from '../../services/api';
 import { useNotifications } from '../../hooks/useNotifications';
 import NotificationBell from '../notifications/NotificationBell';
@@ -170,6 +170,14 @@ const DashboardNavbar = () => {
                                             <Building2 size={16} />
                                             Company Profile
                                         </Link>
+                                        <Link
+                                            to="/recruiter/change-password"
+                                            onClick={() => setIsDropdownOpen(false)}
+                                            className="flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
+                                        >
+                                            <Lock size={16} />
+                                            Change Password
+                                        </Link>
                                         <button
                                             onClick={() => { setIsDropdownOpen(false); handleLogout(); }}
                                             className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 mt-1"
@@ -218,6 +226,14 @@ const DashboardNavbar = () => {
                                     Post a Job
                                 </Link>
                             )}
+                            <Link
+                                to="/recruiter/change-password"
+                                onClick={() => setMobileMenuOpen(false)}
+                                className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg text-slate-600"
+                            >
+                                <Lock size={16} />
+                                Change Password
+                            </Link>
                         </div>
                     </div>
                 )}
