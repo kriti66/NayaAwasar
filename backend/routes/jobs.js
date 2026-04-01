@@ -1,10 +1,11 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
 import Job from '../models/Job.js';
 import Application from '../models/Application.js';
 import Company from '../models/Company.js';
 import User from '../models/User.js';
-import { requireAuth, requireRole, requireKycApproved, requireAdmin, requireCompanyApproved, requireKycVerified, requireRecruiterKycApproved } from '../middleware/auth.js';
+import { requireAuth, requireRole, requireKycApproved, requireAdmin, requireCompanyApproved, requireKycVerified, requireRecruiterKycApproved, getJwtSecret } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getPromotedJobs } from '../controllers/promotedJobController.js';
 import {
@@ -20,8 +21,25 @@ import { normalizeLabelOverride } from '../utils/jobLabel.js';
 import { JOB_CATEGORIES } from '../constants/jobCategories.js';
 import { getValidSavedJobIds, cleanUserSavedJobs } from '../utils/savedJobsUtils.js';
 import { notDeletedFilter } from '../utils/userQueryHelpers.js';
+import {
+    DUPLICATE_MODERATION_STATUSES,
+    isJobPubliclyVisible,
+    normalizeModerationStatusForEdit,
+    isJobVisibleForPublicListing,
+    PUBLIC_MODERATION_MATCH
+} from '../utils/jobModeration.js';
 
 const router = express.Router();
+
+function tryOptionalAuthPayload(req) {
+    const h = req.headers.authorization;
+    if (!h?.startsWith('Bearer ')) return null;
+    try {
+        return jwt.verify(h.split(' ')[1], getJwtSecret());
+    } catch {
+        return null;
+    }
+}
 
 // Get all jobs (Public - only approved, promotion-aware sort)
 router.get('/', async (req, res) => {
@@ -96,7 +114,7 @@ router.get('/stats/recruiter', requireAuth, async (req, res) => {
 router.get('/recommended', async (req, res) => {
     try {
         const jobs = await Job.aggregate([
-            { $match: { status: 'Active', moderationStatus: 'Approved' } },
+            { $match: { status: 'Active', ...PUBLIC_MODERATION_MATCH } },
             { $sample: { size: 5 } },
             {
                 $lookup: {
@@ -173,9 +191,25 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
         }
         const tagList = normalizeTagsInput(tags);
 
+        const companyId = company?._id || req.body.company_id;
+        if (!companyId) {
+            return res.status(400).json({ message: 'Company is required to post a job' });
+        }
+
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const duplicate = await Job.findOne({
+            company_id: companyId,
+            title: String(title).trim(),
+            createdAt: { $gte: thirtyDaysAgo },
+            moderationStatus: { $in: DUPLICATE_MODERATION_STATUSES }
+        }).lean();
+        if (duplicate) {
+            return res.status(400).json({ message: 'You already have a similar active job post.' });
+        }
+
         const job = new Job({
             recruiter_id,
-            company_id: company?._id || req.body.company_id,
+            company_id: companyId,
             title,
             company_name: company?.name || company_name,
             type,
@@ -187,7 +221,8 @@ router.post('/', requireAuth, requireRole('recruiter', 'admin'), requireRecruite
             category,
             tags: tagList,
             company_logo: company?.logo || req.body.company_logo || '',
-            status: 'Active'
+            status: 'Active',
+            moderationStatus: 'active'
         });
 
         await job.save();
@@ -257,7 +292,7 @@ router.get('/saved', requireAuth, requireKycVerified, async (req, res) => {
         const jobs = await Job.find({
             _id: { $in: validIds },
             status: 'Active',
-            moderationStatus: 'Approved'
+            $and: [PUBLIC_MODERATION_MATCH]
         })
             .populate('company_id', 'name logo location')
             .sort({ createdAt: -1 })
@@ -272,6 +307,48 @@ router.get('/saved', requireAuth, requireKycVerified, async (req, res) => {
 });
 
 router.get('/:id/similar', getSimilarJobsForJob);
+
+// Recruiter: acknowledge admin warning (hides banner on dashboard after read)
+router.patch('/:id/acknowledge-warning', requireAuth, requireRole('recruiter'), async (req, res) => {
+    const { id } = req.params;
+    try {
+        const job = await Job.findById(id);
+        if (!job) return res.status(404).json({ message: 'Job not found' });
+        if (job.recruiter_id.toString() !== req.user.id) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+        job.warningAcknowledged = true;
+        await job.save();
+        res.json(job);
+    } catch (error) {
+        console.error('acknowledge-warning error:', error);
+        res.status(500).json({ message: 'Error updating job' });
+    }
+});
+
+// Logged-in users (non-admin): report a job
+router.post('/:id/report', requireAuth, async (req, res) => {
+    const { id } = req.params;
+    if (req.user.role === 'admin') {
+        return res.status(403).json({ message: 'Admins cannot use the report action' });
+    }
+    try {
+        const job = await Job.findById(id);
+        if (!job) return res.status(404).json({ message: 'Job not found' });
+        const uid = new mongoose.Types.ObjectId(req.user.id);
+        if (job.reportedBy?.some((rid) => rid.toString() === uid.toString())) {
+            return res.status(400).json({ message: 'Already reported' });
+        }
+        job.reportedBy = job.reportedBy || [];
+        job.reportedBy.push(uid);
+        job.reportCount = (job.reportCount || 0) + 1;
+        await job.save();
+        res.json({ success: true, message: 'Reported. Our team will review.' });
+    } catch (error) {
+        console.error('report job error:', error);
+        res.status(500).json({ message: 'Error reporting job' });
+    }
+});
 
 // Admin: fixed badge label override (invalidates per-job label cache)
 router.patch('/:id/label-override', requireAuth, requireAdmin, async (req, res) => {
@@ -295,13 +372,20 @@ router.patch('/:id/label-override', requireAuth, requireAdmin, async (req, res) 
     }
 });
 
-// Get specific job
+// Get specific job (public only unless owner/admin sends a valid Bearer token)
 router.get('/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        // Populate company details including logo
         const job = await Job.findById(id).populate('company_id', 'name logo location website size industry');
         if (!job) return res.status(404).json({ message: 'Job not found' });
+
+        const viewer = tryOptionalAuthPayload(req);
+        const isOwner = viewer && job.recruiter_id.toString() === viewer.id;
+        const isAdmin = viewer?.role === 'admin';
+        if (!isJobPubliclyVisible(job) && !isOwner && !isAdmin) {
+            return res.status(404).json({ message: 'Job not found' });
+        }
+
         const jobObj = job.toObject ? job.toObject() : job;
         if (!jobObj.company_logo && jobObj.company_id?.logo) {
             jobObj.company_logo = jobObj.company_id.logo;
@@ -350,90 +434,125 @@ router.put('/:id', requireAuth, requireKycApproved, requireCompanyApproved, asyn
         const existingJob = await Job.findById(id);
         if (!existingJob) return res.status(404).json({ message: 'Job not found' });
 
-        // Check if job belongs to recruiter
         if (existingJob.recruiter_id.toString() !== req.user.id && req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Unauthorized' });
         }
 
-        const updateData = {
-            title,
-            company_name,
-            type,
-            description,
-            location,
-            salary_range,
-            requirements,
-            status,
-            experience_level
-        };
+        const normalizedMs = normalizeModerationStatusForEdit(existingJob.moderationStatus);
+        if (normalizedMs === 'deleted') {
+            return res.status(403).json({ message: 'This job was permanently removed and cannot be edited.' });
+        }
+
+        if (title !== undefined) existingJob.title = title;
+        if (company_name !== undefined) existingJob.company_name = company_name;
+        if (type !== undefined) existingJob.type = type;
+        if (description !== undefined) existingJob.description = description;
+        if (location !== undefined) existingJob.location = location;
+        if (salary_range !== undefined) existingJob.salary_range = salary_range;
+        if (requirements !== undefined) existingJob.requirements = requirements;
+        if (status !== undefined) existingJob.status = status;
+        if (experience_level !== undefined) existingJob.experience_level = experience_level;
         if (category !== undefined) {
             if (!JOB_CATEGORIES.includes(category)) {
                 return res.status(400).json({ message: 'Invalid category' });
             }
-            updateData.category = category;
+            existingJob.category = category;
         }
         if (tags !== undefined) {
-            updateData.tags = normalizeTagsInput(tags);
+            existingJob.tags = normalizeTagsInput(tags);
         }
 
-        // If job was flagged/hidden, update to 'Under Review' on edit
-        if (existingJob.moderationStatus === 'Flagged' || existingJob.moderationStatus === 'Hidden') {
-            updateData.moderationStatus = 'Under Review';
-            updateData.adminComments = 'Waiting for admin re-approval after recruiter update.';
+        if (!Array.isArray(existingJob.moderationHistory)) {
+            existingJob.moderationHistory = [];
         }
 
-        const job = await Job.findByIdAndUpdate(id, updateData, { new: true });
+        if (normalizedMs === 'hidden') {
+            existingJob.moderationStatus = 'pending_review';
+            existingJob.warningMessage = '';
+            existingJob.warningDeadline = null;
+            existingJob.warningAcknowledged = false;
+            existingJob.moderationHistory.push({
+                action: 'resubmitted',
+                note: 'Recruiter edited and resubmitted',
+                changedBy: new mongoose.Types.ObjectId(req.user.id)
+            });
+        } else if (normalizedMs === 'warned') {
+            existingJob.moderationStatus = 'active';
+            existingJob.warningMessage = '';
+            existingJob.warningDeadline = null;
+            existingJob.warningAcknowledged = false;
+            existingJob.moderationHistory.push({
+                action: 'warning_resolved',
+                note: 'Recruiter edited after warning',
+                changedBy: new mongoose.Types.ObjectId(req.user.id)
+            });
+        }
+
+        await existingJob.save();
         triggerEmbeddingUpdate(id, 'job');
         await invalidateJobLabelCacheForJob(id);
-        res.json({ success: true, message: 'Job updated', job });
+        res.json({ success: true, message: 'Job updated', job: existingJob });
     } catch (error) {
         console.error("Update job error:", error);
         res.status(500).json({ message: 'Error updating job' });
     }
 });
 
-// Admin Moderation Route
+// Admin Moderation Route (legacy; prefer /api/admin/moderation/jobs/*)
 router.patch('/:id/moderate', requireAuth, requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { moderationStatus, flagReason, reviewDeadline, adminComments } = req.body;
 
+    const legacyToNew = {
+        Approved: 'active',
+        Flagged: 'warned',
+        'Under Review': 'pending_review',
+        Hidden: 'hidden'
+    };
+    const nextStatus = legacyToNew[moderationStatus] || moderationStatus;
+
     try {
-        const job = await Job.findByIdAndUpdate(id, {
-            moderationStatus,
-            flagReason,
-            reviewDeadline,
-            adminComments
-        }, { new: true }).populate('recruiter_id', '_id');
+        const job = await Job.findByIdAndUpdate(
+            id,
+            {
+                moderationStatus: nextStatus,
+                flagReason,
+                reviewDeadline,
+                adminComments
+            },
+            { new: true }
+        ).populate('recruiter_id', '_id');
 
         if (!job) return res.status(404).json({ message: 'Job not found' });
 
         const { createNotification } = await import('../controllers/notificationController.js');
         const recruiterId = job.recruiter_id?._id || job.recruiter_id;
         if (recruiterId) {
+            const approvedLike = nextStatus === 'active';
             await createNotification({
                 recipient: recruiterId,
-                type: moderationStatus === 'Approved' ? 'job_approved' : 'job_rejected',
+                type: approvedLike ? 'job_approved' : 'job_rejected',
                 category: 'job',
-                title: moderationStatus === 'Approved' ? 'Job Approved' : 'Job Rejected',
-                message: moderationStatus === 'Approved'
+                title: approvedLike ? 'Job Approved' : 'Job update',
+                message: approvedLike
                     ? `Your job "${job.title}" has been approved and is now visible.`
-                    : `Your job "${job.title}" was rejected. ${adminComments || ''}`.trim(),
+                    : `Your job "${job.title}" was updated. ${adminComments || flagReason || ''}`.trim(),
                 link: '/recruiter/jobs',
                 metadata: { jobId: job._id },
                 sender: req.user.id
             });
         }
 
-        const modAction = moderationStatus === 'Approved' ? 'JOB_APPROVED' : 'JOB_REJECTED';
+        const modAction = nextStatus === 'active' ? 'JOB_APPROVED' : 'JOB_REJECTED';
         await logActivity(
             req.user.id,
             modAction,
-            `Job '${job.title}' moderation status updated to ${moderationStatus}.`,
+            `Job '${job.title}' moderation status updated to ${nextStatus}.`,
             { jobId: job._id }
         );
 
         await invalidateJobLabelCacheForJob(id);
-        res.json({ success: true, message: `Job moderation status updated to ${moderationStatus}`, job });
+        res.json({ success: true, message: `Job moderation status updated to ${nextStatus}`, job });
     } catch (error) {
         console.error("Job moderation error:", error);
         res.status(500).json({ message: 'Error updating job moderation status' });
@@ -488,7 +607,7 @@ router.post('/:id/save', requireAuth, requireKycVerified, async (req, res) => {
         if (!job) {
             return res.status(404).json({ message: 'Job not found' });
         }
-        if (job.status !== 'Active' || job.moderationStatus !== 'Approved') {
+        if (!isJobVisibleForPublicListing(job)) {
             return res.status(400).json({ message: 'This job is no longer available to save' });
         }
 

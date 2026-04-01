@@ -5,9 +5,34 @@ import User from '../models/User.js';
 import Company from '../models/Company.js';
 import Job from '../models/Job.js';
 import Application from '../models/Application.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
+import { getActiveWarningsForRecruiter } from '../services/recruiterWarningService.js';
+import { normalizeModerationStatusForEdit } from '../utils/jobModeration.js';
 
 const router = express.Router();
+
+// @route   GET /api/recruiter/warnings
+// @desc    Active moderation warnings for the logged-in recruiter
+// @access  Private (recruiter)
+router.get('/warnings', requireAuth, requireRole('recruiter'), async (req, res) => {
+    try {
+        const rows = await getActiveWarningsForRecruiter(req.user.id);
+        const warnings = rows.map((w) => ({
+            _id: w._id,
+            reason: w.reason,
+            note: w.note || '',
+            warnedAt: w.warnedAt,
+            isActive: w.isActive,
+            job: w.job
+                ? { _id: w.job._id, title: w.job.title || 'Untitled listing' }
+                : null
+        }));
+        res.json({ warnings });
+    } catch (error) {
+        console.error('GET /recruiter/warnings error:', error);
+        res.status(500).json({ message: 'Error fetching warnings' });
+    }
+});
 
 // @route   GET /api/recruiter/profile-summary
 // @desc    Get recruiter profile summary with stats and verification status
@@ -142,11 +167,17 @@ router.get('/jobs', requireAuth, async (req, res) => {
                     status: 1,
                     type: 1,
                     location: 1,
-                    createdAt: 1, // Ensure timestamp works
-                    posted_at: 1, // Fallback if schema uses this
-                    views_count: 1, // From schema
-                    applicants_count: { $size: '$applications' }, // Count array
-                    id: '$_id' // Frontend friendly id
+                    createdAt: 1,
+                    posted_at: 1,
+                    views_count: 1,
+                    applicants_count: { $size: '$applications' },
+                    moderationStatus: 1,
+                    moderationNote: 1,
+                    warningMessage: 1,
+                    warningDeadline: 1,
+                    warningAcknowledged: 1,
+                    reportCount: 1,
+                    id: '$_id'
                 }
             }
         ]);
@@ -183,15 +214,18 @@ router.delete('/jobs/:id', requireAuth, async (req, res) => {
 // @route   PUT /api/recruiter/jobs/:id
 router.put('/jobs/:id', requireAuth, async (req, res) => {
     try {
-        let job = await Job.findOne({ _id: req.params.id, recruiter_id: req.user.id });
+        const job = await Job.findOne({ _id: req.params.id, recruiter_id: req.user.id });
         if (!job) {
             return res.status(404).json({ message: 'Job not found or unauthorized' });
         }
 
-        // Update fields
+        const normalizedMs = normalizeModerationStatusForEdit(job.moderationStatus);
+        if (normalizedMs === 'deleted') {
+            return res.status(403).json({ message: 'This job was permanently removed and cannot be edited.' });
+        }
+
         const { title, type, location, status, description, salary_range, requirements } = req.body;
 
-        // Only update allowed fields
         if (title) job.title = title;
         if (type) job.type = type;
         if (location) job.location = location;
@@ -199,6 +233,31 @@ router.put('/jobs/:id', requireAuth, async (req, res) => {
         if (description) job.description = description;
         if (salary_range) job.salary_range = salary_range;
         if (requirements) job.requirements = requirements;
+
+        if (!Array.isArray(job.moderationHistory)) {
+            job.moderationHistory = [];
+        }
+        if (normalizedMs === 'hidden') {
+            job.moderationStatus = 'pending_review';
+            job.warningMessage = '';
+            job.warningDeadline = null;
+            job.warningAcknowledged = false;
+            job.moderationHistory.push({
+                action: 'resubmitted',
+                note: 'Recruiter edited and resubmitted',
+                changedBy: new mongoose.Types.ObjectId(req.user.id)
+            });
+        } else if (normalizedMs === 'warned') {
+            job.moderationStatus = 'active';
+            job.warningMessage = '';
+            job.warningDeadline = null;
+            job.warningAcknowledged = false;
+            job.moderationHistory.push({
+                action: 'warning_resolved',
+                note: 'Recruiter edited after warning',
+                changedBy: new mongoose.Types.ObjectId(req.user.id)
+            });
+        }
 
         await job.save();
         res.json(job);

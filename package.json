@@ -2,6 +2,10 @@
   "name": "nayaawasar",
   "private": true,
   "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "npm run dev --prefix backend",
+    "dev:stack": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
     "dev:ai": "cd recommendation-service && python -m uvicorn main:app --reload --port 8000",
     "dev:all": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\" \"npm run dev:ai\""
   },

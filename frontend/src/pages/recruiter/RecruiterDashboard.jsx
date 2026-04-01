@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import ActionRequiredBanner from '../../components/dashboard/ActionRequiredBanner';
 import KycGuard from '../../components/common/KycGuard';
 import CompanyLogo from '../../components/common/CompanyLogo';
+import RecruiterModerationWarningsBanner from '../../components/recruiter/RecruiterModerationWarningsBanner';
 
 const AnimatedCounter = ({ end, suffix = '' }) => {
     const [count, setCount] = useState(0);
@@ -282,6 +283,8 @@ const RecruiterDashboard = () => {
                         </div>
                     </div>
                 </Link>
+
+                <RecruiterModerationWarningsBanner />
 
                 {/* ─── Recent Postings Section ─────────────────────────────── */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

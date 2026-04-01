@@ -12,6 +12,27 @@ import {
     PROMOTION_TYPES
 } from '../constants/promotionConfig.js';
 import { invalidateJobLabelCacheForJob } from './userJobLabelEnrichment.js';
+import { isJobPubliclyVisible } from '../utils/jobModeration.js';
+
+/**
+ * Promotions for jobs that are not publicly visible (hidden, pending_review, deleted, etc.)
+ * are hidden from recruiter/admin promotion UIs — those jobs are managed under job moderation.
+ * @param {Array<{ jobId: import('mongoose').Types.ObjectId | { _id?: unknown } }>} promotionDocsLean
+ */
+export async function promotionsVisibleForUiQuery(promotionDocsLean) {
+    if (!promotionDocsLean?.length) return [];
+    const rawIds = promotionDocsLean.map((p) => p.jobId?._id ?? p.jobId).filter(Boolean);
+    const jobIds = [...new Set(rawIds.map((id) => id.toString()))];
+    if (!jobIds.length) return [];
+    const jobs = await Job.find({ _id: { $in: jobIds } }).select('moderationStatus').lean();
+    const visible = new Set(
+        jobs.filter((j) => isJobPubliclyVisible(j)).map((j) => j._id.toString())
+    );
+    return promotionDocsLean.filter((p) => {
+        const jid = (p.jobId?._id ?? p.jobId)?.toString?.();
+        return jid && visible.has(jid);
+    });
+}
 
 /**
  * Get free promotion count used by company (approved/active only)
@@ -37,7 +58,7 @@ export async function canUseFreePromotion(companyId) {
  * Free promotion slots in use: pending review, active, expired, or approved (rejected/cancelled do not count).
  */
 export async function getRecruiterCommittedFreePromotionSlots(recruiterId) {
-    return Promotion.countDocuments({
+    const list = await Promotion.find({
         recruiterId,
         isFreePromotion: true,
         status: {
@@ -48,7 +69,9 @@ export async function getRecruiterCommittedFreePromotionSlots(recruiterId) {
                 PROMOTION_STATUSES.APPROVED
             ]
         }
-    });
+    }).lean();
+    const visible = await promotionsVisibleForUiQuery(list);
+    return visible.length;
 }
 
 /**
@@ -131,7 +154,7 @@ export async function isJobEligibleForPromotion(jobId, companyId) {
     if (!job) return false;
     if (job.status !== 'Active') return false;
     if (job.company_id?._id?.toString() !== companyId?.toString()) return false;
-    if (job.moderationStatus && job.moderationStatus !== 'Approved') return false;
+    if (!isJobPubliclyVisible(job)) return false;
     return true;
 }
 

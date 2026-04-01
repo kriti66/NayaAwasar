@@ -4,6 +4,7 @@ import Job from '../models/Job.js';
 import RecruiterKyc from '../models/RecruiterKyc.js';
 import Application from '../models/Application.js';
 import { requireAuth, requireRole, requireKycApproved, requireCompanyApproved, requireAdmin, getJwtSecret } from '../middleware/auth.js';
+import { PUBLIC_MODERATION_MATCH } from '../utils/jobModeration.js';
 import { hasMeaningfulChanges } from '../utils/companyVerificationUtils.js';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
@@ -273,9 +274,11 @@ router.get('/:id/jobs', async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 3;
         const jobs = await Job.find({
-            company_id: req.params.id,
-            status: 'Active',
-            moderationStatus: 'Approved'
+            $and: [
+                { company_id: req.params.id },
+                { status: 'Active' },
+                PUBLIC_MODERATION_MATCH
+            ]
         })
             .sort({ createdAt: -1 })
             .limit(limit);

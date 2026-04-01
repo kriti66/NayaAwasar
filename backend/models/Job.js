@@ -89,9 +89,35 @@ const jobSchema = new mongoose.Schema({
     },
     moderationStatus: {
         type: String,
-        enum: ['Approved', 'Flagged', 'Under Review', 'Hidden'],
-        default: 'Approved'
+        enum: ['active', 'warned', 'hidden', 'pending_review', 'deleted'],
+        default: 'active'
     },
+    moderationNote: {
+        type: String,
+        default: ''
+    },
+    warningMessage: {
+        type: String,
+        default: ''
+    },
+    warningDeadline: {
+        type: Date,
+        default: null
+    },
+    warningAcknowledged: {
+        type: Boolean,
+        default: false
+    },
+    moderationHistory: [
+        {
+            action: { type: String },
+            note: { type: String, default: '' },
+            changedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+            changedAt: { type: Date, default: Date.now }
+        }
+    ],
+    reportCount: { type: Number, default: 0 },
+    reportedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     flagReason: {
         type: String,
         default: ''

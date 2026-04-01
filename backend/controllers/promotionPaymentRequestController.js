@@ -18,6 +18,7 @@ import {
 } from '../constants/promotionConfig.js';
 import * as promotionService from '../services/promotionService.js';
 import { createNotification, notifyAdmins } from './notificationController.js';
+import { isJobPubliclyVisible } from '../utils/jobModeration.js';
 import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
 
 const validDurations = [7, 15, 30];
@@ -142,10 +143,11 @@ export const submitPromotionPaymentRequest = async (req, res) => {
 export const getMyPromotionPaymentRequests = async (req, res) => {
     try {
         const list = await PromotionPaymentRequest.find({ recruiterId: req.user.id })
-            .populate('jobId', 'title company_name status')
+            .populate('jobId', 'title company_name status moderationStatus')
             .sort({ createdAt: -1 })
             .lean();
-        res.json(list);
+        const visible = list.filter((row) => row.jobId && isJobPubliclyVisible(row.jobId));
+        res.json(visible);
     } catch (error) {
         console.error('getMyPromotionPaymentRequests:', error);
         res.status(500).json({ message: 'Failed to load requests' });
@@ -159,10 +161,11 @@ export const adminListPendingPromotionPaymentRequests = async (req, res) => {
         })
             .populate('recruiterId', 'fullName email')
             .populate('companyId', 'name')
-            .populate('jobId', 'title company_name status')
+            .populate('jobId', 'title company_name status moderationStatus')
             .sort({ createdAt: 1 })
             .lean();
-        res.json(list);
+        const visible = list.filter((row) => row.jobId && isJobPubliclyVisible(row.jobId));
+        res.json(visible);
     } catch (error) {
         console.error('adminListPendingPromotionPaymentRequests:', error);
         res.status(500).json({ message: 'Failed to load requests' });

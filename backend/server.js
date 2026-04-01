@@ -44,19 +44,23 @@ if (!MONGO_URI) {
 const app = express();
 const PORT = process.env.PORT || 5001; // Matches the .env PORT prefernece
 
-// Middleware
+// Middleware — CORS (local dev, FRONTEND_URL(S), Vercel previews, optional regex)
 const parseCsv = (value) =>
     String(value || '')
         .split(',')
         .map((v) => v.trim())
         .filter(Boolean);
 
-const allowedOrigins = new Set([
+const allowedOrigins = [
     'http://localhost:5173',
+    'http://localhost:5174',
     'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
     ...parseCsv(process.env.FRONTEND_URL),
     ...parseCsv(process.env.FRONTEND_URLS),
-]);
+].filter(Boolean);
+
+const allowedOriginsSet = new Set(allowedOrigins);
 
 const allowedOriginRegex = parseCsv(process.env.CORS_ORIGIN_REGEX)
     .map((pattern) => {
@@ -69,19 +73,38 @@ const allowedOriginRegex = parseCsv(process.env.CORS_ORIGIN_REGEX)
     })
     .filter(Boolean);
 
-const corsOptions = {
-    origin: function (origin, callback) {
-        const isVercelDomain =
-            typeof origin === 'string' &&
-            /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i.test(origin);
-        const isAllowedByRegex =
-            typeof origin === 'string' && allowedOriginRegex.some((re) => re.test(origin));
+/** HTTPS deployments on Vercel (*.vercel.app) */
+function isVercelAppOrigin(origin) {
+    if (typeof origin !== 'string' || !origin.startsWith('https://')) return false;
+    try {
+        const { hostname } = new URL(origin);
+        return hostname === 'vercel.app' || hostname.endsWith('.vercel.app');
+    } catch {
+        return false;
+    }
+}
 
-        if (!origin || allowedOrigins.has(origin) || isVercelDomain || isAllowedByRegex) {
-            callback(null, true);
-        } else {
-            callback(new Error(`CORS not allowed for origin: ${origin}`));
+const corsOptions = {
+    origin(origin, callback) {
+        // No Origin: same-origin, Postman, curl, many mobile clients
+        if (origin == null || origin === '') {
+            return callback(null, true);
         }
+
+        if (allowedOriginsSet.has(origin)) {
+            return callback(null, true);
+        }
+
+        if (isVercelAppOrigin(origin)) {
+            return callback(null, true);
+        }
+
+        if (allowedOriginRegex.some((re) => re.test(origin))) {
+            return callback(null, true);
+        }
+
+        console.warn(`CORS not allowed for origin: ${origin}`);
+        return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -116,6 +139,7 @@ import userProfileRoutes from './routes/userProfile.js';
 import profileRoutes from './routes/profiles.js';
 import kycRoutes from './routes/kyc.js';
 import adminRoutes from './routes/admin.js';
+import moderationRoutes from './routes/moderationRoutes.js';
 import locationRoutes from './routes/location.js';
 import companyRoutes from './routes/companies.js';
 import recruiterRoutes from './routes/recruiter.js';
@@ -150,6 +174,7 @@ app.use('/api/upload', requireAuth, uploadRoutes);
 app.use('/api/admin/users', requireAuth, userRoutes);
 app.use('/api/users', requireAuth, userProfileRoutes); // Mounts /profile and /profile-image
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/moderation', moderationRoutes);
 app.use('/api/profile', requireAuth, profileRoutes);
 app.use('/api/projects', requireAuth, projectRoutes);
 app.use('/api/activity', requireAuth, activityRoutes);

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Job from '../models/Job.js';
 import User from '../models/User.js';
+import { PUBLIC_MODERATION_MATCH } from './jobModeration.js';
 
 /**
  * Get valid saved job IDs for a user.
@@ -17,10 +18,14 @@ export const getValidSavedJobIds = async (userId) => {
     const validJobs = await Job.find({
         _id: { $in: ids },
         status: 'Active',
-        moderationStatus: 'Approved',
-        $or: [
-            { application_deadline: { $exists: false } },
-            { application_deadline: { $gte: new Date() } }
+        $and: [
+            PUBLIC_MODERATION_MATCH,
+            {
+                $or: [
+                    { application_deadline: { $exists: false } },
+                    { application_deadline: { $gte: new Date() } }
+                ]
+            }
         ]
     }).select('_id').lean();
 

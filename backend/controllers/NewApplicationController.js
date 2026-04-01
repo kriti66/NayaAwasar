@@ -10,6 +10,7 @@ import Interview from '../models/Interview.js';
 import { recordUserInteraction } from '../services/recommendationService.js';
 import { getEffectiveInterviewStart } from '../utils/interviewDateTime.js';
 import { computeInterviewLifecycle } from '../utils/interviewLifecycle.js';
+import { isJobVisibleForPublicListing } from '../utils/jobModeration.js';
 
 function getSeekerIdString(application) {
     const s = application?.seeker_id;
@@ -169,6 +170,9 @@ export const applyForJob = async (req, res) => {
         if (!job) return res.status(404).json({ message: 'Job not found' });
         if (job.status !== 'Active') {
             return res.status(400).json({ message: 'This job is no longer active.' });
+        }
+        if (!isJobVisibleForPublicListing(job)) {
+            return res.status(400).json({ message: 'This job is not open for applications.' });
         }
 
         // 4. Check for Existing Application

@@ -1,4 +1,5 @@
 import Job from '../models/Job.js';
+import { PUBLIC_MODERATION_MATCH } from '../utils/jobModeration.js';
 import { expireOverduePromotions } from '../services/jobListingService.js';
 
 // @route   PATCH /api/admin/jobs/:id/promote
@@ -76,11 +77,13 @@ export const getPromotedJobs = async (req, res) => {
         const currentDate = new Date();
 
         const promotedJobs = await Job.find({
-            status: 'Active',
-            moderationStatus: 'Approved',
-            isPromoted: true,
-            promotionStartDate: { $lte: currentDate },
-            promotionEndDate: { $gt: currentDate }
+            $and: [
+                { status: 'Active' },
+                PUBLIC_MODERATION_MATCH,
+                { isPromoted: true },
+                { promotionStartDate: { $lte: currentDate } },
+                { promotionEndDate: { $gt: currentDate } }
+            ]
         })
         .sort({ promotionPriority: -1, posted_date: -1 })
         .populate('company_id', 'name logo location')

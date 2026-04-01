@@ -1,6 +1,7 @@
 import axios from 'axios';
 import mongoose from 'mongoose';
 import Job from '../models/Job.js';
+import { PUBLIC_MODERATION_MATCH, isJobVisibleForPublicListing } from '../utils/jobModeration.js';
 
 const PYTHON_URL = (process.env.PYTHON_SERVICE_URL || 'http://localhost:8000').replace(
     /\/+$/,
@@ -70,7 +71,7 @@ async function hydratePythonJobCards(recs) {
     return recs
         .map((r) => {
             const j = byId.get(r.job_id);
-            if (!j) return null;
+            if (!j || !isJobVisibleForPublicListing(j)) return null;
             const raw = r.similarity_score ?? 0;
             const numRaw = Number(raw);
             const clamped = Number.isFinite(numRaw) ? Math.min(1, Math.max(0, numRaw)) : 0;
@@ -91,10 +92,14 @@ async function hydratePythonJobCards(recs) {
 async function fallbackLatestJobs(limit = 10) {
     const jobs = await Job.find({
         status: 'Active',
-        moderationStatus: 'Approved',
-        $or: [
-            { application_deadline: { $exists: false } },
-            { application_deadline: { $gte: new Date() } }
+        $and: [
+            PUBLIC_MODERATION_MATCH,
+            {
+                $or: [
+                    { application_deadline: { $exists: false } },
+                    { application_deadline: { $gte: new Date() } }
+                ]
+            }
         ]
     })
         .sort({ createdAt: -1 })

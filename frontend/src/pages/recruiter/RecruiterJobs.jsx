@@ -19,6 +19,49 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
+function effectiveModerationStatus(job) {
+    const m = job?.moderationStatus;
+    if (!m || m === '' || m === 'Approved') return 'active';
+    if (m === 'Flagged') return 'warned';
+    if (m === 'Hidden') return 'hidden';
+    if (m === 'Under Review') return 'pending_review';
+    return m;
+}
+
+function moderationBadgeClass(eff) {
+    switch (eff) {
+        case 'active':
+            return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        case 'warned':
+            return 'bg-amber-50 text-amber-800 border-amber-200';
+        case 'hidden':
+            return 'bg-rose-50 text-rose-700 border-rose-200';
+        case 'pending_review':
+            return 'bg-yellow-50 text-yellow-800 border-yellow-200';
+        case 'deleted':
+            return 'bg-slate-100 text-slate-600 border-slate-200';
+        default:
+            return 'bg-gray-50 text-gray-600 border-gray-200';
+    }
+}
+
+function moderationBadgeLabel(eff) {
+    switch (eff) {
+        case 'active':
+            return 'Live';
+        case 'warned':
+            return '⚠ Warning';
+        case 'hidden':
+            return 'Hidden — not visible to public';
+        case 'pending_review':
+            return 'Under review';
+        case 'deleted':
+            return 'Deleted';
+        default:
+            return eff || '—';
+    }
+}
+
 const RecruiterJobs = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -75,6 +118,16 @@ const RecruiterJobs = () => {
                 console.error("Error deleting job:", error);
                 toast.error(error.response?.data?.message || "Failed to delete job");
             }
+        }
+    };
+
+    const handleAcknowledgeWarning = async (jobId) => {
+        try {
+            await api.patch(`/jobs/${jobId}/acknowledge-warning`);
+            toast.success('Marked as acknowledged');
+            fetchJobs();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Could not update');
         }
     };
 
@@ -171,20 +224,68 @@ const RecruiterJobs = () => {
                             <p className="mt-4 text-sm text-gray-500 font-bold">Loading Jobs...</p>
                         </div>
                     ) : jobs.length > 0 ? (
-                        jobs.map((job) => (
-                            <div key={job.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col md:flex-row justify-between hover:shadow-lg hover:border-[#29a08e]/10 transition-all duration-300 group relative overflow-hidden">
+                        jobs.map((job) => {
+                            const jid = job.id || job._id;
+                            const mod = effectiveModerationStatus(job);
+                            const isModDeleted = mod === 'deleted';
+                            const showPublicPromote = mod === 'active' || mod === 'warned';
+
+                            return (
+                            <div key={jid} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col md:flex-row justify-between hover:shadow-lg hover:border-[#29a08e]/10 transition-all duration-300 group relative overflow-hidden">
                                 <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#29a08e] to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-r"></div>
                                 <div className="flex-1 pl-2">
-                                    <div className="flex items-center gap-3 mb-2">
+                                    <div className="flex flex-wrap items-center gap-3 mb-2">
                                         <h3 className="text-lg font-black text-gray-900 group-hover:text-[#29a08e] transition-colors tracking-tight">
                                             {job.title}
                                         </h3>
+                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${moderationBadgeClass(mod)}`}>
+                                            {moderationBadgeLabel(mod)}
+                                        </span>
                                         <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border
                                             ${(job.status || 'Active') === 'Active' ? 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20' : 'bg-gray-100 text-gray-500 border-gray-200'}
                                         `}>
                                             {job.status || 'Active'}
                                         </span>
                                     </div>
+
+                                    {mod === 'warned' && job.warningMessage && !job.warningAcknowledged && (
+                                        <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-900">
+                                            <p className="font-semibold">⚠ Admin notice: {job.warningMessage}</p>
+                                            {job.warningDeadline && (
+                                                <p className="mt-2 text-xs text-amber-800">
+                                                    Please fix this by {formatDate(job.warningDeadline)} or your post may be hidden.
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                    {mod === 'warned' && job.warningAcknowledged && (
+                                        <p className="mb-4 text-xs text-gray-500">
+                                            Warning acknowledged. Please edit your job post to resolve the issue.
+                                        </p>
+                                    )}
+
+                                    {mod === 'hidden' && (
+                                        <div className="mb-4 p-4 rounded-xl border border-rose-200 bg-rose-50 text-sm text-rose-900">
+                                            {job.moderationNote && (
+                                                <p className="font-semibold">Reason: {job.moderationNote}</p>
+                                            )}
+                                            <p className="mt-2 text-xs text-rose-800">
+                                                Your job post has been hidden. Please edit and resubmit for admin review.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {mod === 'pending_review' && (
+                                        <div className="mb-4 p-3 rounded-xl border border-yellow-200 bg-yellow-50 text-xs text-yellow-900">
+                                            Your updated post is being reviewed by our team. It will go live once approved.
+                                        </div>
+                                    )}
+
+                                    {mod === 'deleted' && job.moderationNote && (
+                                        <div className="mb-4 p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700">
+                                            <span className="font-semibold">Reason:</span> {job.moderationNote}
+                                        </div>
+                                    )}
 
                                     <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-gray-500 mb-4">
                                         <div className="flex items-center gap-1.5">
@@ -201,7 +302,7 @@ const RecruiterJobs = () => {
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-6">
+                                    <div className="flex flex-wrap items-center gap-6">
                                         <div className="flex items-center gap-2 text-sm font-bold text-gray-700 bg-gray-50 px-3 py-1.5 rounded-lg">
                                             <Users size={16} className="text-[#29a08e]" />
                                             {job.applicants_count || 0} <span className="text-gray-400 font-normal text-xs">Applicants</span>
@@ -210,41 +311,63 @@ const RecruiterJobs = () => {
                                             <Eye size={16} className="text-blue-500" />
                                             {job.views_count || 0} <span className="text-gray-400 font-normal text-xs">Views</span>
                                         </div>
+                                        {mod === 'warned' && job.warningMessage && !job.warningAcknowledged && (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleAcknowledgeWarning(jid)}
+                                                className="text-xs font-bold text-amber-800 underline-offset-2 hover:underline"
+                                            >
+                                                Mark as acknowledged
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 
                                 <div className="mt-6 md:mt-0 flex flex-col items-end gap-2 justify-center pl-0 md:pl-6 md:border-l border-gray-100">
+                                    {showPublicPromote && (
                                     <Link
-                                        to={`/recruiter/promotions?jobId=${job.id || job._id}`}
+                                        to={`/recruiter/promotions?jobId=${jid}`}
                                         className="w-full md:w-auto px-5 py-2.5 bg-amber-500 text-white text-xs font-bold rounded-xl hover:bg-amber-600 shadow-md flex items-center justify-center gap-2 transition-all hover:shadow-lg"
                                     >
                                         <Megaphone size={14} />
                                         Promote
                                     </Link>
+                                    )}
+                                    {!isModDeleted && (
                                     <button
-                                        onClick={() => navigate(`/recruiter/jobs/${job.id || job._id}/analytics`)}
+                                        onClick={() => navigate(`/recruiter/jobs/${jid}/analytics`)}
                                         className="w-full md:w-auto px-5 py-2.5 bg-[#29a08e] text-white text-xs font-bold rounded-xl hover:bg-[#228377] shadow-md shadow-[#29a08e]/20 flex items-center justify-center gap-2 transition-all hover:shadow-lg"
                                     >
                                         <PieChart size={14} />
                                         Analytics
                                     </button>
+                                    )}
+                                    {!isModDeleted && (
                                     <Link
-                                        to={`/recruiter/jobs/${job.id}/edit`}
-                                        className="w-full md:w-auto px-5 py-2.5 bg-gray-50 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 border border-gray-200 flex items-center justify-center gap-2 transition-all"
+                                        to={`/recruiter/jobs/${jid}/edit`}
+                                        className={`w-full md:w-auto px-5 py-2.5 text-xs font-bold rounded-xl border flex items-center justify-center gap-2 transition-all ${
+                                            mod === 'hidden' || mod === 'warned'
+                                                ? 'bg-[#29a08e] text-white border-[#29a08e] hover:bg-[#228377]'
+                                                : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                                        }`}
                                     >
                                         <Edit size={14} />
-                                        Edit
+                                        {mod === 'hidden' ? 'Edit & resubmit' : 'Edit'}
                                     </Link>
+                                    )}
+                                    {!isModDeleted && (
                                     <button
-                                        onClick={() => handleDelete(job.id)}
+                                        onClick={() => handleDelete(jid)}
                                         className="w-full md:w-auto px-5 py-2.5 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-100 hover:text-rose-700 border border-transparent hover:border-rose-200 flex items-center justify-center gap-2 transition-all"
                                     >
                                         <Trash size={14} />
                                         Delete
                                     </button>
+                                    )}
                                 </div>
                             </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-16 text-center relative overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-br from-gray-50/50 to-[#29a08e]/5"></div>

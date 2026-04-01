@@ -136,7 +136,8 @@ export const getMyPromotions = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
-        res.json(promotions);
+        const visible = await promotionService.promotionsVisibleForUiQuery(promotions);
+        res.json(visible);
     } catch (error) {
         console.error('Get promotions error:', error);
         res.status(500).json({ message: 'Failed to fetch promotions' });
@@ -161,14 +162,18 @@ export const getPromotionSummary = async (req, res) => {
         const committed = await promotionService.getRecruiterCommittedFreePromotionSlots(userId);
         await promotionService.syncRecruiterFreePromotionUsedField(userId);
         const freeUsed = committed;
-        const totalPromotions = await Promotion.countDocuments({ companyId: { $in: companyIds } });
+        const allPromos = await Promotion.find({ companyId: { $in: companyIds } }).lean();
+        const visiblePromos = await promotionService.promotionsVisibleForUiQuery(allPromos);
+        const totalPromotions = visiblePromos.length;
         const now = new Date();
-        const activePromotions = await Promotion.countDocuments({
-            companyId: { $in: companyIds },
-            status: PROMOTION_STATUSES.ACTIVE,
-            startDate: { $lte: now },
-            endDate: { $gt: now }
-        });
+        const activePromotions = visiblePromos.filter(
+            (p) =>
+                p.status === PROMOTION_STATUSES.ACTIVE &&
+                p.startDate &&
+                p.endDate &&
+                new Date(p.startDate) <= now &&
+                new Date(p.endDate) > now
+        ).length;
 
         res.json({
             freeUsed,
@@ -286,7 +291,8 @@ export const adminGetAllPromotions = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
-        res.json(promotions);
+        const visible = await promotionService.promotionsVisibleForUiQuery(promotions);
+        res.json(visible);
     } catch (error) {
         console.error('Admin get promotions error:', error);
         res.status(500).json({ message: 'Failed to fetch promotions' });
@@ -437,7 +443,16 @@ export const adminGetPayments = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
-        res.json(payments);
+        const promoRows = payments.map((pay) => pay.promotionId).filter(Boolean);
+        const visiblePromos = await promotionService.promotionsVisibleForUiQuery(
+            promoRows.map((pr) => ({ _id: pr._id, jobId: pr.jobId }))
+        );
+        const visiblePromoIds = new Set(visiblePromos.map((p) => p._id.toString()));
+        const filteredPayments = payments.filter(
+            (pay) => pay.promotionId && visiblePromoIds.has(pay.promotionId._id.toString())
+        );
+
+        res.json(filteredPayments);
     } catch (error) {
         console.error('Admin get payments error:', error);
         res.status(500).json({ message: 'Failed to fetch payments' });

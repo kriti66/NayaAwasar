@@ -7,6 +7,7 @@ import Promotion from '../models/Promotion.js';
 import { PROMOTION_STATUSES } from '../constants/promotionConfig.js';
 import * as promotionService from './promotionService.js';
 import { mergeWithBaseFilter } from './jobSearchFilter.js';
+import { PUBLIC_MODERATION_MATCH } from '../utils/jobModeration.js';
 import { isJobActivelyPromoted } from '../utils/jobPromotionUtils.js';
 import { applyUserJobLabels } from './userJobLabelEnrichment.js';
 
@@ -60,10 +61,14 @@ export function enrichJobWithPromotion(job, now = new Date()) {
  */
 export const BASE_VISIBLE_FILTER = {
     status: 'Active',
-    moderationStatus: 'Approved',
-    $or: [
-        { application_deadline: { $exists: false } },
-        { application_deadline: { $gte: new Date() } }
+    $and: [
+        PUBLIC_MODERATION_MATCH,
+        {
+            $or: [
+                { application_deadline: { $exists: false } },
+                { application_deadline: { $gte: new Date() } }
+            ]
+        }
     ]
 };
 
