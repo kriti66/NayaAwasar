@@ -2,14 +2,19 @@
   "name": "nayaawasar",
   "private": true,
   "scripts": {
+    "setup:ai": "node scripts/run-python.js . -m pip install -r requirements-ai.txt",
+    "free:api": "kill-port 5001",
     "dev": "npm run dev --prefix frontend",
     "dev:frontend": "npm run dev --prefix frontend",
     "dev:backend": "npm run dev --prefix backend",
-    "dev:stack": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
-    "dev:ai": "cd recommendation-service && python -m uvicorn main:app --reload --port 8000",
-    "dev:all": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\" \"npm run dev:ai\""
+    "dev:stack": "npx concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "dev:ai": "node scripts/run-python.js recommendation-service -m uvicorn main:app --reload --port 8000",
+    "dev:flask": "node scripts/run-python.js ai-service app.py",
+    "dev:all": "npx concurrently -n backend,frontend,fastapi,flask -c blue,green,yellow,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\" \"npm run dev:ai\" \"npm run dev:flask\"",
+    "dev:all:fresh": "npm run free:api && npm run dev:all"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "kill-port": "^2.0.1"
   }
 }

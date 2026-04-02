@@ -1,0 +1,20 @@
+# One-shot install for Flask TF-IDF + FastAPI recommendation services.
+# From repo root, with your venv activated:
+#   python -m pip install -r requirements-ai.txt
+# Or: npm run setup:ai
+
+# ai-service (Flask / TF-IDF)
+flask
+Flask-Cors
+pymongo
+scikit-learn
+numpy
+python-dotenv
+pandas
+
+# recommendation-service (FastAPI / embeddings)
+fastapi
+uvicorn[standard]
+motor
+sentence-transformers
+pydantic

@@ -108,5 +108,5 @@ export function computeMatchedAndMissingSkills(mergedUserLike, job) {
 }
 
 export function getRecommendationModelVersion() {
-    return String(process.env.RECOMMENDATION_MODEL_VERSION || 'v1').trim() || 'v1';
+    return String(process.env.RECOMMENDATION_MODEL_VERSION || 'v3-match-display').trim() || 'v3-match-display';
 }

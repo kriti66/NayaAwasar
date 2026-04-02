@@ -116,7 +116,8 @@ export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn
             recMap.set(id, {
                 matchScore: rj.matchScore ?? null,
                 matchReason: rj.matchReason,
-                aiScore: typeof rj.aiScore === 'number' && Number.isFinite(rj.aiScore) ? rj.aiScore : null
+                aiScore: typeof rj.aiScore === 'number' && Number.isFinite(rj.aiScore) ? rj.aiScore : null,
+                recommendationType: rj.recommendationType ?? null
             });
         }
     });
@@ -129,7 +130,8 @@ export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn
             ...base,
             matchScore: recData?.matchScore ?? null,
             matchReason: recData?.matchReason ?? null,
-            aiScore: recData?.aiScore ?? null
+            aiScore: recData?.aiScore ?? null,
+            recommendationType: recData?.recommendationType ?? null
         };
     });
 

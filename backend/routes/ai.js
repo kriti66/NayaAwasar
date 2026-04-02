@@ -5,8 +5,7 @@ import Job from '../models/Job.js';
 
 const router = express.Router();
 
-// AI Service URL (from separate microservice)
-const AI_SERVICE_URL = 'http://localhost:5002'; // Ensure this matches Flask port
+const AI_SERVICE_URL = (process.env.FLASK_AI_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '');
 
 /**
  * @desc Get Job Recommendations based on User Profile/Skills

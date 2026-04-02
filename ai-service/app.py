@@ -2,14 +2,52 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 from database import get_db
-from recommendation_engine import recommend_jobs_for_user, recommend_candidates_for_job
+from recommendation_engine import (
+    recommend_jobs_for_user,
+    recommend_candidates_for_job,
+    recommend_from_profile_and_jobs,
+)
 
 app = Flask(__name__)
 CORS(app)
 
 # Initialize DB
 client, db = get_db()
-PORT = int(os.getenv("PORT", 5002))
+PORT = int(os.getenv("PORT", 5000))
+
+@app.route("/recommend", methods=["POST"])
+def recommend_from_express():
+    """
+    Body JSON:
+      seeker_profile: dict (skills, bio, jobPreferences, etc.)
+      jobs: list of job dicts with _id, title, description, ...
+      limit: int (optional, default 10, max 50)
+    Returns: { recommendations: [{ jobId, similarityScore, matchReason, job_id, similarity_score, reason }], total }
+    """
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    seeker_profile = body.get("seeker_profile")
+    jobs = body.get("jobs")
+    if not isinstance(seeker_profile, dict):
+        return jsonify({"error": "seeker_profile must be an object"}), 400
+    if not isinstance(jobs, list):
+        return jsonify({"error": "jobs must be an array"}), 400
+
+    limit = body.get("limit", 10)
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+
+    result = recommend_from_profile_and_jobs(seeker_profile, jobs, limit=limit)
+    if result.get("error") and not result.get("recommendations"):
+        return jsonify(result), 400
+    return jsonify(result), 200
+
 
 @app.route('/health', methods=['GET'])
 def health_check():

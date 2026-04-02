@@ -1,26 +1,29 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import CompanyLogo from '../common/CompanyLogo';
-import { applyVisibleBadgeLimits, BADGE_CONFIG, getJobDisplayReason } from '../../utils/jobLabelDisplay';
+import { BADGE_CONFIG } from '../../utils/jobLabelDisplay';
+import { jobHasRecommendationScore } from '../../utils/recommendationFriendly';
+import { JobMatchProgressBar, JobMatchScoreCorner, JobMatchWhyBlock } from '../jobs/JobMatchUi';
 
 const RecommendedJobs = () => {
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [hasPersonalizationData, setHasPersonalizationData] = useState(true);
 
     useEffect(() => {
         const fetchJobs = async () => {
             try {
-                // Call the new real AI Recommendation endpoint
                 const res = await api.get('/recommendations');
-                
+
                 if (Array.isArray(res.data)) {
                     setJobs(res.data.slice(0, 3));
                 } else if (res.data.jobs) {
                     setJobs(res.data.jobs.slice(0, 3));
+                    setHasPersonalizationData(res.data.hasPersonalizationData !== false);
                 }
             } catch (err) {
-                console.error("Error fetching recommended jobs:", err);
+                console.error('Error fetching recommended jobs:', err);
             } finally {
                 setLoading(false);
             }
@@ -64,8 +67,9 @@ const RecommendedJobs = () => {
 
             <div className="space-y-4">
                 {jobs.length > 0 ? jobs.map((job, idx) => (
-                    <div key={job._id || idx} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group">
-                        <div className="flex flex-col md:flex-row gap-6">
+                    <div key={job._id || idx} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+                        <JobMatchScoreCorner job={job} />
+                        <div className="flex flex-col md:flex-row gap-6 pr-0 sm:pr-28">
                             {/* Company Logo/Icon */}
                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden ${idx === 0 ? 'bg-pink-100 text-pink-500' :
                                     idx === 1 ? 'bg-[#29a08e]/20 text-[#29a08e]' :
@@ -75,50 +79,45 @@ const RecommendedJobs = () => {
                             </div>
 
                             {/* Job Info */}
-                            <div className="flex-1">
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-4">
-                                    <div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex flex-col md:flex-row md:items-start justify-between gap-2 mb-4">
+                                    <div className="min-w-0">
                                         <h4 className="text-lg font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors line-clamp-1">{job.title}</h4>
                                         <p className="text-sm font-semibold text-gray-400">
-                                            {job.company_name} • {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : (job.posted_date ? new Date(job.posted_date).toLocaleDateString() : 'Just now')}
+                                            {job.company_id?.name || job.company_name} • {job.createdAt ? new Date(job.createdAt).toLocaleDateString() : (job.posted_date ? new Date(job.posted_date).toLocaleDateString() : 'Just now')}
                                         </p>
                                     </div>
-                                        {(() => {
-                                            const cfg = job.visibleLabel ? BADGE_CONFIG[job.visibleLabel] : null;
-                                            if (cfg) {
-                                                return (
-                                                    <div
-                                                        className={`px-3 py-1 rounded-lg text-xs font-bold border ${cfg.className}`}
-                                                        title={
-                                                            getJobDisplayReason(job)
-                                                                ? `Why this job? ${getJobDisplayReason(job)}`
-                                                                : 'Why this job?'
-                                                        }
-                                                    >
-                                                        <span className="mr-1" aria-hidden>
-                                                            {cfg.icon}
-                                                        </span>
-                                                        {cfg.label}
-                                                    </div>
-                                                );
-                                            }
+                                    {(() => {
+                                        const cfg = job.visibleLabel ? BADGE_CONFIG[job.visibleLabel] : null;
+                                        const hasRec = jobHasRecommendationScore(job);
+                                        const showPromo =
+                                            cfg &&
+                                            (!hasRec ||
+                                                job.visibleLabel === 'SPONSORED' ||
+                                                job.visibleLabel === 'FEATURED');
+                                        if (showPromo) {
                                             return (
-                                                <div className="px-3 py-1 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold border border-gray-200">
+                                                <div className={`px-3 py-1 rounded-lg text-xs font-bold border shrink-0 ${cfg.className}`}>
+                                                    <span className="mr-1" aria-hidden>
+                                                        {cfg.icon}
+                                                    </span>
+                                                    {cfg.label}
+                                                </div>
+                                            );
+                                        }
+                                        if (!hasRec) {
+                                            return (
+                                                <div className="px-3 py-1 bg-gray-50 text-gray-600 rounded-lg text-xs font-bold border border-gray-200 shrink-0">
                                                     Job listing
                                                 </div>
                                             );
-                                        })()}
+                                        }
+                                        return null;
+                                    })()}
                                 </div>
 
-                                {getJobDisplayReason(job) && (
-                                    <p
-                                        className="text-xs text-gray-500 mb-3 bg-gray-50 p-2 rounded-lg border border-gray-100"
-                                        title={`Why this job? ${getJobDisplayReason(job)}`}
-                                    >
-                                        <span className="font-bold text-[#29a08e]">Why this job?</span>{' '}
-                                        {getJobDisplayReason(job)}
-                                    </p>
-                                )}
+                                <JobMatchProgressBar job={job} className="mb-3" />
+                                <JobMatchWhyBlock job={job} className="mb-3" />
 
                                 <div className="flex flex-wrap gap-2 mb-6">
                                     <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-xs font-semibold border border-gray-100 flex items-center gap-1.5">

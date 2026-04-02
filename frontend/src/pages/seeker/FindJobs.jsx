@@ -15,7 +15,9 @@ import Pagination from '../../components/common/Pagination';
 import FeaturedJobs from '../../components/jobs/FeaturedJobs';
 import PromotionBadge from '../../components/jobs/PromotionBadge';
 import { JOB_CATEGORIES } from '../../constants/jobCategories';
-import { applyVisibleBadgeLimits, BADGE_CONFIG, getJobDisplayReason } from '../../utils/jobLabelDisplay';
+import { applyVisibleBadgeLimits, BADGE_CONFIG } from '../../utils/jobLabelDisplay';
+import { jobHasRecommendationScore } from '../../utils/recommendationFriendly';
+import { JobMatchProgressBar, JobMatchScoreCorner, JobMatchWhyBlock } from '../../components/jobs/JobMatchUi';
 
 /** Sidebar experience labels → Job.experience_level values (exact match) */
 const SEEKER_EXP_TO_API = {
@@ -175,11 +177,17 @@ const timeAgo = (date) => {
 
 const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
     const badgeCfg = job.visibleLabel ? BADGE_CONFIG[job.visibleLabel] : null;
-    const displayReason = getJobDisplayReason(job);
+    const hasRecScore = jobHasRecommendationScore(job);
+    const showLegacyPromoBadge =
+        badgeCfg &&
+        (!hasRecScore ||
+            job.visibleLabel === 'SPONSORED' ||
+            job.visibleLabel === 'FEATURED');
     const isAiStyle = ['AI_SUGGESTED', 'GOOD_MATCH'].includes(job.visibleLabel || '');
     const isPromoted = job?.activePromotion || (job?.isPromoted && job?.promotionType && job.promotionType !== 'NONE');
     const salaryValue = normalizeSalaryRangeToNrsValue(job.salary_range || 'Negotiable');
     const salaryHasDigits = /\d/.test(salaryValue);
+    const companyLine = job.company_id?.name || job.company_name;
     return (
     <div className={`group rounded-2xl border transition-all duration-300 hover:shadow-xl p-6 relative ${
         isPromoted && job.visibleLabel === 'SPONSORED'
@@ -190,36 +198,39 @@ const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
                     ? 'bg-gradient-to-br from-white to-amber-50/30 border-amber-200/50 ring-1 ring-amber-200/30 shadow-sm'
                     : 'bg-white border-gray-100 shadow-sm hover:border-[#29a08e]/20'
     }`}>
-        {badgeCfg && (
-            <div className="absolute -top-3 right-6 z-[1]" title={displayReason ? `Why this job? ${displayReason}` : 'Why this job?'}>
-                <span
-                    className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md ${badgeCfg.className}`}
-                >
-                    <span aria-hidden>{badgeCfg.icon}</span> {badgeCfg.label}
-                </span>
+        {(hasRecScore || showLegacyPromoBadge) && (
+            <div className="absolute top-4 right-6 z-[1] flex flex-col items-end gap-2 max-w-[58%] text-right">
+                {hasRecScore && <JobMatchScoreCorner job={job} layout="inline" />}
+                {showLegacyPromoBadge && (
+                    <span
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md ${badgeCfg.className}`}
+                    >
+                        <span aria-hidden>{badgeCfg.icon}</span> {badgeCfg.label}
+                    </span>
+                )}
             </div>
         )}
 
-        <div className={`flex flex-col ${viewMode === 'grid' ? '' : 'md:flex-row'} gap-5`}>
+        <div className={`flex flex-col ${viewMode === 'grid' ? '' : 'md:flex-row'} gap-5 ${hasRecScore || showLegacyPromoBadge ? 'pt-2' : ''}`}>
             <CompanyLogo job={job} className="w-14 h-14 rounded-xl p-2 group-hover:scale-105 transition-transform duration-300 shadow-inner" imgClassName="w-full h-full" fallbackClassName="text-xl" />
 
-            <div className="flex-1 min-w-0">
+            <div className={`flex-1 min-w-0 ${hasRecScore ? 'pr-2 sm:pr-28' : showLegacyPromoBadge ? 'pr-2 sm:pr-24' : ''}`}>
                 <div className="flex justify-between items-start mb-2">
-                    <div>
+                    <div className="min-w-0 pr-2">
                         <div className="flex flex-wrap items-center gap-2 mb-0.5">
                             <h3 className="text-base font-bold text-gray-900 group-hover:text-[#29a08e] transition-colors line-clamp-1">{job.title}</h3>
                             {!job.visibleLabel && <PromotionBadge job={job} />}
                         </div>
-                        <p className="text-sm font-medium text-gray-500 flex items-center gap-1.5">
-                            <Building2 size={12} className="text-gray-400" />
-                            {job.company_name}
+                        <p className="text-sm font-medium text-gray-500 flex items-center gap-1.5 flex-wrap">
+                            <Building2 size={12} className="text-gray-400 shrink-0" />
+                            <span className="truncate">{companyLine}</span>
                             <span className="text-gray-300">·</span>
-                            <span className="text-xs text-gray-400">{timeAgo(job.createdAt || job.posted_date)}</span>
+                            <span className="text-xs text-gray-400 shrink-0">{timeAgo(job.createdAt || job.posted_date)}</span>
                         </p>
                     </div>
                     <button
                         onClick={() => toggleSaveJob(job.id || job._id)}
-                        className={`p-2 rounded-xl transition-all ${savedJobIds.includes(job.id || job._id) ? 'text-[#29a08e] bg-[#29a08e]/10' : 'text-gray-400 hover:text-[#29a08e] hover:bg-[#29a08e]/5'}`}
+                        className={`p-2 rounded-xl transition-all shrink-0 ${savedJobIds.includes(job.id || job._id) ? 'text-[#29a08e] bg-[#29a08e]/10' : 'text-gray-400 hover:text-[#29a08e] hover:bg-[#29a08e]/5'}`}
                     >
                         <Bookmark size={16} fill={savedJobIds.includes(job.id || job._id) ? "currentColor" : "none"} />
                     </button>
@@ -233,14 +244,9 @@ const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
                     ))}
                 </div>
 
-                {displayReason && (
-                    <div
-                        className="mb-4 text-xs font-medium text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100"
-                        title={`Why this job? ${displayReason}`}
-                    >
-                        <span className="font-bold text-gray-800">Why this job?</span> {displayReason}
-                    </div>
-                )}
+                <JobMatchProgressBar job={job} className="mb-3" />
+
+                <JobMatchWhyBlock job={job} className="mb-4" />
 
                 <div className="flex items-center justify-between pt-4 border-t border-gray-50">
                     <div className="flex items-center gap-1 text-gray-700 font-bold text-xs">
