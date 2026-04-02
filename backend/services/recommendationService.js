@@ -12,31 +12,66 @@ import {
     scoreFallbackJob
 } from '../utils/recommendationFallback.js';
 
-const PYTHON_URL = (process.env.PYTHON_SERVICE_URL || 'http://localhost:8000').replace(
-    /\/+$/,
-    ''
-);
-const FLASK_AI_URL = (process.env.FLASK_AI_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '');
+/** FastAPI / embedding service — env only; no localhost default (avoids silent prod misconfig). */
+const PYTHON_URL = (process.env.PYTHON_SERVICE_URL?.trim() || '').replace(/\/+$/, '');
+/** Flask TF-IDF service — env only. */
+const FLASK_AI_URL = (process.env.FLASK_AI_URL?.trim() || '').replace(/\/+$/, '');
 const FLASK_TIMEOUT_MS = Number(process.env.FLASK_AI_TIMEOUT_MS) || 90000;
 const PYTHON_TIMEOUT_MS = 90000;
 
 const MAX_JOBS_SENT_TO_FLASK = 250;
 
-function logFlaskConnectionHint(err) {
+if (process.env.NODE_ENV !== 'test') {
+    console.info('[recommendations] AI service config:', {
+        FLASK_AI_URL_set: Boolean(FLASK_AI_URL),
+        PYTHON_SERVICE_URL_set: Boolean(PYTHON_URL)
+    });
+    if (!FLASK_AI_URL) {
+        console.warn(
+            '[recommendations] FLASK_AI_URL is not set or empty — Flask TF-IDF recommendations will be skipped. Set FLASK_AI_URL in production (e.g. your Render Flask service URL).'
+        );
+    }
+    if (!PYTHON_URL) {
+        console.warn(
+            '[recommendations] PYTHON_SERVICE_URL is not set or empty — FastAPI /recommend and similar-jobs will be skipped. Set PYTHON_SERVICE_URL when that service is deployed.'
+        );
+    }
+}
+
+/**
+ * Log a failed AI provider request for production debugging.
+ * @param {'Flask TF-IDF'|'FastAPI'} serviceName
+ * @param {string} baseUrl
+ * @param {unknown} err
+ */
+function logRecommendationProviderFailure(serviceName, baseUrl, err) {
+    const status = err?.response?.status;
+    const data = err?.response?.data;
+    const bodyMsg =
+        (typeof data?.error === 'string' && data.error) ||
+        (typeof data?.message === 'string' && data.message) ||
+        '';
     const code = err?.code || '';
-    const msg = err?.message || String(err);
-    console.warn(
-        `[recommendations] Cannot reach Flask TF-IDF at ${FLASK_AI_URL} (${code || 'network'}): ${msg}\n` +
-            '  → Start it: npm run dev:flask (repo root), or npm run dev:all for backend+frontend+AI services.\n' +
-            '  → If port 5000 is busy: set PORT=5002 in ai-service/.env and FLASK_AI_URL=http://127.0.0.1:5002 in backend/.env'
-    );
+    const msg = bodyMsg || err?.message || String(err);
+    const parts = [`[recommendations] ${serviceName} request failed`];
+    if (baseUrl) parts.push(`url=${baseUrl}`);
+    if (status != null) parts.push(`HTTP ${status}`);
+    if (code) parts.push(`code=${code}`);
+    parts.push(`message=${msg}`);
+    console.warn(parts.join(' | '));
+
+    if (process.env.NODE_ENV !== 'production' && serviceName === 'Flask TF-IDF' && !err?.response) {
+        console.warn(
+            '  → Local dev: npm run dev:flask (repo root), or npm run dev:all. If port 5000 is busy, set PORT in ai-service and FLASK_AI_URL accordingly.'
+        );
+    }
 }
 
 /**
  * Fire-and-forget: refresh cached embedding in the Python (FastAPI) service.
  */
 export function triggerEmbeddingUpdate(docId, docType) {
-    if (!docId || !docType) return;
+    if (!docId || !docType || !PYTHON_URL) return;
     axios
         .post(
             `${PYTHON_URL}/recompute-embeddings`,
@@ -176,6 +211,21 @@ async function postFlaskRecommend(seeker_profile, jobs, limit) {
  * mislabeling "trending" jobs as AI when Python returns [] or an error body.
  */
 async function fetchPythonRecommendations(userId, limit) {
+    if (!PYTHON_URL) {
+        if (process.env.NODE_ENV !== 'test') {
+            console.warn('[recommendations] FastAPI: PYTHON_SERVICE_URL not set; skipping POST /recommend.');
+        }
+        return {
+            recommendations: [],
+            __pythonError: false,
+            __networkError: false,
+            __skippedNoUrl: true,
+            __pythonStatus: null,
+            __pythonBody: null,
+            __pythonMessage: null,
+            __pythonCode: null
+        };
+    }
     try {
         const { data, status } = await axios.post(
             `${PYTHON_URL}/recommend`,
@@ -217,6 +267,12 @@ function formatPythonServiceMessage(pyResult) {
 }
 
 export async function getSimilarJobs(jobId, limit = 5) {
+    if (!PYTHON_URL) {
+        if (process.env.NODE_ENV !== 'test') {
+            console.warn('[recommendations] getSimilarJobs: PYTHON_SERVICE_URL not set; returning empty.');
+        }
+        return { job_id: String(jobId), similar_jobs: [], total: 0 };
+    }
     try {
         const { data } = await axios.post(
             `${PYTHON_URL}/similar-jobs`,
@@ -382,8 +438,8 @@ async function getScoredFallbackJobs(userId, limit = 10) {
 }
 
 /**
- * TF-IDF recommendations from Flask (seeker profile + active jobs from Mongo).
- * Falls back to latest listings only if Flask is unreachable or returns a server error.
+ * TF-IDF recommendations from Flask when FLASK_AI_URL is set; then FastAPI when PYTHON_SERVICE_URL is set;
+ * then scored offline fallback. No silent localhost defaults — missing env skips that provider cleanly.
  */
 export async function getRecommendedJobs(userId, options = {}) {
     const limit = Math.min(Number(options.limit) || 50, 100);
@@ -398,114 +454,124 @@ export async function getRecommendedJobs(userId, options = {}) {
         };
     }
 
-    try {
-        const jobs = await loadActiveJobsForFlask(userId);
-        const data = await postFlaskRecommend(profilePayload, jobs, flaskLimit);
-        const recs = data?.recommendations || [];
-        const hydrated = await hydratePythonJobCards(recs);
-        if (hydrated.length > 0) {
-            return {
-                jobs: hydrated,
-                isComplete: true,
-                source: 'flask_tfidf'
-            };
-        }
-        if (recs.length > 0) {
+    const jobs = await loadActiveJobsForFlask(userId);
+
+    if (FLASK_AI_URL) {
+        try {
+            const data = await postFlaskRecommend(profilePayload, jobs, flaskLimit);
+            const recs = data?.recommendations || [];
+            const hydrated = await hydratePythonJobCards(recs);
+            if (hydrated.length > 0) {
+                return {
+                    jobs: hydrated,
+                    isComplete: true,
+                    source: 'flask_tfidf'
+                };
+            }
+            if (recs.length > 0) {
+                return {
+                    jobs: [],
+                    isComplete: false,
+                    message:
+                        'The AI ranked jobs, but none can be shown (removed, hidden, or not visible on the public board).',
+                    source: 'flask_filtered'
+                };
+            }
             return {
                 jobs: [],
                 isComplete: false,
                 message:
-                    'The AI ranked jobs, but none can be shown (removed, hidden, or not visible on the public board).',
-                source: 'flask_filtered'
+                    jobs.length === 0
+                        ? 'No open jobs to match against yet.'
+                        : 'No strong TF-IDF match for your profile text yet. Add skills, headline, bio, or summary.',
+                source: 'flask_empty'
             };
-        }
-        return {
-            jobs: [],
-            isComplete: false,
-            message:
-                jobs.length === 0
-                    ? 'No open jobs to match against yet.'
-                    : 'No strong TF-IDF match for your profile text yet. Add skills, headline, bio, or summary.',
-            source: 'flask_empty'
-        };
-    } catch (err) {
-        const status = err.response?.status;
-        const msg = err.response?.data?.error || err.message;
+        } catch (err) {
+            const status = err.response?.status;
+            const msg = err.response?.data?.error || err.message;
 
-        if (status === 400 && typeof msg === 'string') {
+            if (status === 400 && typeof msg === 'string') {
+                if (process.env.NODE_ENV !== 'test') {
+                    console.warn('[recommendations] Flask TF-IDF validation (HTTP 400):', msg);
+                }
+                return {
+                    jobs: [],
+                    isComplete: false,
+                    message: msg,
+                    source: 'flask_validation'
+                };
+            }
+
             if (process.env.NODE_ENV !== 'test') {
-                console.warn('[recommendations] Flask validation:', msg);
-            }
-            return {
-                jobs: [],
-                isComplete: false,
-                message: msg,
-                source: 'flask_validation'
-            };
-        }
-
-        if (process.env.NODE_ENV !== 'test') {
-            if (!err.response) {
-                logFlaskConnectionHint(err);
-            } else {
-                console.warn(
-                    '[recommendations] Flask HTTP error, trying FastAPI.',
-                    err.response.status,
-                    msg
-                );
+                logRecommendationProviderFailure('Flask TF-IDF', FLASK_AI_URL, err);
+                if (PYTHON_URL) {
+                    console.warn('[recommendations] Attempting FastAPI fallback after Flask failure.');
+                }
             }
         }
+    } else if (process.env.NODE_ENV !== 'test') {
+        console.warn('[recommendations] Skipping Flask TF-IDF: FLASK_AI_URL is not configured.');
+    }
 
-        const pyResult = await fetchPythonRecommendations(userId, flaskLimit);
-        const recs = pyResult.recommendations || [];
-        const hydrated = await hydratePythonJobCards(recs);
+    const pyResult = await fetchPythonRecommendations(userId, flaskLimit);
+    const recs = pyResult.recommendations || [];
+    const hydrated = await hydratePythonJobCards(recs);
 
-        if (hydrated.length > 0) {
-            return {
-                jobs: hydrated,
-                isComplete: true,
-                source: 'python'
-            };
-        }
-
-        if (recs.length > 0) {
-            return {
-                jobs: [],
-                isComplete: false,
-                message:
-                    'FastAPI returned matches, but none are visible on the job board (moderation or removed).',
-                source: 'python_filtered'
-            };
-        }
-
-        if (pyResult.__networkError) {
-            if (process.env.NODE_ENV !== 'test') {
-                console.warn(
-                    '[recommendations] FastAPI unreachable:',
-                    pyResult.__pythonCode || '',
-                    pyResult.__pythonMessage
-                );
-            }
-            return getScoredFallbackJobs(userId, Math.min(limit, 10));
-        }
-
-        if (pyResult.__pythonError) {
-            return {
-                jobs: [],
-                isComplete: false,
-                message: formatPythonServiceMessage(pyResult),
-                source: 'python_error'
-            };
-        }
-
+    if (hydrated.length > 0) {
         return {
-            jobs: [],
-            isComplete: false,
-            message:
-                'No personalized matches from the embedding service yet. Complete your profile or try again later.',
-            source: 'python_empty'
+            jobs: hydrated,
+            isComplete: true,
+            source: 'python'
         };
     }
+
+    if (recs.length > 0) {
+        return {
+            jobs: [],
+            isComplete: false,
+            message:
+                'FastAPI returned matches, but none are visible on the job board (moderation or removed).',
+            source: 'python_filtered'
+        };
+    }
+
+    if (pyResult.__skippedNoUrl || pyResult.__networkError) {
+        if (pyResult.__networkError && process.env.NODE_ENV !== 'test') {
+            const syntheticErr = {
+                message: pyResult.__pythonMessage || 'network error',
+                code: pyResult.__pythonCode || ''
+            };
+            logRecommendationProviderFailure('FastAPI', PYTHON_URL, syntheticErr);
+        }
+        return getScoredFallbackJobs(userId, Math.min(limit, 10));
+    }
+
+    if (pyResult.__pythonError) {
+        if (process.env.NODE_ENV !== 'test') {
+            const syntheticErr = {
+                response: {
+                    status: pyResult.__pythonStatus,
+                    data: pyResult.__pythonBody
+                },
+                message: formatPythonServiceMessage(pyResult)
+            };
+            logRecommendationProviderFailure('FastAPI', PYTHON_URL, syntheticErr);
+        }
+        return {
+            jobs: [],
+            isComplete: false,
+            message: formatPythonServiceMessage(pyResult),
+            source: 'python_error'
+        };
+    }
+
+    return {
+        jobs: [],
+        isComplete: false,
+        message:
+            'No personalized matches from the embedding service yet. Complete your profile or try again later.',
+        source: 'python_empty'
+    };
 }
 
 export async function hydrateSimilarJobsResponse(pythonPayload) {
