@@ -31,12 +31,49 @@ const interviewSchema = new mongoose.Schema({
         enum: ['Scheduled', 'Completed', 'Cancelled', 'Missed'],
         default: 'Scheduled'
     },
-    // Sub-status for dashboard/frontend: scheduled, reschedule_pending, confirmed
+    // Sub-status for dashboard/frontend: scheduled, reschedule_pending, confirmed, pending_acceptance
     interviewStatus: {
         type: String,
-        enum: ['scheduled', 'reschedule_pending', 'confirmed'],
+        enum: ['scheduled', 'reschedule_pending', 'confirmed', 'pending_acceptance'],
         default: 'scheduled'
     },
+    /** Unified calendar lifecycle for API/UI (optional on legacy documents). */
+    calendarStatus: {
+        type: String,
+        enum: ['pending_acceptance', 'scheduled', 'completed', 'cancelled', 'reschedule_requested']
+    },
+    acceptedBySeeker: {
+        type: Boolean,
+        default: true
+    },
+    acceptedByRecruiter: {
+        type: Boolean,
+        default: true
+    },
+    rescheduleRequest: {
+        proposedBy: { type: String, enum: ['recruiter', 'jobseeker'] },
+        newDate: { type: Date },
+        newTime: { type: String },
+        reason: { type: String },
+        requestedAt: { type: Date }
+    },
+    rescheduleHistory: [
+        {
+            proposedBy: { type: String, enum: ['recruiter', 'jobseeker'] },
+            date: { type: Date },
+            time: { type: String },
+            reason: { type: String },
+            proposedAt: { type: Date, default: Date.now }
+        }
+    ],
+    cancelledBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
+    },
+    cancelReason: { type: String, default: '' },
+    cancelledAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
     date: {
         type: Date,
         required: true

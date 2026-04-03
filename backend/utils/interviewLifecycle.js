@@ -32,6 +32,17 @@ export function computeInterviewLifecycle(interview, now = new Date()) {
         return { status: 'CANCELLED', effectiveStart, effectiveEnd, joinWindow };
     }
 
+    const pendingCalendar =
+        interview.calendarStatus === 'pending_acceptance' || interview.interviewStatus === 'pending_acceptance';
+    if (pendingCalendar && interview.acceptedBySeeker === false) {
+        return {
+            status: 'PENDING_ACCEPTANCE',
+            effectiveStart,
+            effectiveEnd,
+            joinWindow
+        };
+    }
+
     const rs = String(interview.rescheduleStatus || '').toUpperCase();
     const pendingJobseeker =
         interview.interviewStatus === 'reschedule_pending' &&

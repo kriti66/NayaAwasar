@@ -1,8 +1,11 @@
 import Interview from '../models/Interview.js';
 import User from '../models/User.js';
+import Application from '../models/Application.js';
 import mongoose from 'mongoose';
 import { createRequire } from 'module';
-import { getInterviewJoinWindow } from '../utils/interviewDateTime.js';
+import { getInterviewJoinWindow, combineDateAndTimeNepal } from '../utils/interviewDateTime.js';
+import { createNotification } from './notificationController.js';
+import { interviewCalendarMetadata } from '../utils/interviewNotificationMetadata.js';
 
 const require = createRequire(import.meta.url);
 const { generateToken04 } = require('../utils/zegoServerAssistant.cjs');
@@ -36,6 +39,16 @@ export const getZegoToken = async (req, res) => {
 
         if (!isRecruiter && !isSeeker) {
             return res.status(403).json({ message: 'Unauthorized access to this interview' });
+        }
+
+        const awaitingSeekerAccept =
+            (interview.calendarStatus === 'pending_acceptance' ||
+                interview.interviewStatus === 'pending_acceptance') &&
+            interview.acceptedBySeeker === false;
+        if (awaitingSeekerAccept) {
+            return res.status(403).json({
+                message: 'Please accept the interview invitation before joining the call.'
+            });
         }
 
         // Verify status
@@ -139,4 +152,507 @@ export const createInterview = async (req, res) => {
     // The scheduling logic is in NewApplicationController.
     // We update NewApplicationController to create this doc.
     res.status(501).json({ message: 'Use application flow to schedule interviews' });
+};
+
+// ─── Interview calendar helpers ───────────────────────────────────────────
+
+function normalizeSeekerRole(role) {
+    return role === 'job_seeker' ? 'jobseeker' : role;
+}
+
+function serializeRescheduleRequest(i) {
+    const rq = i.rescheduleRequest;
+    if (rq && rq.newDate) {
+        return {
+            proposed_by: rq.proposedBy,
+            new_date: rq.newDate,
+            new_time: rq.newTime || '',
+            reason: rq.reason || '',
+            requested_at: rq.requestedAt || null
+        };
+    }
+    const rs = String(i.rescheduleStatus || '').toUpperCase();
+    if (rs === 'PENDING' && i.requestedDate && i.rescheduleRequestedBy === 'jobseeker') {
+        return {
+            proposed_by: 'jobseeker',
+            new_date: i.requestedDate,
+            new_time: i.requestedTime || '',
+            reason: i.rescheduleReason || '',
+            requested_at: i.rescheduleRequestedAt || null
+        };
+    }
+    if (['PROPOSED', 'PENDING'].includes(rs) && i.proposedDate && i.rescheduleRequestedBy === 'recruiter') {
+        return {
+            proposed_by: 'recruiter',
+            new_date: i.proposedDate,
+            new_time: i.proposedTime || '',
+            reason: i.rescheduleReason || '',
+            requested_at: i.recruiterDecisionAt || null
+        };
+    }
+    return null;
+}
+
+function deriveCalendarStatus(i) {
+    const top = String(i.status || '');
+    if (top === 'Completed') return 'completed';
+    if (top === 'Cancelled') return 'cancelled';
+
+    if (i.calendarStatus === 'reschedule_requested') return 'reschedule_requested';
+    if (i.calendarStatus === 'pending_acceptance') return 'pending_acceptance';
+    if (i.calendarStatus === 'scheduled') return 'scheduled';
+    if (i.calendarStatus === 'completed') return 'completed';
+    if (i.calendarStatus === 'cancelled') return 'cancelled';
+
+    if (i.interviewStatus === 'pending_acceptance' && i.acceptedBySeeker === false) {
+        return 'pending_acceptance';
+    }
+    if (i.interviewStatus === 'reschedule_pending') return 'reschedule_requested';
+
+    const rs = String(i.rescheduleStatus || '').toUpperCase();
+    if (['PENDING', 'PROPOSED'].includes(rs) && serializeRescheduleRequest(i)) {
+        return 'reschedule_requested';
+    }
+
+    return 'scheduled';
+}
+
+function modeToApi(m) {
+    const s = String(m || '');
+    return s.toLowerCase() === 'onsite' ? 'onsite' : 'online';
+}
+
+function toRecruiterCalendarItem(doc) {
+    const seeker = doc.seekerId;
+    const job = doc.jobId;
+    const status = deriveCalendarStatus(doc);
+    return {
+        id: doc._id,
+        application_id: doc.applicationId,
+        date: doc.date,
+        time: doc.time,
+        mode: modeToApi(doc.mode),
+        status,
+        seeker_name: seeker?.fullName || 'Candidate',
+        job_title: job?.title || 'Job',
+        reschedule_request: serializeRescheduleRequest(doc)
+    };
+}
+
+function toSeekerCalendarItem(doc) {
+    const rec = doc.recruiterId;
+    const job = doc.jobId;
+    const status = deriveCalendarStatus(doc);
+    return {
+        id: doc._id,
+        application_id: doc.applicationId,
+        date: doc.date,
+        time: doc.time,
+        mode: modeToApi(doc.mode),
+        status,
+        job_title: job?.title || 'Job',
+        company_name: job?.company_name || '',
+        recruiter_name: rec?.fullName || 'Recruiter',
+        reschedule_request: serializeRescheduleRequest(doc)
+    };
+}
+
+async function syncApplicationInterviewSlot(interview) {
+    if (!interview?.applicationId) return;
+    const patch = {
+        'interview.date': interview.date,
+        'interview.time': interview.time,
+        'interview.mode': interview.mode,
+        'interview.roomId': interview.roomId,
+        'interview.location': interview.location
+    };
+    await Application.updateOne({ _id: interview.applicationId }, { $set: patch });
+}
+
+function assertSlotNotInPast(dateVal, timeStr) {
+    const slot = combineDateAndTimeNepal(dateVal, timeStr);
+    if (!slot) return { ok: false, message: 'Invalid date or time' };
+    if (slot.getTime() <= Date.now()) {
+        return { ok: false, message: 'Interview slot must be in the future' };
+    }
+    return { ok: true, slot };
+}
+
+export const getRecruiterInterviewCalendar = async (req, res) => {
+    try {
+        const uid = req.user.id;
+        const rows = await Interview.find({ recruiterId: uid })
+            .populate('seekerId', 'fullName')
+            .populate('jobId', 'title company_name')
+            .sort({ date: 1, time: 1 })
+            .lean();
+
+        res.json({ interviews: rows.map(toRecruiterCalendarItem) });
+    } catch (e) {
+        console.error('getRecruiterInterviewCalendar', e);
+        res.status(500).json({ message: 'Failed to load interview calendar' });
+    }
+};
+
+export const getSeekerInterviewCalendar = async (req, res) => {
+    try {
+        const uid = req.user.id;
+        const rows = await Interview.find({ seekerId: uid })
+            .populate('recruiterId', 'fullName')
+            .populate('jobId', 'title company_name')
+            .sort({ date: 1, time: 1 })
+            .lean();
+
+        res.json({ interviews: rows.map(toSeekerCalendarItem) });
+    } catch (e) {
+        console.error('getSeekerInterviewCalendar', e);
+        res.status(500).json({ message: 'Failed to load interview calendar' });
+    }
+};
+
+export const acceptInterviewBySeeker = async (req, res) => {
+    const { id } = req.params;
+    const seekerId = req.user.id;
+    const role = normalizeSeekerRole(req.user.role);
+    if (role !== 'jobseeker') {
+        return res.status(403).json({ message: 'Only job seekers can accept this invitation' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid interview id' });
+    }
+
+    try {
+        const interview = await Interview.findById(id).populate('jobId', 'title recruiter_id');
+        if (!interview) return res.status(404).json({ message: 'Interview not found' });
+        if (interview.seekerId.toString() !== seekerId) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        const cal = deriveCalendarStatus(interview);
+        if (cal !== 'pending_acceptance') {
+            return res.status(400).json({ message: 'This interview is not awaiting your acceptance' });
+        }
+        if (interview.status !== 'Scheduled') {
+            return res.status(400).json({ message: `Interview is ${interview.status}` });
+        }
+
+        interview.acceptedBySeeker = true;
+        interview.calendarStatus = 'scheduled';
+        interview.interviewStatus = 'scheduled';
+        await interview.save();
+        await syncApplicationInterviewSlot(interview);
+
+        const jobTitle = interview.jobId?.title || 'a position';
+        await createNotification({
+            recipient: interview.recruiterId,
+            type: 'interview_accepted',
+            category: 'interview',
+            title: 'Interview accepted',
+            message: `The candidate accepted the interview for ${jobTitle}.`,
+            link: '/recruiter/calendar',
+            sender: seekerId,
+            metadata: interviewCalendarMetadata(interview, { applicationId: interview.applicationId })
+        });
+
+        const fresh = await Interview.findById(interview._id)
+            .populate('recruiterId', 'fullName')
+            .populate('jobId', 'title company_name')
+            .lean();
+
+        res.json({
+            success: true,
+            message: 'Interview accepted',
+            interview: toSeekerCalendarItem(fresh)
+        });
+    } catch (e) {
+        console.error('acceptInterviewBySeeker', e);
+        res.status(500).json({ message: 'Failed to accept interview' });
+    }
+};
+
+export const requestInterviewReschedule = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = normalizeSeekerRole(req.user.role);
+    const newDateRaw = req.body.new_date ?? req.body.newDate;
+    const newTimeRaw = req.body.new_time ?? req.body.newTime;
+    const reason = String(req.body.reason ?? '').trim();
+
+    if (!newDateRaw || !newTimeRaw) {
+        return res.status(400).json({ message: 'new_date and new_time are required' });
+    }
+    if (!reason) {
+        return res.status(400).json({ message: 'reason is required' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid interview id' });
+    }
+
+    const newDate = new Date(newDateRaw);
+    if (Number.isNaN(newDate.getTime())) {
+        return res.status(400).json({ message: 'Invalid new_date' });
+    }
+    const newTime = String(newTimeRaw).trim();
+    const pastCheck = assertSlotNotInPast(newDate, newTime);
+    if (!pastCheck.ok) return res.status(400).json({ message: pastCheck.message });
+
+    try {
+        const interview = await Interview.findById(id).populate('jobId', 'title');
+        if (!interview) return res.status(404).json({ message: 'Interview not found' });
+
+        const isRec = interview.recruiterId.toString() === userId;
+        const isSeek = interview.seekerId.toString() === userId;
+        if (!isRec && !isSeek) return res.status(403).json({ message: 'Unauthorized' });
+        if (role === 'recruiter' && !isRec) return res.status(403).json({ message: 'Unauthorized' });
+        if (role === 'jobseeker' && !isSeek) return res.status(403).json({ message: 'Unauthorized' });
+
+        const cal = deriveCalendarStatus(interview);
+        if (cal === 'completed' || cal === 'cancelled') {
+            return res.status(400).json({ message: 'Cannot reschedule a completed or cancelled interview' });
+        }
+        if (cal === 'reschedule_requested') {
+            return res.status(409).json({ message: 'A reschedule request is already pending' });
+        }
+
+        interview.rescheduleHistory = interview.rescheduleHistory || [];
+        interview.rescheduleHistory.push({
+            proposedBy: isRec ? 'recruiter' : 'jobseeker',
+            date: interview.date,
+            time: interview.time,
+            reason,
+            proposedAt: new Date()
+        });
+
+        interview.rescheduleRequest = {
+            proposedBy: isRec ? 'recruiter' : 'jobseeker',
+            newDate,
+            newTime,
+            reason,
+            requestedAt: new Date()
+        };
+        interview.calendarStatus = 'reschedule_requested';
+        interview.interviewStatus = 'reschedule_pending';
+
+        if (isRec) {
+            interview.rescheduleRequestedBy = 'recruiter';
+            interview.proposedDate = newDate;
+            interview.proposedTime = newTime;
+            interview.rescheduleReason = reason;
+            interview.rescheduleStatus = 'PROPOSED';
+        } else {
+            interview.rescheduleRequestedBy = 'jobseeker';
+            interview.rescheduleRequestedAt = new Date();
+            interview.requestedDate = newDate;
+            interview.requestedTime = newTime;
+            interview.rescheduleReason = reason;
+            interview.rescheduleStatus = 'PENDING';
+        }
+
+        await interview.save();
+
+        const jobTitle = interview.jobId?.title || 'Interview';
+        const otherId = isRec ? interview.seekerId : interview.recruiterId;
+        await createNotification({
+            recipient: otherId,
+            type: 'reschedule_requested',
+            category: 'interview',
+            title: 'Reschedule requested',
+            message: `${isRec ? 'The recruiter' : 'The candidate'} requested a new time for ${jobTitle}.`,
+            link: isRec ? '/seeker/calendar' : '/recruiter/calendar',
+            sender: userId,
+            metadata: interviewCalendarMetadata(interview, { applicationId: interview.applicationId })
+        });
+
+        res.json({ success: true, message: 'Reschedule request sent' });
+    } catch (e) {
+        console.error('requestInterviewReschedule', e);
+        res.status(500).json({ message: 'Failed to request reschedule' });
+    }
+};
+
+export const acceptInterviewReschedule = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = normalizeSeekerRole(req.user.role);
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid interview id' });
+    }
+
+    try {
+        const interview = await Interview.findById(id).populate('jobId', 'title');
+        if (!interview) return res.status(404).json({ message: 'Interview not found' });
+
+        const isRec = interview.recruiterId.toString() === userId;
+        const isSeek = interview.seekerId.toString() === userId;
+        if (!isRec && !isSeek) return res.status(403).json({ message: 'Unauthorized' });
+
+        const rq = interview.rescheduleRequest;
+        if (!rq || !rq.newDate) {
+            return res.status(400).json({ message: 'No pending reschedule request on this interview' });
+        }
+
+        const proposer = rq.proposedBy;
+        if (proposer === 'recruiter' && !isSeek) {
+            return res.status(403).json({ message: 'Only the candidate can accept this reschedule request' });
+        }
+        if (proposer === 'jobseeker' && !isRec) {
+            return res.status(403).json({ message: 'Only the recruiter can accept this reschedule request' });
+        }
+        if ((proposer === 'recruiter' && role !== 'jobseeker') || (proposer === 'jobseeker' && role !== 'recruiter')) {
+            return res.status(403).json({ message: 'You cannot accept your own reschedule request' });
+        }
+
+        const pastCheck = assertSlotNotInPast(rq.newDate, rq.newTime);
+        if (!pastCheck.ok) return res.status(400).json({ message: pastCheck.message });
+
+        interview.date = rq.newDate;
+        interview.time = rq.newTime;
+        interview.calendarStatus = 'scheduled';
+        interview.interviewStatus = 'scheduled';
+        interview.acceptedBySeeker = true;
+        interview.acceptedByRecruiter = true;
+        interview.status = 'Scheduled';
+        interview.set('rescheduleRequest', undefined);
+        interview.rescheduleStatus = 'NONE';
+        interview.proposedDate = undefined;
+        interview.proposedTime = undefined;
+        interview.requestedDate = undefined;
+        interview.requestedTime = undefined;
+
+        if (interview.mode === 'Online' && !interview.roomId) {
+            interview.roomId = `interview_${interview.applicationId}_${Date.now()}`;
+        }
+
+        await interview.save();
+        await syncApplicationInterviewSlot(interview);
+
+        const jobTitle = interview.jobId?.title || 'Interview';
+        const metaAfter = interviewCalendarMetadata(interview, { applicationId: interview.applicationId });
+        await createNotification({
+            recipient: interview.recruiterId,
+            type: 'interview_rescheduled',
+            category: 'interview',
+            title: 'Reschedule accepted',
+            message: `The new interview time for ${jobTitle} is confirmed.`,
+            link: '/recruiter/calendar',
+            sender: userId,
+            metadata: metaAfter
+        });
+        await createNotification({
+            recipient: interview.seekerId,
+            type: 'interview_rescheduled',
+            category: 'interview',
+            title: 'Reschedule accepted',
+            message: `The new interview time for ${jobTitle} is confirmed.`,
+            link: '/seeker/calendar',
+            sender: userId,
+            metadata: metaAfter
+        });
+
+        res.json({ success: true, message: 'Reschedule accepted' });
+    } catch (e) {
+        console.error('acceptInterviewReschedule', e);
+        res.status(500).json({ message: 'Failed to accept reschedule' });
+    }
+};
+
+export const completeInterview = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    if (req.user.role !== 'recruiter') {
+        return res.status(403).json({ message: 'Only recruiters can mark interviews complete' });
+    }
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid interview id' });
+    }
+
+    try {
+        const interview = await Interview.findById(id).populate('jobId', 'title');
+        if (!interview) return res.status(404).json({ message: 'Interview not found' });
+        if (interview.recruiterId.toString() !== userId) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        const cal = deriveCalendarStatus(interview);
+        if (cal !== 'scheduled' || interview.status !== 'Scheduled') {
+            return res.status(400).json({ message: 'Only scheduled interviews can be marked complete' });
+        }
+
+        interview.status = 'Completed';
+        interview.calendarStatus = 'completed';
+        interview.completedAt = new Date();
+        await interview.save();
+
+        const jobTitle = interview.jobId?.title || 'Interview';
+        await createNotification({
+            recipient: interview.seekerId,
+            type: 'interview_completed',
+            category: 'interview',
+            title: 'Interview completed',
+            message: `Your interview for ${jobTitle} has been marked as completed.`,
+            link: '/seeker/calendar',
+            sender: userId,
+            metadata: interviewCalendarMetadata(interview, { applicationId: interview.applicationId })
+        });
+
+        res.json({ success: true, message: 'Interview marked complete' });
+    } catch (e) {
+        console.error('completeInterview', e);
+        res.status(500).json({ message: 'Failed to complete interview' });
+    }
+};
+
+export const cancelInterview = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const cancelReason = String(req.body.cancel_reason ?? req.body.cancelReason ?? '').trim();
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid interview id' });
+    }
+
+    try {
+        const interview = await Interview.findById(id).populate('jobId', 'title');
+        if (!interview) return res.status(404).json({ message: 'Interview not found' });
+
+        const isRec = interview.recruiterId.toString() === userId;
+        const isSeek = interview.seekerId.toString() === userId;
+        if (!isRec && !isSeek) return res.status(403).json({ message: 'Unauthorized' });
+
+        const cal = deriveCalendarStatus(interview);
+        if (cal === 'completed' || interview.status === 'Completed') {
+            return res.status(400).json({ message: 'Cannot cancel a completed interview' });
+        }
+        if (cal === 'cancelled' || interview.status === 'Cancelled') {
+            return res.status(400).json({ message: 'Interview is already cancelled' });
+        }
+
+        interview.status = 'Cancelled';
+        interview.calendarStatus = 'cancelled';
+        interview.cancelledBy = userId;
+        interview.cancelReason = cancelReason;
+        interview.cancelledAt = new Date();
+        interview.set('rescheduleRequest', undefined);
+        interview.rescheduleStatus = 'NONE';
+
+        await interview.save();
+
+        const otherId = isRec ? interview.seekerId : interview.recruiterId;
+        const jobTitle = interview.jobId?.title || 'Interview';
+        await createNotification({
+            recipient: otherId,
+            type: 'interview_cancelled',
+            category: 'interview',
+            title: 'Interview cancelled',
+            message: `${isRec ? 'The recruiter' : 'The candidate'} cancelled the interview for ${jobTitle}.`,
+            link: isRec ? '/seeker/calendar' : '/recruiter/calendar',
+            sender: userId,
+            metadata: interviewCalendarMetadata(interview, { applicationId: interview.applicationId })
+        });
+
+        res.json({ success: true, message: 'Interview cancelled' });
+    } catch (e) {
+        console.error('cancelInterview', e);
+        res.status(500).json({ message: 'Failed to cancel interview' });
+    }
 };

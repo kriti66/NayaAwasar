@@ -7,8 +7,10 @@ import Application from '../models/Application.js';
 import { PUBLIC_MODERATION_MATCH, isJobVisibleForPublicListing } from '../utils/jobModeration.js';
 import {
     extractRequiredSkillsFromJob,
+    FALLBACK_MIN_INCLUSION_SCORE,
     getAllowedJobCategoriesForSeeker,
     joinFallbackReasons,
+    MAX_FALLBACK_JOBS_RETURNED,
     scoreFallbackJob
 } from '../utils/recommendationFallback.js';
 
@@ -321,7 +323,7 @@ async function hydratePythonJobCards(recs) {
 /**
  * Profile-based ranking when Flask and FastAPI are unreachable (no generic "trending" list).
  */
-async function getScoredFallbackJobs(userId, limit = 10) {
+async function getScoredFallbackJobs(userId, limit = MAX_FALLBACK_JOBS_RETURNED) {
     const profilePayload = await loadSeekerProfilePayload(userId);
     if (!profilePayload) {
         return {
@@ -386,10 +388,10 @@ async function getScoredFallbackJobs(userId, limit = 10) {
             const { score, reasons } = scoreFallbackJob(job, seeker, { categoryFilterApplied });
             return { job, score, reasons };
         })
-        .filter((x) => x.score >= 40);
+        .filter((x) => x.score >= FALLBACK_MIN_INCLUSION_SCORE);
 
     scored.sort((a, b) => b.score - a.score);
-    const top = scored.slice(0, Math.min(limit, 10));
+    const top = scored.slice(0, Math.min(limit, MAX_FALLBACK_JOBS_RETURNED));
 
     if (top.length === 0) {
         return {
@@ -461,14 +463,15 @@ export async function getRecommendedJobs(userId, options = {}) {
             const data = await postFlaskRecommend(profilePayload, jobs, flaskLimit);
             const recs = data?.recommendations || [];
             const hydrated = await hydratePythonJobCards(recs);
-            if (hydrated.length > 0) {
+            const flaskQuality = hydrated.filter((j) => j.matchScore >= 50);
+            if (flaskQuality.length > 0) {
                 return {
-                    jobs: hydrated,
+                    jobs: flaskQuality,
                     isComplete: true,
                     source: 'flask_tfidf'
                 };
             }
-            if (recs.length > 0) {
+            if (recs.length > 0 && hydrated.length === 0) {
                 return {
                     jobs: [],
                     isComplete: false,
@@ -477,15 +480,17 @@ export async function getRecommendedJobs(userId, options = {}) {
                     source: 'flask_filtered'
                 };
             }
-            return {
-                jobs: [],
-                isComplete: false,
-                message:
-                    jobs.length === 0
-                        ? 'No open jobs to match against yet.'
-                        : 'No strong TF-IDF match for your profile text yet. Add skills, headline, bio, or summary.',
-                source: 'flask_empty'
-            };
+            if (recs.length === 0) {
+                return {
+                    jobs: [],
+                    isComplete: false,
+                    message:
+                        jobs.length === 0
+                            ? 'No open jobs to match against yet.'
+                            : 'No strong TF-IDF match for your profile text yet. Add skills, headline, bio, or summary.',
+                    source: 'flask_empty'
+                };
+            }
         } catch (err) {
             const status = err.response?.status;
             const msg = err.response?.data?.error || err.message;
@@ -516,16 +521,17 @@ export async function getRecommendedJobs(userId, options = {}) {
     const pyResult = await fetchPythonRecommendations(userId, flaskLimit);
     const recs = pyResult.recommendations || [];
     const hydrated = await hydratePythonJobCards(recs);
+    const pyQuality = hydrated.filter((j) => j.matchScore >= 50);
 
-    if (hydrated.length > 0) {
+    if (pyQuality.length > 0) {
         return {
-            jobs: hydrated,
+            jobs: pyQuality,
             isComplete: true,
             source: 'python'
         };
     }
 
-    if (recs.length > 0) {
+    if (recs.length > 0 && hydrated.length === 0) {
         return {
             jobs: [],
             isComplete: false,
@@ -533,6 +539,10 @@ export async function getRecommendedJobs(userId, options = {}) {
                 'FastAPI returned matches, but none are visible on the job board (moderation or removed).',
             source: 'python_filtered'
         };
+    }
+
+    if (recs.length > 0 && hydrated.length > 0 && pyQuality.length === 0) {
+        return getScoredFallbackJobs(userId, Math.min(limit, 5));
     }
 
     if (pyResult.__skippedNoUrl || pyResult.__networkError) {
@@ -543,7 +553,7 @@ export async function getRecommendedJobs(userId, options = {}) {
             };
             logRecommendationProviderFailure('FastAPI', PYTHON_URL, syntheticErr);
         }
-        return getScoredFallbackJobs(userId, Math.min(limit, 10));
+        return getScoredFallbackJobs(userId, Math.min(limit, 5));
     }
 
     if (pyResult.__pythonError) {

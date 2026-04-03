@@ -4,11 +4,23 @@
  */
 import { JOB_CATEGORIES } from '../constants/jobCategories.js';
 
+/** Minimum total score to include a job in offline fallback results. */
+export const FALLBACK_MIN_INCLUSION_SCORE = 55;
+
+/** Hard cap on how many fallback jobs are returned per request. */
+export const MAX_FALLBACK_JOBS_RETURNED = 5;
+
 /** @type {{ keywords: string[]; categories: string[] }[]} */
 export const TITLE_KEYWORD_RULES = [
     {
         keywords: [
             'engineer',
+            'civil',
+            'structural',
+            'mechanical',
+            'electrical',
+            'construction',
+            'surveyor',
             'developer',
             'software',
             'programmer',
@@ -66,6 +78,54 @@ export function getAllowedJobCategoriesForSeeker(jobTitleBlob) {
     return [...allowed].filter((c) => JOB_CATEGORIES.includes(c));
 }
 
+/**
+ * Category signals from seeker title + skills (same keyword rules as title).
+ * @returns {Set<string>}
+ */
+export function inferSeekerCategoryHints(jobTitleBlob, skills) {
+    const blob = [String(jobTitleBlob || ''), ...(Array.isArray(skills) ? skills : []).map((s) => String(s))].join(' ').toLowerCase();
+    if (!blob.trim()) return new Set();
+    const hints = new Set();
+    for (const rule of TITLE_KEYWORD_RULES) {
+        if (rule.keywords.some((kw) => blob.includes(kw))) {
+            rule.categories.forEach((c) => hints.add(c));
+        }
+    }
+    return hints;
+}
+
+/**
+ * True if job category is in a different "career cluster" than seeker hints and
+ * the match is not strong enough to keep (score must exceed this threshold).
+ */
+function isCrossClusterMismatch(seekerHints, jobCategory, score, strongScoreThreshold = 70) {
+    if (!jobCategory || !JOB_CATEGORIES.includes(jobCategory)) return false;
+    if (!seekerHints || seekerHints.size === 0) return false;
+    if (score > strongScoreThreshold) return false;
+
+    const hasStem = seekerHints.has('IT') || seekerHints.has('Engineering');
+    const hasHealth = seekerHints.has('Health');
+    const hasEdu = seekerHints.has('Education');
+    const hasFinance = seekerHints.has('Finance');
+    const hasGov = seekerHints.has('Government');
+
+    if (hasStem && (jobCategory === 'Health' || jobCategory === 'Education')) return true;
+    if (hasHealth && (jobCategory === 'IT' || jobCategory === 'Engineering' || jobCategory === 'Education')) return true;
+    if (hasEdu && (jobCategory === 'IT' || jobCategory === 'Engineering' || jobCategory === 'Health')) return true;
+
+    if (hasFinance && (jobCategory === 'Health' || jobCategory === 'Education')) return true;
+    if (hasHealth && jobCategory === 'Finance') return true;
+    if (hasEdu && jobCategory === 'Finance') return true;
+
+    if (hasGov && (jobCategory === 'Health' || jobCategory === 'Education')) return true;
+    if ((hasHealth || hasEdu) && jobCategory === 'Government') return true;
+
+    if (hasFinance && (jobCategory === 'IT' || jobCategory === 'Engineering')) return true;
+    if (hasStem && jobCategory === 'Finance') return true;
+
+    return false;
+}
+
 export function extractRequiredSkillsFromJob(job) {
     const fromTags = Array.isArray(job.tags) ? job.tags.map((x) => String(x).trim()).filter(Boolean) : [];
     const req = String(job.requirements || '');
@@ -121,6 +181,16 @@ function locationMatches(seekerLoc, jobLoc) {
 const REASON_ORDER = { skills: 0, category: 1, experience: 2, location: 3, jobType: 4 };
 
 /**
+ * Skill overlap bonus: stronger weight than category-only baseline so close skill matches rank higher.
+ */
+function skillOverlapBonus(matchCount) {
+    if (matchCount <= 0) return 0;
+    if (matchCount === 1) return 28;
+    if (matchCount <= 3) return 34;
+    return 40;
+}
+
+/**
  * @param {object} job — Mongo job lean doc
  * @param {object} seeker — { jobTitle, experienceLevel, preferredJobType, location, skills: string[] }
  * @param {{ categoryFilterApplied?: boolean }} options — true when seeker passed hard category filter
@@ -147,7 +217,7 @@ export function scoreFallbackJob(job, seeker, options = {}) {
 
     let bonus = 0;
     if (uniqueSkills.length > 0) {
-        bonus += 20;
+        bonus += skillOverlapBonus(uniqueSkills.length);
         reasons.push({
             type: 'skills',
             label: `Matches your skills: ${uniqueSkills.slice(0, 5).join(', ')}`
@@ -193,6 +263,11 @@ export function scoreFallbackJob(job, seeker, options = {}) {
         score = bonus;
     }
     score = Math.min(100, score);
+
+    const seekerHints = inferSeekerCategoryHints(seeker.jobTitle || '', seeker.skills || []);
+    if (isCrossClusterMismatch(seekerHints, job.category, score)) {
+        return { score: 0, reasons: [] };
+    }
 
     return { score, reasons };
 }

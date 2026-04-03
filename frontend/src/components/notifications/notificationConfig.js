@@ -46,6 +46,11 @@ export const NOTIFICATION_TYPE_CONFIG = {
     interview_scheduled: { icon: Calendar, bg: 'bg-amber-100', color: 'text-amber-600' },
     interview_rescheduled: { icon: Calendar, bg: 'bg-amber-100', color: 'text-amber-600' },
     interview_update: { icon: Calendar, bg: 'bg-amber-100', color: 'text-amber-600' },
+    interview_completed: { icon: Calendar, bg: 'bg-emerald-100', color: 'text-emerald-600' },
+    interview_cancelled: { icon: XCircle, bg: 'bg-red-100', color: 'text-red-600' },
+    interview_accepted: { icon: Calendar, bg: 'bg-emerald-100', color: 'text-emerald-600' },
+    reschedule_requested: { icon: Calendar, bg: 'bg-sky-100', color: 'text-sky-700' },
+    reschedule_rejected: { icon: XCircle, bg: 'bg-red-100', color: 'text-red-600' },
     reschedule_approved: { icon: Calendar, bg: 'bg-emerald-100', color: 'text-emerald-600' },
     reschedule_declined: { icon: XCircle, bg: 'bg-red-100', color: 'text-red-600' },
     // Company / Recruiter

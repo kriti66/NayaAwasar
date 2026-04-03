@@ -17,6 +17,66 @@ function normalizeRole(role) {
     return role || 'jobseeker';
 }
 
+const INTERVIEW_CALENDAR_TYPES = new Set([
+    'interview_scheduled',
+    'interview_rescheduled',
+    'reschedule_requested',
+    'interview_completed',
+    'interview_cancelled',
+    'interview_accepted',
+    'reschedule_rejected',
+    'interview_update',
+    'reschedule_approved',
+    'reschedule_declined'
+]);
+
+/**
+ * Pull interviewId + YYYY-MM-DD date from notification metadata / legacy shapes.
+ */
+export function extractInterviewCalendarPayload(notification) {
+    const meta = notification?.metadata;
+    const data = notification?.data;
+    const src = {
+        ...(data && typeof data === 'object' ? data : {}),
+        ...(meta && typeof meta === 'object' ? meta : {})
+    };
+    const interviewId = src.interviewId ?? src.interview_id;
+    let date = null;
+    const rawDate = src.interview_date ?? src.interviewDate ?? src.date;
+    if (rawDate != null) {
+        if (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate.trim())) {
+            date = rawDate.trim();
+        } else {
+            const d = new Date(rawDate);
+            if (!Number.isNaN(d.getTime())) {
+                date = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+            }
+        }
+    }
+    return {
+        interviewId: interviewId != null && String(interviewId).trim() !== '' ? String(interviewId) : null,
+        date
+    };
+}
+
+export function isInterviewCalendarNotification(notification) {
+    const t = notification?.type;
+    const c = notification?.category;
+    if (c === 'interview') return true;
+    if (INTERVIEW_CALENDAR_TYPES.has(t)) return true;
+    return false;
+}
+
+export function buildInterviewCalendarUrl(role, payload) {
+    const normalized = normalizeRole(role);
+    const base = normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar';
+    const q = new URLSearchParams();
+    if (payload?.date) q.set('date', payload.date);
+    if (payload?.interviewId) q.set('interviewId', payload.interviewId);
+    const qs = q.toString();
+    return qs ? `${base}?${qs}` : base;
+}
+
 export function getRoleDashboardPath(role) {
     const normalized = normalizeRole(role);
     return ROLE_DASHBOARD[normalized] || '/seeker/dashboard';
@@ -38,9 +98,14 @@ function mapByType(type, role) {
         recruiter_kyc_new_submission: normalized === 'admin' ? '/admin/kyc' : '/kyc/recruiter',
         recruiter_kyc_resubmitted_after_rejection: normalized === 'admin' ? '/admin/kyc' : '/kyc/recruiter',
         application_update: normalized === 'recruiter' ? '/recruiter/applications' : '/seeker/applications',
-        interview_scheduled: normalized === 'recruiter' ? '/recruiter/applications' : '/seeker/interviews',
-        interview_update: normalized === 'recruiter' ? '/recruiter/applications' : '/seeker/interviews',
-        interview_rescheduled: normalized === 'recruiter' ? '/recruiter/applications' : '/seeker/interviews'
+        interview_scheduled: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
+        interview_update: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
+        interview_rescheduled: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
+        reschedule_requested: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
+        interview_completed: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
+        interview_cancelled: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
+        interview_accepted: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
+        reschedule_rejected: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar'
     };
     return commonMap[type] || null;
 }
@@ -49,11 +114,31 @@ function mapByType(type, role) {
  * Resolve notification link into a valid role-aware path.
  */
 export function resolveNotificationPath(notification, role) {
+    const normalized = normalizeRole(role);
+    const payload = extractInterviewCalendarPayload(notification);
+    const hasCalendarPayload = !!(payload.interviewId || payload.date);
+    if (
+        hasCalendarPayload &&
+        (normalized === 'jobseeker' || normalized === 'recruiter') &&
+        isInterviewCalendarNotification(notification)
+    ) {
+        return buildInterviewCalendarUrl(role, payload);
+    }
+
     const fallback = getRoleDashboardPath(role);
     const rawLink = notification?.link;
     const typeMapped = mapByType(notification?.type, role);
+    const trimmedLink = typeof rawLink === 'string' ? rawLink.trim() : '';
 
-    let target = (typeof rawLink === 'string' && rawLink.trim()) ? rawLink.trim() : (typeMapped || fallback);
+    let target;
+    if (
+        isInterviewCalendarNotification(notification) &&
+        (normalized === 'jobseeker' || normalized === 'recruiter')
+    ) {
+        target = typeMapped || trimmedLink || fallback;
+    } else {
+        target = trimmedLink || typeMapped || fallback;
+    }
 
     // Legacy backend links sometimes use '/dashboard'
     if (target === '/dashboard') return fallback;

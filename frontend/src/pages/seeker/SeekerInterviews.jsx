@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import applicationService from '../../services/applicationService';
 import { useInterviews } from '../../hooks/useInterviews';
 import InterviewStatusBadge from '../../components/interviews/InterviewStatusBadge';
@@ -20,7 +20,9 @@ import { getApiErrorMessage } from '../../utils/apiErrorMessage';
 
 const SeekerInterviews = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const isFocused = searchParams.get('focused') === 'true';
+    const applicationIdToScroll = searchParams.get('applicationId');
     const [activeTab, setActiveTab] = useState('upcoming');
 
     const { interviews, loading, refetch } = useInterviews();
@@ -40,6 +42,26 @@ const SeekerInterviews = () => {
         window.addEventListener('focus', handleFocus);
         return () => window.removeEventListener('focus', handleFocus);
     }, [isFocused, refetch]);
+
+    useEffect(() => {
+        if (applicationIdToScroll) setActiveTab('upcoming');
+    }, [applicationIdToScroll]);
+
+    useEffect(() => {
+        if (!applicationIdToScroll || loading) return;
+        const paramsSnapshot = searchParams.toString();
+        const t = window.setTimeout(() => {
+            const el = document.getElementById(`seeker-interview-${applicationIdToScroll}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const next = new URLSearchParams(paramsSnapshot);
+                next.delete('applicationId');
+                const qs = next.toString();
+                navigate(`/seeker/interviews${qs ? `?${qs}` : ''}`, { replace: true });
+            }
+        }, 350);
+        return () => clearTimeout(t);
+    }, [applicationIdToScroll, loading, interviews.length, searchParams, navigate]);
 
     const handleRescheduleSubmit = async () => {
         if (!rescheduleForm.reason) {
@@ -156,7 +178,10 @@ const SeekerInterviews = () => {
                   : '#';
 
         return (
-            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group">
+            <div
+                id={app._id ? `seeker-interview-${app._id}` : undefined}
+                className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 group"
+            >
                 {/* Top accent bar */}
                 <div className={`h-1 ${jobseekerRescheduleRejected ? 'bg-gradient-to-r from-red-400 to-rose-500' : 'bg-gradient-to-r from-[#29a08e] via-teal-400 to-emerald-400'}`}></div>
 

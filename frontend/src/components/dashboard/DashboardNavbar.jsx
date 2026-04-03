@@ -12,6 +12,7 @@ const RecruiterNavLinks = [
     { label: 'Dashboard', path: '/recruiter/dashboard' },
     { label: 'Jobs', path: '/recruiter/jobs' },
     { label: 'Applications', path: '/recruiter/applications' },
+    { label: 'Calendar', path: '/recruiter/calendar' },
     { label: 'Promotions', path: '/recruiter/promotions' },
 ];
 
@@ -246,6 +247,7 @@ const DashboardNavbar = () => {
         { label: 'Dashboard', path: '/seeker/dashboard' },
         { label: 'Profile', path: '/seeker/profile' },
         { label: 'Applications', path: '/seeker/applications' },
+        { label: 'Calendar', path: '/seeker/calendar' },
         { label: 'Find Jobs', path: '/seeker/jobs' }
     ];
     const jsActive = (path) => path === '/seeker/dashboard' ? location.pathname === path : location.pathname.startsWith(path);

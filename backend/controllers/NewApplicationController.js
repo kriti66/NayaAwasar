@@ -11,6 +11,7 @@ import { recordUserInteraction } from '../services/recommendationService.js';
 import { getEffectiveInterviewStart } from '../utils/interviewDateTime.js';
 import { computeInterviewLifecycle } from '../utils/interviewLifecycle.js';
 import { isJobVisibleForPublicListing } from '../utils/jobModeration.js';
+import { interviewCalendarMetadata } from '../utils/interviewNotificationMetadata.js';
 
 function getSeekerIdString(application) {
     const s = application?.seeker_id;
@@ -391,7 +392,11 @@ export const advanceApplication = async (req, res) => {
                 timezone,
                 status: 'Scheduled',
                 duration: Number.isFinite(dur) && dur > 0 ? dur : 30,
-                interviewer: interviewer ? String(interviewer).trim() : ''
+                interviewer: interviewer ? String(interviewer).trim() : '',
+                interviewStatus: 'pending_acceptance',
+                calendarStatus: 'pending_acceptance',
+                acceptedBySeeker: false,
+                acceptedByRecruiter: true
             });
 
             application.interview = {
@@ -413,13 +418,21 @@ export const advanceApplication = async (req, res) => {
         await application.save();
 
         if (nextStatus === 'interview') {
+            const invId = application.interview?.interviewId;
             await createNotification({
                 recipient: application.seeker_id,
-                type: 'application_update',
+                type: 'interview_scheduled',
+                category: 'interview',
                 title: 'Interview Scheduled',
                 message: `Your interview for ${application.job_id?.title} has been scheduled (${application.interview.mode}).`,
-                link: '/seeker/interviews?focused=true&from=notifications',
-                sender: recruiterId
+                link: '/seeker/calendar',
+                sender: recruiterId,
+                metadata: invId
+                    ? interviewCalendarMetadata(
+                          { _id: invId, date: application.interview?.date },
+                          { applicationId: application._id }
+                      )
+                    : {}
             });
         }
 
@@ -523,7 +536,11 @@ export const updateApplicationStatus = async (req, res) => {
                 timezone: timezone,
                 status: 'Scheduled',
                 duration: Number.isFinite(dur) && dur > 0 ? dur : 30,
-                interviewer: interviewer ? String(interviewer).trim() : ''
+                interviewer: interviewer ? String(interviewer).trim() : '',
+                interviewStatus: 'pending_acceptance',
+                calendarStatus: 'pending_acceptance',
+                acceptedBySeeker: false,
+                acceptedByRecruiter: true
             });
 
             application.interview = {
@@ -566,10 +583,23 @@ export const updateApplicationStatus = async (req, res) => {
             let notifMessage = `Your application status for ${application.job_id.title} has been updated to ${normalizedStatus.replace('-', ' ')}.`;
             let notifTitle = 'Application Status Update';
             let notifLink = '/seeker/applications';
+            let notifType = normalizedStatus === 'offered' ? 'offer' : 'application_update';
+            let notifCategory;
+            let notifMetadata = {};
 
             if (normalizedStatus === 'interview') {
                 notifMessage = `You have an interview scheduled for ${application.job_id.title}.`;
-                notifLink = '/seeker/interviews?focused=true&from=notifications';
+                notifLink = '/seeker/calendar';
+                notifTitle = 'Interview Scheduled';
+                notifType = 'interview_scheduled';
+                notifCategory = 'interview';
+                const invId = application.interview?.interviewId;
+                if (invId) {
+                    notifMetadata = interviewCalendarMetadata(
+                        { _id: invId, date: application.interview?.date },
+                        { applicationId: application._id }
+                    );
+                }
             } else if (normalizedStatus === 'offered') {
                 notifTitle = 'Offer Received';
                 notifMessage = `Congratulations! You have received an offer for ${application.job_id.title}.`;
@@ -583,11 +613,13 @@ export const updateApplicationStatus = async (req, res) => {
 
             await createNotification({
                 recipient: application.seeker_id,
-                type: normalizedStatus === 'offered' ? 'offer' : 'application_update',
+                type: notifType,
+                category: notifCategory || 'application',
                 title: notifTitle,
                 message: notifMessage,
                 link: notifLink,
-                sender: recruiterId
+                sender: recruiterId,
+                metadata: notifMetadata
             });
 
             await logActivity(
@@ -661,7 +693,11 @@ export const getMyInterviews = async (req, res) => {
             seekerId,
             status: { $in: ['Scheduled', 'Completed', 'Missed'] },
             $or: [
-                { interviewStatus: { $in: ['scheduled', 'reschedule_pending', 'confirmed'] } },
+                {
+                    interviewStatus: {
+                        $in: ['scheduled', 'reschedule_pending', 'confirmed', 'pending_acceptance']
+                    }
+                },
                 { interviewStatus: { $exists: false } },
                 { interviewStatus: null }
             ]
@@ -897,6 +933,7 @@ export const requestReschedule = async (req, res) => {
         await application.save();
 
         // Sync to Interview (single source of truth)
+        let interviewDocAfter = null;
         const interviewId = application.interview?.interviewId;
         if (interviewId) {
             const interviewDoc = await Interview.findById(interviewId);
@@ -911,16 +948,24 @@ export const requestReschedule = async (req, res) => {
                 interviewDoc.rescheduleRejectedReason = undefined;
                 interviewDoc.recruiterDecisionAt = undefined;
                 await interviewDoc.save();
+                interviewDocAfter = interviewDoc;
             }
         }
 
         await createNotification({
             recipient: application.job_id.recruiter_id,
-            type: 'application_update',
+            type: 'reschedule_requested',
+            category: 'interview',
             title: 'Reschedule Requested',
             message: `Reschedule requested for ${application.job_id.title}`,
-            link: `/recruiter/applications?jobId=${application.job_id._id}`,
-            sender: seekerId
+            link: '/recruiter/calendar',
+            sender: seekerId,
+            metadata: interviewDocAfter
+                ? interviewCalendarMetadata(interviewDocAfter, { applicationId: application._id })
+                : interviewCalendarMetadata(
+                      { _id: interviewId, date: application.interview?.date },
+                      { applicationId: application._id }
+                  )
         });
 
         res.json({ success: true, message: 'Reschedule requested' });
@@ -967,6 +1012,10 @@ export const approveReschedule = async (req, res) => {
             interviewDoc.timezone = timezone;
             interviewDoc.status = 'Scheduled';
             interviewDoc.interviewStatus = 'scheduled';
+            interviewDoc.calendarStatus = 'scheduled';
+            interviewDoc.acceptedBySeeker = true;
+            interviewDoc.acceptedByRecruiter = true;
+            interviewDoc.set('rescheduleRequest', undefined);
             interviewDoc.rescheduleStatus = 'NONE';
             if (Number.isFinite(durApprove) && durApprove > 0) interviewDoc.duration = durApprove;
             if (interviewer != null) interviewDoc.interviewer = String(interviewer).trim();
@@ -984,7 +1033,11 @@ export const approveReschedule = async (req, res) => {
                 timezone,
                 status: 'Scheduled',
                 duration: Number.isFinite(durApprove) && durApprove > 0 ? durApprove : 30,
-                interviewer: interviewer ? String(interviewer).trim() : ''
+                interviewer: interviewer ? String(interviewer).trim() : '',
+                interviewStatus: 'scheduled',
+                calendarStatus: 'scheduled',
+                acceptedBySeeker: true,
+                acceptedByRecruiter: true
             });
         }
 
@@ -1017,11 +1070,13 @@ export const approveReschedule = async (req, res) => {
 
         await createNotification({
             recipient: application.seeker_id,
-            type: 'application_update',
+            type: 'interview_rescheduled',
+            category: 'interview',
             title: 'Reschedule Approved',
             message: `Your interview for ${application.job_id.title} has been rescheduled to ${date} at ${time}.`,
-            link: '/seeker/interviews?focused=true&from=notifications',
-            sender: recruiterId
+            link: '/seeker/calendar',
+            sender: recruiterId,
+            metadata: interviewCalendarMetadata(interviewDoc, { applicationId: application._id })
         });
 
         res.json({ success: true, message: 'Reschedule approved', application });
@@ -1074,13 +1129,21 @@ export const rejectReschedule = async (req, res) => {
         }
 
         // Notify Seeker (still create notification for alert)
+        const interviewDocForReject = interviewId ? await Interview.findById(interviewId).lean() : null;
         await createNotification({
             recipient: application.seeker_id,
-            type: 'application_update',
+            type: 'reschedule_rejected',
+            category: 'interview',
             title: 'Reschedule Declined',
             message: `Your reschedule request for ${application.job_id.title} was declined. Reason: ${rejectionReason}`,
-            link: '/seeker/interviews?focused=true&from=notifications',
-            sender: recruiterId
+            link: '/seeker/calendar',
+            sender: recruiterId,
+            metadata: interviewDocForReject
+                ? interviewCalendarMetadata(interviewDocForReject, { applicationId: application._id })
+                : interviewCalendarMetadata(
+                      { _id: interviewId, date: application.interview?.date },
+                      { applicationId: application._id }
+                  )
         });
 
         res.json({ success: true, message: 'Reschedule request rejected', application });
@@ -1167,11 +1230,13 @@ export const proposeRecruiterReschedule = async (req, res) => {
 
         await createNotification({
             recipient: application.seeker_id._id,
-            type: 'application_update',
+            type: 'reschedule_requested',
+            category: 'interview',
             title: 'Reschedule Proposed',
             message: `Recruiter wants to reschedule your interview for ${application.job_id.title} to ${proposedDateObj.toLocaleDateString()} at ${proposedTime}.`,
-            link: '/seeker/interviews?focused=true&from=notifications',
-            sender: requesterId
+            link: '/seeker/calendar',
+            sender: requesterId,
+            metadata: interviewCalendarMetadata(interviewDoc, { applicationId: application._id })
         });
 
         res.json({ success: true, message: 'Reschedule request sent' });
@@ -1271,11 +1336,13 @@ export const acceptRecruiterReschedule = async (req, res) => {
 
         await createNotification({
             recipient: application.job_id.recruiter_id,
-            type: 'application_update',
+            type: 'interview_rescheduled',
+            category: 'interview',
             title: 'Reschedule Approved',
             message: `${application.seeker_id.fullName} accepted the reschedule for ${application.job_id.title}.`,
-            link: `/recruiter/applications?jobId=${application.job_id._id}`,
-            sender: seekerId
+            link: '/recruiter/calendar',
+            sender: seekerId,
+            metadata: interviewCalendarMetadata(interviewDoc, { applicationId: application._id })
         });
 
         res.json({ success: true, message: 'Reschedule approved', application });
@@ -1348,11 +1415,13 @@ export const rejectRecruiterReschedule = async (req, res) => {
 
         await createNotification({
             recipient: application.job_id.recruiter_id,
-            type: 'application_update',
+            type: 'reschedule_rejected',
+            category: 'interview',
             title: 'Reschedule Rejected',
             message: `${application.seeker_id.fullName} rejected the reschedule for ${application.job_id.title}.`,
-            link: `/recruiter/applications?jobId=${application.job_id._id}`,
-            sender: seekerId
+            link: '/recruiter/calendar',
+            sender: seekerId,
+            metadata: interviewCalendarMetadata(interviewDoc, { applicationId: application._id })
         });
 
         res.json({ success: true, message: 'Reschedule rejected', application });

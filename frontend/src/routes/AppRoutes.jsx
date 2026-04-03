@@ -38,12 +38,14 @@ import JobseekerProfileDashboard from '../pages/seeker/JobseekerProfileDashboard
 import ApplyJob from '../pages/seeker/ApplyJob';
 import FindJobs from '../pages/seeker/FindJobs';
 import SeekerInterviews from '../pages/seeker/SeekerInterviews';
+import JobseekerCalendar from '../pages/seeker/JobseekerCalendar';
 import RecruiterDashboard from '../pages/recruiter/RecruiterDashboard';
 import RecruiterProfile from '../pages/recruiter/RecruiterProfile';
 import PostJob from '../pages/recruiter/PostJob';
 import RecruiterJobs from '../pages/recruiter/RecruiterJobs';
 import EditJob from '../pages/recruiter/EditJob';
 import RecruiterApplicants from '../pages/recruiter/RecruiterApplicants';
+import RecruiterCalendar from '../pages/recruiter/RecruiterCalendar';
 import RecruiterPromotions from '../pages/recruiter/RecruiterPromotions';
 import PromotionPayment from '../pages/recruiter/PromotionPayment';
 import JobAnalytics from '../pages/recruiter/JobAnalytics';
@@ -143,6 +145,9 @@ const AppRoutes = () => {
                         <Route path="/seeker/profile" element={<JobseekerProfileDashboard />} />
                         <Route path="/seeker/jobs" element={<FindJobs />} />
                         <Route path="/seeker/interviews" element={<SeekerInterviews />} />
+                        <Route path="/seeker/calendar" element={<JobseekerCalendar />} />
+                        <Route path="/jobseeker/calendar" element={<JobseekerCalendar />} />
+                        <Route path="/dashboard/calendar" element={<JobseekerCalendar />} />
                         <Route path="/seeker/notifications" element={<Notifications />} />
                         <Route path="/seeker/company/:id" element={<CompanyProfile />} />
                         <Route path="/jobseeker/jobs/:id" element={<JobDetails />} />
@@ -169,6 +174,7 @@ const AppRoutes = () => {
                         <Route path="/recruiter/jobs" element={<RecruiterJobs />} />
                         <Route path="/recruiter/jobs/:id/edit" element={<EditJob />} />
                         <Route path="/recruiter/applications" element={<RecruiterApplicants />} />
+                        <Route path="/recruiter/calendar" element={<RecruiterCalendar />} />
                         <Route path="/recruiter/jobs/:jobId/analytics" element={<JobAnalytics />} />
                         <Route path="/recruiter/promotions" element={<RecruiterPromotions />} />
                         <Route path="/promotion-payment" element={<PromotionPayment />} />
