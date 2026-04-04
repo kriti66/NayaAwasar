@@ -689,18 +689,14 @@ export const getMyInterviews = async (req, res) => {
     const seekerId = req.user.id;
 
     try {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
         const interviewDocs = await Interview.find({
             seekerId,
-            status: { $in: ['Scheduled', 'Completed', 'Missed'] },
-            $or: [
-                {
-                    interviewStatus: {
-                        $in: ['scheduled', 'reschedule_pending', 'confirmed', 'pending_acceptance']
-                    }
-                },
-                { interviewStatus: { $exists: false } },
-                { interviewStatus: null }
-            ]
+            status: 'Scheduled',
+            interviewStatus: 'scheduled',
+            date: { $gte: startOfToday }
         })
             .populate('applicationId')
             .populate('jobId', 'title company_name location')

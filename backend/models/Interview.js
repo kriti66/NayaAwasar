@@ -139,7 +139,47 @@ const interviewSchema = new mongoose.Schema({
     requestedDate: { type: Date },
     requestedTime: { type: String },
     recruiterDecisionAt: { type: Date },
-    rescheduleRejectedReason: { type: String }
+    rescheduleRejectedReason: { type: String },
+
+    /**
+     * Reschedule state machine (v2). Orthogonal to legacy rescheduleStatus (NONE/PENDING/…)
+     * and interviewStatus. Stored datetimes are UTC instants where applicable.
+     */
+    workflowRescheduleStatus: {
+        type: String,
+        enum: ['none', 'pending', 'countered', 'accepted', 'rejected', 'expired'],
+        default: 'none',
+        index: true
+    },
+    workflowRescheduleRequestedBy: {
+        type: String,
+        default: null
+    },
+    workflowProposedDateTime: { type: Date, default: null },
+    workflowCounterProposedDateTime: { type: Date, default: null },
+    workflowRescheduleExpiresAt: { type: Date, default: null, index: true },
+    workflowRescheduleRoundCount: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 3
+    },
+    workflowRescheduleNote: { type: String, default: '' },
+    workflowRescheduleHistory: [
+        {
+            round: { type: Number, required: true },
+            proposedBy: { type: String, enum: ['jobseeker', 'recruiter'], required: true },
+            previousScheduledAt: { type: Date, default: null },
+            newProposedAt: { type: Date, required: true },
+            note: { type: String, default: '' },
+            action: {
+                type: String,
+                enum: ['proposed', 'accepted', 'rejected', 'expired', 'countered', 'cancelled'],
+                required: true
+            },
+            at: { type: Date, default: Date.now }
+        }
+    ]
 }, { timestamps: true });
 
 // Auto-generate roomId before saving if Online

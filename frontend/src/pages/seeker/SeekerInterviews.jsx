@@ -6,7 +6,7 @@ import InterviewStatusBadge from '../../components/interviews/InterviewStatusBad
 import { msUntilInterviewStart } from '../../utils/interviewDateTime';
 import {
     getInterviewBuckets,
-    getInterviewDisplayStatus,
+    getInterviewStatusBadgeKeyFromApp,
     getInterviewScheduledAtMs,
     getTimeUntilInterviewFromApp
 } from '../../utils/seekerInterviewList';
@@ -148,7 +148,8 @@ const SeekerInterviews = () => {
 
     const InterviewCard = ({ app, bucket }) => {
         const lifecycle = app.lifecycleStatus || 'SCHEDULED';
-        const displayStatus = getInterviewDisplayStatus(app);
+        const interviewBadgeKey = getInterviewStatusBadgeKeyFromApp(app);
+        const displayStatus = app?.interview?.interviewId?.interviewStatus ?? 'scheduled';
         const scheduledAtMs = getInterviewScheduledAtMs(app);
         const isFuture =
             scheduledAtMs != null && Number.isFinite(scheduledAtMs) && scheduledAtMs > Date.now();
@@ -214,7 +215,7 @@ const SeekerInterviews = () => {
                                     {timeUntil === 'Today' ? '⏰ Today' : `🗓 In ${timeUntil}`}
                                 </span>
                             )}
-                            <InterviewStatusBadge status={displayStatus} />
+                            <InterviewStatusBadge status={interviewBadgeKey} />
                         </div>
                     </div>
 

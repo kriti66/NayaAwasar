@@ -13,6 +13,11 @@ import InterviewCalendarGrid from '../../components/interviews/InterviewCalendar
 import InterviewCalendarLegend from '../../components/interviews/InterviewCalendarLegend';
 import RescheduleModal from '../../components/RescheduleModal';
 import { useInterviewCalendarDeepLink } from '../../hooks/useInterviewCalendarDeepLink';
+import {
+    getInterviewRescheduleUiState,
+    formatRescheduleInstantNepal,
+    rescheduleProposerDisplayName
+} from '../../utils/interviewRescheduleUi';
 
 export default function RecruiterCalendar() {
     const now = new Date();
@@ -22,7 +27,7 @@ export default function RecruiterCalendar() {
     const [loading, setLoading] = useState(true);
     const [selectedDayKey, setSelectedDayKey] = useState(null);
     const [busyId, setBusyId] = useState(null);
-    const [rescheduleForId, setRescheduleForId] = useState(null);
+    const [rescheduleModal, setRescheduleModal] = useState(null);
     const [cancelForId, setCancelForId] = useState(null);
     const [cancelReason, setCancelReason] = useState('');
 
@@ -70,7 +75,46 @@ export default function RecruiterCalendar() {
         } else setMonthIndex((m) => m + 1);
     };
 
-    const handleAcceptReschedule = async (id) => {
+    const handleFsmAccept = async (id) => {
+        setBusyId(id);
+        try {
+            await api.post(`/interviews/reschedule/${id}/accept`);
+            toast.success('New time confirmed');
+            await load();
+        } catch (e) {
+            toast.error(getApiErrorMessage(e, 'Could not accept reschedule'));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handleFsmReject = async (id) => {
+        setBusyId(id);
+        try {
+            await api.post(`/interviews/reschedule/${id}/reject`);
+            toast.success('Reschedule declined; original time kept');
+            await load();
+        } catch (e) {
+            toast.error(getApiErrorMessage(e, 'Could not decline reschedule'));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handleFsmCancelRequest = async (id) => {
+        setBusyId(id);
+        try {
+            await api.post(`/interviews/reschedule/${id}/cancel-request`);
+            toast.success('Your reschedule request was withdrawn');
+            await load();
+        } catch (e) {
+            toast.error(getApiErrorMessage(e, 'Could not cancel request'));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handleLegacyAcceptReschedule = async (id) => {
         setBusyId(id);
         try {
             await api.patch(`/interviews/${id}/accept-reschedule`);
@@ -174,7 +218,12 @@ export default function RecruiterCalendar() {
                                         {formatDisplayDayKey(selectedDayKey)}
                                     </h3>
                                     <ul className="space-y-4">
-                                        {selectedList.map((inv) => (
+                                        {selectedList.map((inv) => {
+                                            const ui = getInterviewRescheduleUiState(inv, 'recruiter');
+                                            const fsm = inv.reschedule_fsm || {};
+                                            const canCancelInterview =
+                                                inv.status !== 'completed' && inv.status !== 'cancelled';
+                                            return (
                                             <li
                                                 key={inv.id}
                                                 ref={(el) => registerInterviewCardRef(inv.id, el)}
@@ -197,7 +246,7 @@ export default function RecruiterCalendar() {
                                                     {inv.time} · {inv.mode === 'onsite' ? 'Onsite' : 'Online'}
                                                 </p>
 
-                                                {inv.reschedule_request && (
+                                                {!ui.activeFsm && inv.reschedule_request && (
                                                     <div className="text-xs text-slate-600 bg-white rounded-md p-2 border border-slate-100">
                                                         <span className="font-semibold">Proposed change</span> by{' '}
                                                         {inv.reschedule_request.proposed_by}:{' '}
@@ -211,40 +260,89 @@ export default function RecruiterCalendar() {
                                                     </div>
                                                 )}
 
-                                                <div className="flex flex-wrap gap-2 pt-1">
-                                                    {inv.status === 'reschedule_requested' &&
-                                                        inv.reschedule_request?.proposed_by === 'jobseeker' && (
-                                                            <button
-                                                                type="button"
-                                                                disabled={busyId === inv.id}
-                                                                onClick={() => handleAcceptReschedule(inv.id)}
-                                                                className="text-xs sm:text-sm px-3 py-1.5 rounded-lg bg-[#29a08e] text-white font-medium hover:bg-[#238276] disabled:opacity-50"
-                                                            >
-                                                                Accept reschedule
-                                                            </button>
-                                                        )}
+                                                {ui.waitingMessage && (
+                                                    <p className="text-xs text-slate-600">{ui.waitingMessage}</p>
+                                                )}
+                                                {ui.counterMaxMessage && (
+                                                    <p className="text-xs text-amber-800">{ui.counterMaxMessage}</p>
+                                                )}
 
-                                                    {inv.status === 'scheduled' && isInterviewUpcoming(inv) && (
-                                                        <>
+                                                <div className="flex flex-wrap gap-2 pt-1">
+                                                    {inv.status === 'reschedule_requested' && ui.showAccept && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busyId === inv.id}
+                                                            onClick={() =>
+                                                                ui.activeFsm
+                                                                    ? handleFsmAccept(inv.id)
+                                                                    : handleLegacyAcceptReschedule(inv.id)
+                                                            }
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg bg-[#29a08e] text-white font-medium hover:bg-[#238276] disabled:opacity-50"
+                                                        >
+                                                            Accept new time
+                                                        </button>
+                                                    )}
+
+                                                    {inv.status === 'reschedule_requested' && ui.showDecline && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busyId === inv.id}
+                                                            onClick={() => handleFsmReject(inv.id)}
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white disabled:opacity-50"
+                                                        >
+                                                            Decline request
+                                                        </button>
+                                                    )}
+
+                                                    {inv.status === 'reschedule_requested' && ui.showCounter && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setRescheduleModal({ id: inv.id, mode: 'counter' })
+                                                            }
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white"
+                                                        >
+                                                            Propose another time
+                                                        </button>
+                                                    )}
+
+                                                    {inv.status === 'reschedule_requested' && ui.showCancelMyRequest && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busyId === inv.id}
+                                                            onClick={() => handleFsmCancelRequest(inv.id)}
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white disabled:opacity-50"
+                                                        >
+                                                            Cancel my request
+                                                        </button>
+                                                    )}
+
+                                                    {inv.status === 'scheduled' &&
+                                                        isInterviewUpcoming(inv) &&
+                                                        ui.showRequestReschedule && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => setRescheduleForId(inv.id)}
+                                                                onClick={() =>
+                                                                    setRescheduleModal({ id: inv.id, mode: 'request' })
+                                                                }
                                                                 className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white"
                                                             >
                                                                 Request reschedule
                                                             </button>
-                                                            <button
-                                                                type="button"
-                                                                disabled={busyId === inv.id}
-                                                                onClick={() => {
-                                                                    setCancelForId(inv.id);
-                                                                    setCancelReason('');
-                                                                }}
-                                                                className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-700 font-medium hover:bg-red-50"
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                        </>
+                                                        )}
+
+                                                    {canCancelInterview && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busyId === inv.id}
+                                                            onClick={() => {
+                                                                setCancelForId(inv.id);
+                                                                setCancelReason('');
+                                                            }}
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-700 font-medium hover:bg-red-50"
+                                                        >
+                                                            Cancel interview
+                                                        </button>
                                                     )}
 
                                                     {inv.status === 'scheduled' && (
@@ -258,8 +356,18 @@ export default function RecruiterCalendar() {
                                                         </button>
                                                     )}
                                                 </div>
+
+                                                {ui.activeFsm && fsm.proposed_at && (
+                                                    <p className="text-xs text-slate-600 pt-1 border-t border-slate-100">
+                                                        <span className="font-semibold">Proposed time</span> (
+                                                        {rescheduleProposerDisplayName(fsm)}):{' '}
+                                                        {formatRescheduleInstantNepal(fsm.proposed_at)}
+                                                        {fsm.note ? ` · “${fsm.note}”` : ''}
+                                                    </p>
+                                                )}
                                             </li>
-                                        ))}
+                                            );
+                                        })}
                                     </ul>
                                 </>
                             )}
@@ -269,9 +377,10 @@ export default function RecruiterCalendar() {
             </div>
 
             <RescheduleModal
-                open={!!rescheduleForId}
-                interviewId={rescheduleForId}
-                onClose={() => setRescheduleForId(null)}
+                open={!!rescheduleModal}
+                mode={rescheduleModal?.mode || 'request'}
+                interviewId={rescheduleModal?.id}
+                onClose={() => setRescheduleModal(null)}
                 onSuccess={load}
             />
 

@@ -14,6 +14,11 @@ import InterviewCalendarGrid from '../../components/interviews/InterviewCalendar
 import InterviewCalendarLegend from '../../components/interviews/InterviewCalendarLegend';
 import RescheduleModal from '../../components/RescheduleModal';
 import { useInterviewCalendarDeepLink } from '../../hooks/useInterviewCalendarDeepLink';
+import {
+    getInterviewRescheduleUiState,
+    formatRescheduleInstantNepal,
+    rescheduleProposerDisplayName
+} from '../../utils/interviewRescheduleUi';
 
 export default function JobseekerCalendar() {
     const navigate = useNavigate();
@@ -24,7 +29,9 @@ export default function JobseekerCalendar() {
     const [loading, setLoading] = useState(true);
     const [selectedDayKey, setSelectedDayKey] = useState(null);
     const [busyId, setBusyId] = useState(null);
-    const [rescheduleForId, setRescheduleForId] = useState(null);
+    const [rescheduleModal, setRescheduleModal] = useState(null);
+    const [cancelForId, setCancelForId] = useState(null);
+    const [cancelReason, setCancelReason] = useState('');
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -104,7 +111,46 @@ export default function JobseekerCalendar() {
         }
     };
 
-    const handleAcceptReschedule = async (id) => {
+    const handleFsmAccept = async (id) => {
+        setBusyId(id);
+        try {
+            await api.post(`/interviews/reschedule/${id}/accept`);
+            toast.success('New time confirmed');
+            await load();
+        } catch (e) {
+            toast.error(getApiErrorMessage(e, 'Could not accept reschedule'));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handleFsmReject = async (id) => {
+        setBusyId(id);
+        try {
+            await api.post(`/interviews/reschedule/${id}/reject`);
+            toast.success('Reschedule declined; original time kept');
+            await load();
+        } catch (e) {
+            toast.error(getApiErrorMessage(e, 'Could not decline reschedule'));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handleFsmCancelRequest = async (id) => {
+        setBusyId(id);
+        try {
+            await api.post(`/interviews/reschedule/${id}/cancel-request`);
+            toast.success('Your reschedule request was withdrawn');
+            await load();
+        } catch (e) {
+            toast.error(getApiErrorMessage(e, 'Could not cancel request'));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handleLegacyAcceptReschedule = async (id) => {
         setBusyId(id);
         try {
             await api.patch(`/interviews/${id}/accept-reschedule`);
@@ -112,6 +158,24 @@ export default function JobseekerCalendar() {
             await load();
         } catch (e) {
             toast.error(getApiErrorMessage(e, 'Could not accept reschedule'));
+        } finally {
+            setBusyId(null);
+        }
+    };
+
+    const handleCancelInterview = async () => {
+        if (!cancelForId) return;
+        setBusyId(cancelForId);
+        try {
+            await api.patch(`/interviews/${cancelForId}/cancel`, {
+                cancel_reason: cancelReason.trim()
+            });
+            toast.success('Interview cancelled');
+            setCancelForId(null);
+            setCancelReason('');
+            await load();
+        } catch (e) {
+            toast.error(getApiErrorMessage(e, 'Could not cancel'));
         } finally {
             setBusyId(null);
         }
@@ -176,7 +240,12 @@ export default function JobseekerCalendar() {
                                         {formatDisplayDayKey(selectedDayKey)}
                                     </h3>
                                     <ul className="space-y-4">
-                                        {selectedList.map((inv) => (
+                                        {selectedList.map((inv) => {
+                                            const ui = getInterviewRescheduleUiState(inv, 'jobseeker');
+                                            const fsm = inv.reschedule_fsm || {};
+                                            const canCancelInterview =
+                                                inv.status !== 'completed' && inv.status !== 'cancelled';
+                                            return (
                                             <li
                                                 key={inv.id}
                                                 ref={(el) => registerInterviewCardRef(inv.id, el)}
@@ -198,7 +267,7 @@ export default function JobseekerCalendar() {
                                                     {inv.time} · {inv.mode === 'onsite' ? 'Onsite' : 'Online'}
                                                 </p>
 
-                                                {inv.reschedule_request && (
+                                                {!ui.activeFsm && inv.reschedule_request && (
                                                     <div className="text-xs text-slate-600 bg-white rounded-md p-2 border border-slate-100">
                                                         <span className="font-semibold">Proposed change</span> by{' '}
                                                         {inv.reschedule_request.proposed_by}:{' '}
@@ -212,6 +281,13 @@ export default function JobseekerCalendar() {
                                                     </div>
                                                 )}
 
+                                                {ui.waitingMessage && (
+                                                    <p className="text-xs text-slate-600">{ui.waitingMessage}</p>
+                                                )}
+                                                {ui.counterMaxMessage && (
+                                                    <p className="text-xs text-amber-800">{ui.counterMaxMessage}</p>
+                                                )}
+
                                                 <div className="flex flex-wrap gap-2 pt-1">
                                                     {inv.status === 'pending_acceptance' && (
                                                         <>
@@ -223,27 +299,71 @@ export default function JobseekerCalendar() {
                                                             >
                                                                 Accept interview
                                                             </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setRescheduleForId(inv.id)}
-                                                                className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white"
-                                                            >
-                                                                Request reschedule
-                                                            </button>
+                                                            {ui.showRequestReschedule && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        setRescheduleModal({
+                                                                            id: inv.id,
+                                                                            mode: 'request'
+                                                                        })
+                                                                    }
+                                                                    className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white"
+                                                                >
+                                                                    Request reschedule
+                                                                </button>
+                                                            )}
                                                         </>
                                                     )}
 
-                                                    {inv.status === 'reschedule_requested' &&
-                                                        inv.reschedule_request?.proposed_by === 'recruiter' && (
-                                                            <button
-                                                                type="button"
-                                                                disabled={busyId === inv.id}
-                                                                onClick={() => handleAcceptReschedule(inv.id)}
-                                                                className="text-xs sm:text-sm px-3 py-1.5 rounded-lg bg-[#29a08e] text-white font-medium hover:bg-[#238276] disabled:opacity-50"
-                                                            >
-                                                                Accept reschedule
-                                                            </button>
-                                                        )}
+                                                    {inv.status === 'reschedule_requested' && ui.showAccept && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busyId === inv.id}
+                                                            onClick={() =>
+                                                                ui.activeFsm
+                                                                    ? handleFsmAccept(inv.id)
+                                                                    : handleLegacyAcceptReschedule(inv.id)
+                                                            }
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg bg-[#29a08e] text-white font-medium hover:bg-[#238276] disabled:opacity-50"
+                                                        >
+                                                            Accept new time
+                                                        </button>
+                                                    )}
+
+                                                    {inv.status === 'reschedule_requested' && ui.showDecline && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busyId === inv.id}
+                                                            onClick={() => handleFsmReject(inv.id)}
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white disabled:opacity-50"
+                                                        >
+                                                            Decline request
+                                                        </button>
+                                                    )}
+
+                                                    {inv.status === 'reschedule_requested' && ui.showCounter && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setRescheduleModal({ id: inv.id, mode: 'counter' })
+                                                            }
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white"
+                                                        >
+                                                            Propose another time
+                                                        </button>
+                                                    )}
+
+                                                    {inv.status === 'reschedule_requested' && ui.showCancelMyRequest && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busyId === inv.id}
+                                                            onClick={() => handleFsmCancelRequest(inv.id)}
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white disabled:opacity-50"
+                                                        >
+                                                            Cancel my request
+                                                        </button>
+                                                    )}
 
                                                     {inv.status === 'scheduled' && (
                                                         <>
@@ -256,10 +376,15 @@ export default function JobseekerCalendar() {
                                                             >
                                                                 View interview
                                                             </button>
-                                                            {isInterviewUpcoming(inv) && (
+                                                            {isInterviewUpcoming(inv) && ui.showRequestReschedule && (
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => setRescheduleForId(inv.id)}
+                                                                    onClick={() =>
+                                                                        setRescheduleModal({
+                                                                            id: inv.id,
+                                                                            mode: 'request'
+                                                                        })
+                                                                    }
                                                                     className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-white"
                                                                 >
                                                                     Request reschedule
@@ -267,9 +392,33 @@ export default function JobseekerCalendar() {
                                                             )}
                                                         </>
                                                     )}
+
+                                                    {canCancelInterview && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={busyId === inv.id}
+                                                            onClick={() => {
+                                                                setCancelForId(inv.id);
+                                                                setCancelReason('');
+                                                            }}
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-700 font-medium hover:bg-red-50"
+                                                        >
+                                                            Cancel interview
+                                                        </button>
+                                                    )}
                                                 </div>
+
+                                                {ui.activeFsm && fsm.proposed_at && (
+                                                    <p className="text-xs text-slate-600 pt-1 border-t border-slate-100">
+                                                        <span className="font-semibold">Proposed time</span> (
+                                                        {rescheduleProposerDisplayName(fsm)}):{' '}
+                                                        {formatRescheduleInstantNepal(fsm.proposed_at)}
+                                                        {fsm.note ? ` · “${fsm.note}”` : ''}
+                                                    </p>
+                                                )}
                                             </li>
-                                        ))}
+                                            );
+                                        })}
                                     </ul>
                                 </>
                             )}
@@ -279,11 +428,52 @@ export default function JobseekerCalendar() {
             </div>
 
             <RescheduleModal
-                open={!!rescheduleForId}
-                interviewId={rescheduleForId}
-                onClose={() => setRescheduleForId(null)}
+                open={!!rescheduleModal}
+                mode={rescheduleModal?.mode || 'request'}
+                interviewId={rescheduleModal?.id}
+                onClose={() => setRescheduleModal(null)}
                 onSuccess={load}
             />
+
+            {cancelForId && (
+                <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+                    <button
+                        type="button"
+                        className="absolute inset-0 bg-slate-900/50"
+                        aria-label="Close"
+                        onClick={() => !busyId && setCancelForId(null)}
+                    />
+                    <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-slate-200 p-4">
+                        <h3 className="text-lg font-semibold text-slate-900 mb-2">Cancel interview</h3>
+                        <p className="text-sm text-slate-600 mb-3">Optional message for the recruiter.</p>
+                        <textarea
+                            value={cancelReason}
+                            onChange={(e) => setCancelReason(e.target.value)}
+                            rows={2}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-4"
+                            placeholder="Reason (optional)"
+                        />
+                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+                            <button
+                                type="button"
+                                disabled={!!busyId}
+                                onClick={() => setCancelForId(null)}
+                                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700"
+                            >
+                                Back
+                            </button>
+                            <button
+                                type="button"
+                                disabled={!!busyId}
+                                onClick={handleCancelInterview}
+                                className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium disabled:opacity-50"
+                            >
+                                {busyId ? 'Cancelling…' : 'Confirm cancel'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

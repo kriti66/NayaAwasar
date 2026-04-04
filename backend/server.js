@@ -149,6 +149,8 @@ import activityRoutes from './routes/activity.js';
 import notificationRoutes from './routes/notifications.js';
 import analyticsRoutes from './routes/analytics.js';
 import interviewRoutes from './routes/interviewRoutes.js';
+import interviewRescheduleRoutes from './routes/interviewRescheduleRoutes.js';
+import { startRescheduleExpiryCron } from './jobs/rescheduleExpiryCron.js';
 import zegoRoutes from './routes/zegoRoutes.js';
 import recommendationRoutes from './routes/recommendations.js';
 import contactRoutes from './routes/contact.js';
@@ -179,6 +181,7 @@ app.use('/api/profile', requireAuth, profileRoutes);
 app.use('/api/projects', requireAuth, projectRoutes);
 app.use('/api/activity', requireAuth, activityRoutes);
 app.use('/api/interviews', interviewRoutes);
+app.use('/api/interviews/reschedule', interviewRescheduleRoutes);
 app.use('/api/zego', zegoRoutes);
 app.use('/api/notifications', requireAuth, notificationRoutes);
 
@@ -196,6 +199,7 @@ app.use('/api/promotion-payment-requests', promotionPaymentRequestRoutes);
 app.use(errorHandler);
 
 app.listen(PORT, () => {
+    startRescheduleExpiryCron();
     console.log(`\n========================================`);
     console.log(`  Backend running at http://localhost:${PORT}`);
     console.log(`  Health check: http://localhost:${PORT}/api/health`);

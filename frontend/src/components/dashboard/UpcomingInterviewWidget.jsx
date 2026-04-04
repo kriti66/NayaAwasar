@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getApiErrorMessage } from '../../utils/apiErrorMessage';
@@ -14,6 +14,7 @@ import {
 import applicationService from '../../services/applicationService';
 import toast from 'react-hot-toast';
 import InterviewStatusBadge from '../interviews/InterviewStatusBadge';
+import { getInterviewStatusBadgeKeyFromApp } from '../../utils/seekerInterviewList';
 
 const formatDate = (date) => {
     if (!date) return 'Date TBD';
@@ -24,11 +25,33 @@ const formatDate = (date) => {
 
 const formatTime = (time) => time || 'Time TBD';
 
+/** Map Interview document `interviewStatus` to InterviewStatusBadge keys (not application status). */
+function interviewStatusToBadgeKey(dbStatus) {
+    const s = String(dbStatus || 'scheduled').toLowerCase();
+    if (s === 'reschedule_pending') return 'RESCHEDULE_REQUESTED';
+    if (s === 'confirmed') return 'SCHEDULED_UPCOMING';
+    if (s === 'pending_acceptance') return 'SCHEDULED_UPCOMING';
+    return 'SCHEDULED_UPCOMING';
+}
+
+function filterInterviewsForWidget(list) {
+    if (!Array.isArray(list) || list.length === 0) return [];
+    return list.filter((row) => {
+        const invStatus = row?.interview?.interviewId?.interviewStatus;
+        const mongo = row?.interview?.interviewId?.mongoStatus;
+        if (invStatus === 'completed' || invStatus === 'cancelled') return false;
+        if (mongo === 'Completed' || mongo === 'Cancelled') return false;
+        return true;
+    });
+}
+
 const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleAction }) => {
     const { user } = useAuth();
     const isJobseeker = user?.role === 'jobseeker' || user?.role === 'job_seeker';
     const [actionLoading, setActionLoading] = useState(false);
-    const nextInterview = interviews && Array.isArray(interviews) && interviews.length > 0 ? interviews[0] : null;
+    const visibleInterviews = useMemo(() => filterInterviewsForWidget(interviews), [interviews]);
+    const nextInterview =
+        visibleInterviews && visibleInterviews.length > 0 ? visibleInterviews[0] : null;
     const interviewDoc = nextInterview?.interview?.interviewId;
     const interviewStatus = interviewDoc?.interviewStatus || 'scheduled';
     const isReschedulePending = interviewStatus === 'reschedule_pending';
@@ -119,22 +142,9 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
                             </div>
                         </div>
 
-                        {/* Status: recruiter-proposed reschedule vs computed lifecycle */}
+                        {/* Primary badge from Interview.interviewStatus (not application status / lifecycle) */}
                         <div className="mb-4 flex flex-wrap items-center gap-2">
-                            {isReschedulePending && (
-                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider border border-amber-200">
-                                    <AlertCircle size={12} />
-                                    Reschedule Pending
-                                </span>
-                            )}
-                            {!isReschedulePending && nextInterview?.lifecycleStatus && (
-                                <InterviewStatusBadge status={nextInterview.lifecycleStatus} />
-                            )}
-                            {isReschedulePending &&
-                                nextInterview?.lifecycleStatus &&
-                                nextInterview.lifecycleStatus !== 'RESCHEDULE_REQUESTED' && (
-                                    <InterviewStatusBadge status={nextInterview.lifecycleStatus} />
-                                )}
+                            <InterviewStatusBadge status={getInterviewStatusBadgeKeyFromApp(nextInterview)} />
                         </div>
 
                         <div className="space-y-3">

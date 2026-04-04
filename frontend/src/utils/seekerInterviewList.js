@@ -28,6 +28,29 @@ export function getInterviewMongoStatus(app) {
 }
 
 /**
+ * Primary badge for interview cards: Interview document `interviewStatus` / `mongoStatus`,
+ * not derived application-stage timing.
+ * @param {object} app
+ * @returns {string} InterviewStatusBadge key
+ */
+export function getInterviewStatusBadgeKeyFromApp(app) {
+    const id = app?.interview?.interviewId;
+    const mongo = id?.mongoStatus;
+    if (mongo === 'Completed') {
+        if (id?.result === 'passed') return 'COMPLETED_PASSED';
+        if (id?.result === 'rejected') return 'COMPLETED_REJECTED';
+        return 'PENDING_RESULT';
+    }
+    if (mongo === 'Cancelled') return 'CANCELLED';
+    if (mongo === 'Missed') return 'MISSED';
+    const s = String(id?.interviewStatus || 'scheduled').toLowerCase();
+    if (s === 'reschedule_pending') return 'RESCHEDULE_REQUESTED';
+    if (s === 'confirmed') return 'SCHEDULED_UPCOMING';
+    if (s === 'pending_acceptance') return 'SCHEDULED_UPCOMING';
+    return 'SCHEDULED_UPCOMING';
+}
+
+/**
  * Badge keys for list UI: SCHEDULED_UPCOMING | MISSED | COMPLETED | CANCELLED
  * @param {object} app
  * @param {number} [nowMs]

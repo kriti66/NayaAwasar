@@ -6,6 +6,7 @@ import { createRequire } from 'module';
 import { getInterviewJoinWindow, combineDateAndTimeNepal } from '../utils/interviewDateTime.js';
 import { createNotification } from './notificationController.js';
 import { interviewCalendarMetadata } from '../utils/interviewNotificationMetadata.js';
+import { RESCHEDULE_FSM } from '../constants/reschedule.js';
 
 const require = createRequire(import.meta.url);
 const { generateToken04 } = require('../utils/zegoServerAssistant.cjs');
@@ -160,6 +161,39 @@ function normalizeSeekerRole(role) {
     return role === 'job_seeker' ? 'jobseeker' : role;
 }
 
+function clearActiveRescheduleWorkflowScalars(i) {
+    i.workflowRescheduleStatus = RESCHEDULE_FSM.NONE;
+    i.workflowRescheduleRequestedBy = null;
+    i.workflowProposedDateTime = null;
+    i.workflowCounterProposedDateTime = null;
+    i.workflowRescheduleExpiresAt = null;
+    i.workflowRescheduleNote = '';
+    i.workflowRescheduleRoundCount = 0;
+}
+
+function serializeWorkflowReschedule(i) {
+    const status = String(i.workflowRescheduleStatus || RESCHEDULE_FSM.NONE).toLowerCase();
+    return {
+        status,
+        requested_by: i.workflowRescheduleRequestedBy || null,
+        proposed_at: i.workflowProposedDateTime || null,
+        counter_previous_at: i.workflowCounterProposedDateTime || null,
+        expires_at: i.workflowRescheduleExpiresAt || null,
+        round_count:
+            typeof i.workflowRescheduleRoundCount === 'number' ? i.workflowRescheduleRoundCount : 0,
+        note: i.workflowRescheduleNote || '',
+        history: (i.workflowRescheduleHistory || []).map((h) => ({
+            round: h.round,
+            proposed_by: h.proposedBy,
+            previous_scheduled_at: h.previousScheduledAt ?? null,
+            new_proposed_at: h.newProposedAt,
+            note: h.note || '',
+            action: h.action,
+            at: h.at
+        }))
+    };
+}
+
 function serializeRescheduleRequest(i) {
     const rq = i.rescheduleRequest;
     if (rq && rq.newDate) {
@@ -198,6 +232,11 @@ function deriveCalendarStatus(i) {
     if (top === 'Completed') return 'completed';
     if (top === 'Cancelled') return 'cancelled';
 
+    const wf = String(i.workflowRescheduleStatus || RESCHEDULE_FSM.NONE).toLowerCase();
+    if (wf === RESCHEDULE_FSM.PENDING || wf === RESCHEDULE_FSM.COUNTERED) {
+        return 'reschedule_requested';
+    }
+
     if (i.calendarStatus === 'reschedule_requested') return 'reschedule_requested';
     if (i.calendarStatus === 'pending_acceptance') return 'pending_acceptance';
     if (i.calendarStatus === 'scheduled') return 'scheduled';
@@ -235,7 +274,8 @@ function toRecruiterCalendarItem(doc) {
         status,
         seeker_name: seeker?.fullName || 'Candidate',
         job_title: job?.title || 'Job',
-        reschedule_request: serializeRescheduleRequest(doc)
+        reschedule_request: serializeRescheduleRequest(doc),
+        reschedule_fsm: serializeWorkflowReschedule(doc)
     };
 }
 
@@ -253,7 +293,8 @@ function toSeekerCalendarItem(doc) {
         job_title: job?.title || 'Job',
         company_name: job?.company_name || '',
         recruiter_name: rec?.fullName || 'Recruiter',
-        reschedule_request: serializeRescheduleRequest(doc)
+        reschedule_request: serializeRescheduleRequest(doc),
+        reschedule_fsm: serializeWorkflowReschedule(doc)
     };
 }
 
@@ -410,6 +451,12 @@ export const requestInterviewReschedule = async (req, res) => {
         if (cal === 'completed' || cal === 'cancelled') {
             return res.status(400).json({ message: 'Cannot reschedule a completed or cancelled interview' });
         }
+        const wf = String(interview.workflowRescheduleStatus || RESCHEDULE_FSM.NONE).toLowerCase();
+        if (wf === RESCHEDULE_FSM.PENDING || wf === RESCHEDULE_FSM.COUNTERED) {
+            return res.status(409).json({
+                message: 'A reschedule request is already active. Use the calendar to respond or cancel it.'
+            });
+        }
         if (cal === 'reschedule_requested') {
             return res.status(409).json({ message: 'A reschedule request is already pending' });
         }
@@ -485,6 +532,13 @@ export const acceptInterviewReschedule = async (req, res) => {
         const isRec = interview.recruiterId.toString() === userId;
         const isSeek = interview.seekerId.toString() === userId;
         if (!isRec && !isSeek) return res.status(403).json({ message: 'Unauthorized' });
+
+        const wf = String(interview.workflowRescheduleStatus || RESCHEDULE_FSM.NONE).toLowerCase();
+        if (wf === RESCHEDULE_FSM.PENDING || wf === RESCHEDULE_FSM.COUNTERED) {
+            return res.status(400).json({
+                message: 'Use Accept / Decline / Counter in the calendar for this reschedule request.'
+            });
+        }
 
         const rq = interview.rescheduleRequest;
         if (!rq || !rq.newDate) {
@@ -634,6 +688,7 @@ export const cancelInterview = async (req, res) => {
         interview.cancelledAt = new Date();
         interview.set('rescheduleRequest', undefined);
         interview.rescheduleStatus = 'NONE';
+        clearActiveRescheduleWorkflowScalars(interview);
 
         await interview.save();
 

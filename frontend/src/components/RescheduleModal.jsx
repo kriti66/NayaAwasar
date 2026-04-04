@@ -4,22 +4,28 @@ import toast from 'react-hot-toast';
 import api from '../services/api';
 import { getApiErrorMessage } from '../utils/apiErrorMessage';
 
-export default function RescheduleModal({ open, interviewId, onClose, onSuccess }) {
+/**
+ * @param {'request'|'counter'} mode — POST .../request vs .../counter
+ */
+export default function RescheduleModal({ open, mode = 'request', interviewId, onClose, onSuccess }) {
     const [newDate, setNewDate] = useState('');
     const [newTime, setNewTime] = useState('');
-    const [reason, setReason] = useState('');
+    const [note, setNote] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         if (!open) {
             setNewDate('');
             setNewTime('');
-            setReason('');
+            setNote('');
             setSubmitting(false);
         }
     }, [open]);
 
     if (!open) return null;
+
+    const isCounter = mode === 'counter';
+    const title = isCounter ? 'Propose another time' : 'Request reschedule';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -27,22 +33,19 @@ export default function RescheduleModal({ open, interviewId, onClose, onSuccess 
             toast.error('Please choose a new date and time');
             return;
         }
-        if (!reason.trim()) {
-            toast.error('Please add a short reason');
-            return;
-        }
         setSubmitting(true);
         try {
-            await api.patch(`/interviews/${interviewId}/request-reschedule`, {
+            const path = isCounter ? 'counter' : 'request';
+            await api.post(`/interviews/reschedule/${interviewId}/${path}`, {
                 new_date: newDate,
                 new_time: newTime,
-                reason: reason.trim()
+                note: note.trim()
             });
-            toast.success('Reschedule request sent');
+            toast.success(isCounter ? 'Counter proposal sent' : 'Reschedule request sent');
             onSuccess?.();
             onClose();
         } catch (err) {
-            toast.error(getApiErrorMessage(err, 'Could not send reschedule request'));
+            toast.error(getApiErrorMessage(err, 'Could not submit reschedule'));
         } finally {
             setSubmitting(false);
         }
@@ -62,7 +65,7 @@ export default function RescheduleModal({ open, interviewId, onClose, onSuccess 
                 aria-modal="true"
             >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                    <h3 className="text-lg font-semibold text-slate-900">Request reschedule</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
                     <button
                         type="button"
                         onClick={onClose}
@@ -94,14 +97,15 @@ export default function RescheduleModal({ open, interviewId, onClose, onSuccess 
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Reason</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                            Note <span className="text-slate-400 font-normal">(optional)</span>
+                        </label>
                         <textarea
-                            value={reason}
-                            onChange={(e) => setReason(e.target.value)}
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
                             rows={3}
                             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-slate-900 focus:ring-2 focus:ring-[#29a08e] focus:border-[#29a08e]"
-                            placeholder="Why do you need a different slot?"
-                            required
+                            placeholder="Optional message for the other party"
                         />
                     </div>
                     <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-2">
@@ -117,7 +121,7 @@ export default function RescheduleModal({ open, interviewId, onClose, onSuccess 
                             disabled={submitting}
                             className="w-full sm:w-auto px-4 py-2.5 rounded-lg bg-[#29a08e] text-white font-semibold hover:bg-[#238276] disabled:opacity-60"
                         >
-                            {submitting ? 'Submitting…' : 'Submit reschedule'}
+                            {submitting ? 'Submitting…' : isCounter ? 'Send proposal' : 'Submit reschedule'}
                         </button>
                     </div>
                 </form>

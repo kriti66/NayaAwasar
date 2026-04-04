@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import Application from '../models/Application.js';
 import Interview from '../models/Interview.js';
 import Job from '../models/Job.js';
@@ -18,6 +19,37 @@ import { getRecommendedJobs } from '../services/recommendationService.js';
 import { applyUserJobLabels } from '../services/userJobLabelEnrichment.js';
 
 const router = express.Router();
+
+/** Upcoming interviews: scheduled slot + DB interviewStatus `scheduled`, application still in interview stage. */
+async function countSeekerUpcomingScheduledInterviews(seekerId, startOfToday) {
+    const dayStart = startOfToday || (() => {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+    })();
+    const result = await Interview.aggregate([
+        {
+            $match: {
+                seekerId: new mongoose.Types.ObjectId(String(seekerId)),
+                status: 'Scheduled',
+                interviewStatus: 'scheduled',
+                date: { $gte: dayStart }
+            }
+        },
+        {
+            $lookup: {
+                from: 'applications',
+                localField: 'applicationId',
+                foreignField: '_id',
+                as: 'app'
+            }
+        },
+        { $unwind: '$app' },
+        { $match: { 'app.status': 'interview' } },
+        { $count: 'n' }
+    ]);
+    return result[0]?.n ?? 0;
+}
 
 router.get('/', async (req, res) => {
     const userId = req.user?.id;
@@ -42,11 +74,14 @@ router.get('/', async (req, res) => {
                 return res.status(404).json({ message: 'User not found' });
             }
 
+            const startOfToday = new Date();
+            startOfToday.setHours(0, 0, 0, 0);
+
             // Stats
             const [appliedCount, inReviewCount, interviewCount, offerCount, validSavedIds] = await Promise.all([
                 Application.countDocuments({ seeker_id: userId }), // Total Applied
                 Application.countDocuments({ seeker_id: userId, status: { $in: ['applied', 'in_review'] } }), // In Review
-                Application.countDocuments({ seeker_id: userId, status: 'interview' }), // Interview
+                countSeekerUpcomingScheduledInterviews(userId, startOfToday),
                 Application.countDocuments({ seeker_id: userId, status: 'offered' }), // Offers
                 getValidSavedJobIds(userId)
             ]);
@@ -74,17 +109,11 @@ router.get('/', async (req, res) => {
             const profileViews = await Activity.countDocuments({ userId: userId, type: 'RECRUITER_VIEW' });
 
             // Application Pipeline Details (Interview model as single source of truth)
-            const startOfToday = new Date();
-            startOfToday.setHours(0, 0, 0, 0);
             const interviewDocs = await Interview.find({
                 seekerId: userId,
                 status: 'Scheduled',
-                date: { $gte: startOfToday },
-                $or: [
-                    { interviewStatus: { $in: ['scheduled', 'reschedule_pending', 'confirmed'] } },
-                    { interviewStatus: { $exists: false } },
-                    { interviewStatus: null }
-                ]
+                interviewStatus: 'scheduled',
+                date: { $gte: startOfToday }
             })
                 .populate('applicationId')
                 .populate('jobId', 'title company_name company_logo')
@@ -237,9 +266,12 @@ router.get('/seeker/stats', async (req, res) => {
     if (!seekerId) return res.status(401).json({ message: 'Unauthorized' });
 
     try {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+
         const [appliedCount, interviewCount, validSavedIds, profileViews, seekerUser, seekerProfile] = await Promise.all([
             Application.countDocuments({ seeker_id: seekerId }),
-            Application.countDocuments({ seeker_id: seekerId, status: 'interview' }),
+            countSeekerUpcomingScheduledInterviews(seekerId, startOfToday),
             getValidSavedJobIds(seekerId),
             // Count only recruiter profile-view activities for this seeker.
             // Excludes accidental self-view logs if any were ever inserted.
