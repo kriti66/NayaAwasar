@@ -28,10 +28,16 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     connect_db()
     await setup_indexes()
-    from embeddings import get_model
-    get_model()  # ← directly load model here
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, _load_model_in_thread)  # ← non-blocking
     yield
     await close_db()
+
+
+def _load_model_in_thread():
+    from embeddings import get_model
+    get_model()  # loads in background thread, doesn't block server
 
 
 
