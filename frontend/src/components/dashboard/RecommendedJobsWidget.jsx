@@ -14,27 +14,61 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
     const [recommendationNotice, setRecommendationNotice] = useState('');
     const [serverMessage, setServerMessage] = useState('');
     const [loading, setLoading] = useState(true);
+    const [usingFallbackJobs, setUsingFallbackJobs] = useState(false);
     const hookSaver = useJobSaver();
     const savedJobIds = propSavedIds ?? hookSaver.savedJobIds;
     const toggleSaveJob = propToggleSave ?? hookSaver.toggleSaveJob;
 
     useEffect(() => {
+        const fetchLatestJobsFallback = async () => {
+            const fallbackRes = await api.get('/jobs');
+            const rawJobs = Array.isArray(fallbackRes.data)
+                ? fallbackRes.data
+                : (Array.isArray(fallbackRes.data?.jobs) ? fallbackRes.data.jobs : []);
+            const sorted = rawJobs
+                .slice()
+                .sort((a, b) => new Date(b.createdAt || b.posted_date || 0) - new Date(a.createdAt || a.posted_date || 0))
+                .slice(0, 5);
+            setJobs(sorted);
+            setUsingFallbackJobs(true);
+            setRecommendationNotice('');
+            setServerMessage('');
+        };
+
         const fetchRecommendations = async () => {
             try {
                 const response = await api.get('/recommendations');
 
                 if (response.data && response.data.jobs) {
-                    setJobs(response.data.jobs);
+                    const recommendationJobs = Array.isArray(response.data.jobs) ? response.data.jobs : [];
+                    if (recommendationJobs.length === 0) {
+                        await fetchLatestJobsFallback();
+                        return;
+                    }
+                    setJobs(recommendationJobs);
+                    setUsingFallbackJobs(false);
                     setHasPersonalizationData(response.data.hasPersonalizationData !== false);
                     setIsCompleteProfile(response.data.isComplete !== false);
                     setRecommendationNotice(response.data.recommendationNotice || '');
                     setServerMessage(response.data.message || '');
                 } else if (Array.isArray(response.data)) {
+                    if (response.data.length === 0) {
+                        await fetchLatestJobsFallback();
+                        return;
+                    }
                     setJobs(response.data);
+                    setUsingFallbackJobs(false);
                     setHasPersonalizationData(true);
+                } else {
+                    await fetchLatestJobsFallback();
                 }
             } catch (error) {
                 console.error('Failed to fetch recommendations:', error);
+                try {
+                    await fetchLatestJobsFallback();
+                } catch (fallbackError) {
+                    console.error('Failed to fetch latest jobs fallback:', fallbackError);
+                }
             } finally {
                 setLoading(false);
             }
@@ -57,16 +91,9 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
 
     if (loading) {
         return (
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 min-h-[400px]">
-                <div className="flex items-center justify-between mb-6 animate-pulse">
-                    <div className="h-6 bg-gray-200 rounded w-1/3"></div>
-                    <div className="h-4 bg-gray-100 rounded w-16"></div>
-                </div>
-                <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-32 bg-gray-50 rounded-xl animate-pulse"></div>
-                    ))}
-                </div>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 min-h-[400px] flex flex-col items-center justify-center">
+                <div className="w-12 h-12 rounded-full border-4 border-[#29a08e]/20 border-t-[#29a08e] animate-spin"></div>
+                <p className="mt-4 text-sm font-semibold text-gray-500">Loading recommendations...</p>
             </div>
         );
     }
@@ -74,33 +101,18 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
     if (jobs.length === 0) {
         return (
             <div className="bg-white rounded-2xl p-10 border border-gray-100 shadow-sm text-center relative overflow-hidden flex flex-col items-center justify-center min-h-[400px]">
-                <div className="absolute right-0 top-0 w-64 h-64 opacity-5 pointer-events-none">
-                    <svg viewBox="0 0 100 100" className="w-full h-full text-[#29a08e]" fill="currentColor">
-                        <path d="M50 10 L60 40 L90 40 L65 60 L75 90 L50 75 L25 90 L35 60 L10 40 L40 40 Z" />
-                    </svg>
-                </div>
-
                 <div className="w-20 h-20 bg-[#29a08e]/10 rounded-full flex items-center justify-center mb-5">
                     <Sparkles className="w-10 h-10 text-[#29a08e]" />
                 </div>
-
-                <h3 className="text-xl font-extrabold text-gray-900 mb-2 z-10">
-                    Complete your profile for personalized matches
-                </h3>
-                {serverMessage ? (
-                    <p className="text-sm text-gray-700 mb-4 max-w-md mx-auto z-10 leading-relaxed bg-[#29a08e]/5 border border-[#29a08e]/15 rounded-lg px-4 py-3">
-                        {serverMessage}
-                    </p>
-                ) : (
-                    <p className="text-sm text-gray-600 mb-8 max-w-sm mx-auto z-10 leading-relaxed">
-                        Complete your profile skills and experience to get personalized job matches!
-                    </p>
-                )}
+                <h3 className="text-xl font-extrabold text-gray-900 mb-2 z-10">No jobs available right now</h3>
+                <p className="text-sm text-gray-600 mb-8 max-w-sm mx-auto z-10 leading-relaxed">
+                    Check back soon for new opportunities.
+                </p>
                 <Link
-                    to="/seeker/profile"
+                    to="/seeker/jobs"
                     className="px-6 py-3 bg-[#29a08e] text-white text-sm font-bold rounded-xl hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/20 hover:shadow-[#29a08e]/30 z-10"
                 >
-                    Improve Profile
+                    Browse Jobs
                 </Link>
             </div>
         );
@@ -114,10 +126,12 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                         <div className="p-1.5 bg-[#29a08e]/10 rounded-lg">
                             <Sparkles className="w-5 h-5 text-[#29a08e] fill-[#29a08e]/20" />
                         </div>
-                        AI Recommended For You
+                        {usingFallbackJobs ? 'Recommended Jobs' : 'AI Recommended For You'}
                     </h3>
                     <p className="text-xs text-gray-500 font-medium mt-1">
-                        Curated matches based on your skills, experience, and location
+                        {usingFallbackJobs
+                            ? 'Latest opportunities selected for you'
+                            : 'Curated matches based on your skills, experience, and location'}
                     </p>
                 </div>
                 <Link
@@ -128,14 +142,14 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                 </Link>
             </div>
 
-            {recommendationNotice ? (
+            {recommendationNotice && !usingFallbackJobs ? (
                 <div className="mx-6 mt-4 p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900">
                     <span className="font-bold">Note: </span>
                     {recommendationNotice}
                 </div>
             ) : null}
 
-            {(!isCompleteProfile || !hasPersonalizationData) && (
+            {(!usingFallbackJobs && (!isCompleteProfile || !hasPersonalizationData)) && (
                 <div className="mx-6 mt-6 p-4 bg-amber-50 rounded-xl border border-amber-200 flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                     <div>
