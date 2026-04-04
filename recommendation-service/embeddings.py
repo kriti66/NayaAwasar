@@ -1,18 +1,17 @@
 import hashlib
-import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 from database import get_db
 
 load_dotenv()
 
-_model: Optional[SentenceTransformer] = None
+_model: Optional[TfidfVectorizer] = None
 
 
 def load_model() -> None:
@@ -20,11 +19,11 @@ def load_model() -> None:
     pass
 
 
-def get_model() -> SentenceTransformer:
+def get_model() -> TfidfVectorizer:
     global _model
     if _model is None:
-        name = os.getenv("MODEL_NAME", "all-MiniLM-L6-v2")
-        _model = SentenceTransformer(name)  # loads on first actual request
+        # Lightweight TF-IDF model for memory-constrained deployment.
+        _model = TfidfVectorizer(max_features=300)
     return _model
 
 
@@ -34,7 +33,8 @@ def is_model_loaded() -> bool:
 
 def generate_embedding(text: str) -> List[float]:
     raw = (text or "").strip() or " "
-    vec = get_model().encode(raw, convert_to_numpy=True, normalize_embeddings=True)
+    model = get_model()
+    vec = model.fit_transform([raw]).toarray()[0]
     return [float(x) for x in vec.tolist()]
 
 
