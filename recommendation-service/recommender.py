@@ -157,7 +157,8 @@ async def content_based_recommend(user_id: str, top_n: int = 10) -> List[Dict[st
     ranked.sort(key=lambda x: x[0], reverse=True)
     out: List[Dict[str, Any]] = []
     for score, job, reason in ranked[:top_n]:
-        out.append(_job_to_rec(job, score, reason))
+        if score >= 0.01:
+            out.append(_job_to_rec(job, score, reason))
 
     # Release large arrays/matrices aggressively on low-memory hosts.
     del u
@@ -278,6 +279,19 @@ async def hybrid_recommend(user_id: str, top_n: int = 10) -> List[Dict[str, Any]
         finals.append(rec)
 
     finals.sort(key=lambda x: x["similarity_score"], reverse=True)
+    if not finals:
+        db = get_db()
+        cursor = db["jobs"].find(_job_match_filter()).sort("createdAt", -1).limit(top_n)
+        fallback: List[Dict[str, Any]] = []
+        async for job in cursor:
+            fallback.append(
+                _job_to_rec(
+                    job,
+                    0.1,
+                    "Recommended for you based on available opportunities",
+                )
+            )
+        return fallback
     return finals[:top_n]
 
 
