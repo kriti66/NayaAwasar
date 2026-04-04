@@ -5,13 +5,17 @@ from typing import Any, Dict, List, Optional
 from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import HashingVectorizer
 
 from database import get_db
 
 load_dotenv()
 
-_model: Optional[TfidfVectorizer] = None
+_model: Optional[HashingVectorizer] = HashingVectorizer(
+    n_features=300,
+    norm="l2",
+    alternate_sign=False,
+)
 
 
 def load_model() -> None:
@@ -19,11 +23,14 @@ def load_model() -> None:
     pass
 
 
-def get_model() -> TfidfVectorizer:
+def get_model() -> HashingVectorizer:
     global _model
     if _model is None:
-        # Lightweight TF-IDF model for memory-constrained deployment.
-        _model = TfidfVectorizer(max_features=300)
+        _model = HashingVectorizer(
+            n_features=300,
+            norm="l2",
+            alternate_sign=False,
+        )
     return _model
 
 
@@ -34,7 +41,7 @@ def is_model_loaded() -> bool:
 def generate_embedding(text: str) -> List[float]:
     raw = (text or "").strip() or " "
     model = get_model()
-    vec = model.fit_transform([raw]).toarray()[0]
+    vec = model.transform([raw]).toarray()[0]
     return [float(x) for x in vec.tolist()]
 
 
