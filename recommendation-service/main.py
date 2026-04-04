@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+import gc
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -8,7 +9,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import close_db, connect_db, setup_indexes
-from embeddings import load_model, recompute_embedding
 from models import (
     HealthResponse,
     RecommendRequest,
@@ -28,16 +28,9 @@ load_dotenv()
 async def lifespan(app: FastAPI):
     connect_db()
     await setup_indexes()
-    import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, _load_model_in_thread)  # ← non-blocking
     yield
+    gc.collect()
     await close_db()
-
-
-def _load_model_in_thread():
-    from embeddings import get_model
-    get_model()  # loads in background thread, doesn't block server
 
 
 
@@ -131,6 +124,8 @@ async def similar_jobs(body: SimilarJobsRequest):
 
 @app.post("/recompute-embeddings")
 async def recompute_embeddings(body: RecomputeRequest):
+    from embeddings import recompute_embedding
+
     try:
         await recompute_embedding(body.doc_id, body.doc_type)
     except ValueError as e:
@@ -138,6 +133,7 @@ async def recompute_embeddings(body: RecomputeRequest):
         if "not found" in msg:
             raise HTTPException(status_code=404, detail=str(e)) from e
         raise HTTPException(status_code=400, detail=str(e)) from e
+    gc.collect()
     return {"message": "Recomputed successfully"}
 
 

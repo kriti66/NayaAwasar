@@ -1,15 +1,8 @@
 from collections import Counter, defaultdict
 from typing import Any, Dict, List, Set, Tuple
+import gc
 
-import numpy as np
 from bson import ObjectId
-from sklearn.metrics.pairwise import cosine_similarity
-
-from embeddings import (
-    build_job_text,
-    build_user_text,
-    get_or_create_embedding,
-)
 from database import get_db
 
 
@@ -115,6 +108,10 @@ async def _fetch_my_interaction_jobs(user_oid: ObjectId) -> Set[str]:
 
 
 async def content_based_recommend(user_id: str, top_n: int = 10) -> List[Dict[str, Any]]:
+    import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
+    from embeddings import build_job_text, build_user_text, get_or_create_embedding
+
     db = get_db()
     user_oid = ObjectId(user_id)
     user = await db["users"].find_one({"_id": user_oid})
@@ -161,6 +158,13 @@ async def content_based_recommend(user_id: str, top_n: int = 10) -> List[Dict[st
     out: List[Dict[str, Any]] = []
     for score, job, reason in ranked[:top_n]:
         out.append(_job_to_rec(job, score, reason))
+
+    # Release large arrays/matrices aggressively on low-memory hosts.
+    del u
+    del m
+    del sims
+    del embeddings
+    gc.collect()
     return out
 
 
@@ -278,6 +282,10 @@ async def hybrid_recommend(user_id: str, top_n: int = 10) -> List[Dict[str, Any]
 
 
 async def get_similar_jobs(job_id: str, top_n: int = 5) -> List[Dict[str, Any]]:
+    import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
+    from embeddings import build_job_text, get_or_create_embedding
+
     db = get_db()
     try:
         src = await db["jobs"].find_one({"_id": ObjectId(job_id)})
@@ -314,7 +322,15 @@ async def get_similar_jobs(job_id: str, top_n: int = 5) -> List[Dict[str, Any]]:
         reverse=True,
     )[:top_n]
 
-    return [
+    result = [
         _job_to_rec(job, float(max(0.0, min(1.0, score))), "Similar role and requirements")
         for score, job in ranked
     ]
+
+    # Release large arrays/matrices aggressively on low-memory hosts.
+    del u
+    del m
+    del sims
+    del embeddings
+    gc.collect()
+    return result
