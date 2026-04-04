@@ -108,63 +108,114 @@ async def _fetch_my_interaction_jobs(user_oid: ObjectId) -> Set[str]:
 
 
 async def content_based_recommend(user_id: str, top_n: int = 10) -> List[Dict[str, Any]]:
-    import numpy as np
-    from sklearn.metrics.pairwise import cosine_similarity
-    from embeddings import build_job_text, build_user_text, get_or_create_embedding
-
     db = get_db()
     user_oid = ObjectId(user_id)
     user = await db["users"].find_one({"_id": user_oid})
     if not user:
         return []
     profile = await db["profiles"].find_one({"userId": user_oid})
-    user_text = build_user_text(user, profile)
-    user_emb = await get_or_create_embedding(user_id, user_text, "user")
     user_skills = _user_skill_list(user, profile)
+    user_skills_lower = [s.lower() for s in user_skills if str(s).strip()]
+    professional_headline = str(user.get("professionalHeadline") or "").strip()
+    profile_headline = str((profile or {}).get("headline") or "").strip()
+    headline_words = [
+        w.lower()
+        for w in f"{professional_headline} {profile_headline}".split()
+        if w.strip()
+    ]
+    preferred_category = str(
+        (profile or {}).get("preferredCategory")
+        or (profile or {}).get("category")
+        or ((profile or {}).get("jobPreferences") or {}).get("category")
+        or ""
+    ).strip().lower()
+
+    user_prefs = user.get("jobPreferences") or {}
+    profile_prefs = (profile or {}).get("jobPreferences") or {}
+    preferred_location = str(
+        user_prefs.get("location")
+        or profile_prefs.get("preferredLocation")
+        or profile_prefs.get("location")
+        or ""
+    ).strip().lower()
+    preferred_job_type = str(
+        user_prefs.get("jobType")
+        or (profile_prefs.get("jobTypes") or [""])[0]
+        or ""
+    ).strip().lower()
+    preferred_seniority = str(
+        user_prefs.get("seniority")
+        or profile_prefs.get("seniority")
+        or ""
+    ).strip().lower()
 
     applied_ids = await _fetch_applied_job_ids(user_oid)
 
     cursor = db["jobs"].find(_job_match_filter())
-    jobs: List[Dict[str, Any]] = []
-    embeddings: List[List[float]] = []
+    ranked: List[Tuple[float, Dict[str, Any], str]] = []
     async for job in cursor:
         jid = str(job["_id"])
         if jid in applied_ids:
             continue
-        jt = build_job_text(job)
-        je = await get_or_create_embedding(jid, jt, "job")
-        jobs.append(job)
-        embeddings.append(je)
+        title = str(job.get("title") or job.get("job_title") or "")
+        description = str(job.get("description") or job.get("job_description") or "")
+        requirements = str(job.get("requirements") or "")
+        tags = " ".join(str(t) for t in (job.get("tags") or []))
+        searchable = f"{title} {description} {requirements} {tags}".lower()
 
-    if not jobs:
-        return []
+        matched_skills: List[str] = []
+        for idx, skill in enumerate(user_skills_lower):
+            if skill and skill in searchable:
+                matched_skills.append(user_skills[idx])
 
-    u = np.array(user_emb, dtype=np.float64).reshape(1, -1)
-    m = np.array(embeddings, dtype=np.float64)
-    sims = cosine_similarity(u, m)[0]
+        score = min(1.0, 0.2 * len(matched_skills))
 
-    ranked: List[Tuple[float, Dict[str, Any], str]] = []
-    for idx, job in enumerate(jobs):
-        score = float(max(0.0, min(1.0, sims[idx])))
-        jt_lower = build_job_text(job).lower()
-        matched = _top_matching_skills(user_skills, job, jt_lower)
-        if matched:
-            reason = f"Matches your {', '.join(matched[:3])}"
-        else:
-            reason = "Matches your profile and preferences"
+        title_desc = f"{title} {description}".lower()
+        headline_match_count = 0
+        for word in headline_words:
+            if word and word in title_desc:
+                headline_match_count += 1
+        score += 0.15 * headline_match_count
+
+        job_category = str(job.get("category") or "").strip().lower()
+        if preferred_category and job_category and (
+            preferred_category == job_category
+            or preferred_category in job_category
+            or job_category in preferred_category
+        ):
+            score += 0.2
+
+        job_location = str(job.get("location") or "").strip().lower()
+        if preferred_location and job_location and (
+            preferred_location in job_location or job_location in preferred_location
+        ):
+            score += 0.1
+
+        job_type = str(job.get("type") or job.get("job_type") or "").strip().lower()
+        if preferred_job_type and job_type and (
+            preferred_job_type in job_type or job_type in preferred_job_type
+        ):
+            score += 0.1
+
+        job_experience = str(job.get("experience_level") or "").strip().lower()
+        if preferred_seniority and job_experience and (
+            preferred_seniority in job_experience or job_experience in preferred_seniority
+        ):
+            score += 0.1
+
+        score = float(min(1.0, score))
+        if score <= 0:
+            continue
+
+        reason_skills = matched_skills[:2]
+        reason = f"Matched because you have [{', '.join(reason_skills)}] related skills"
         ranked.append((score, job, reason))
 
     ranked.sort(key=lambda x: x[0], reverse=True)
     out: List[Dict[str, Any]] = []
     for score, job, reason in ranked[:top_n]:
-        if score >= 0.01:
-            out.append(_job_to_rec(job, score, reason))
+        out.append(_job_to_rec(job, score, reason))
 
-    # Release large arrays/matrices aggressively on low-memory hosts.
-    del u
-    del m
-    del sims
-    del embeddings
     gc.collect()
     return out
 
