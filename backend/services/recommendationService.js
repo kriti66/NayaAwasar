@@ -78,7 +78,7 @@ export function triggerEmbeddingUpdate(docId, docType) {
         .post(
             `${PYTHON_URL}/recompute-embeddings`,
             { doc_id: String(docId), doc_type: docType },
-            { timeout: 8000 }
+            { timeout: 60000 }
         )
         .catch(() => {});
 }

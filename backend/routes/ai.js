@@ -5,7 +5,7 @@ import Job from '../models/Job.js';
 
 const router = express.Router();
 
-const AI_SERVICE_URL = (process.env.FLASK_AI_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '');
+const AI_SERVICE_URL = (process.env.FLASK_AI_URL || 'https://naya-awasar-flask.onrender.com').replace(/\/+$/, '');
 
 /**
  * @desc Get Job Recommendations based on User Profile/Skills
@@ -19,7 +19,7 @@ router.post('/recommend', requireAuth, async (req, res) => {
 
         // Forward to new Flask Microservice endpoint
         try {
-            const aiResponse = await axios.post(`${AI_SERVICE_URL}/recommend-jobs/${userId}`);
+            const aiResponse = await axios.post(`${AI_SERVICE_URL}/recommend-jobs/${userId}`, {}, { timeout: 60000 });
 
             console.log(`✅ AI Service responded with ${aiResponse.data.count || 0} jobs`);
             res.json(aiResponse.data);
