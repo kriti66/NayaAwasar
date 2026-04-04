@@ -16,14 +16,15 @@ _model: Optional[SentenceTransformer] = None
 
 
 def load_model() -> None:
-    global _model
-    name = os.getenv("MODEL_NAME", "all-MiniLM-L6-v2")
-    _model = SentenceTransformer(name)
+    """Called at lifespan startup — now a no-op. Model loads lazily on first use."""
+    pass
 
 
 def get_model() -> SentenceTransformer:
+    global _model
     if _model is None:
-        raise RuntimeError("SentenceTransformer model not loaded.")
+        name = os.getenv("MODEL_NAME", "all-MiniLM-L6-v2")
+        _model = SentenceTransformer(name)  # loads on first actual request
     return _model
 
 
