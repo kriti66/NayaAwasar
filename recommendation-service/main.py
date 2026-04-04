@@ -23,19 +23,13 @@ load_dotenv()
 
 
 
-async def warmup_model():
-    import asyncio
-    await asyncio.sleep(2)
-    from embeddings import get_model
-    get_model()  # triggers lazy model load
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     connect_db()
     await setup_indexes()
-    load_model()  # keep as is
-    import asyncio
-    asyncio.create_task(warmup_model())  # ← add this
+    from embeddings import get_model
+    get_model()  # ← directly load model here
     yield
     await close_db()
 
