@@ -26,8 +26,8 @@ const Contact = () => {
 
     const displayLoc = location || {
         address: 'Kathmandu, Nepal',
-        phone: '+977 1234567890',
-        email: 'info@nayaawasar.com'
+        phone: '02-12345678',
+        email: 'admin@nayaawasar.com'
     };
 
     // Google Maps embed: geocodes from the saved physical address only (no stored lat/lng).
@@ -294,7 +294,16 @@ const Contact = () => {
                                     </div>
                                     <div className="min-w-0">
                                         <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-0.5">{info.label}</p>
-                                        <p className="text-gray-900 font-semibold text-sm break-words">{info.value}</p>
+                                        {info.label === 'Email Us' ? (
+                                            <a
+                                                href={`mailto:${info.value}`}
+                                                className="text-gray-900 font-semibold text-sm break-words"
+                                            >
+                                                {info.value}
+                                            </a>
+                                        ) : (
+                                            <p className="text-gray-900 font-semibold text-sm break-words">{info.value}</p>
+                                        )}
                                     </div>
                                 </div>
                             ))}

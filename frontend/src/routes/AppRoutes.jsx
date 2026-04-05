@@ -57,6 +57,8 @@ import AdminCompanies from '../pages/admin/AdminCompanies';
 import AdminLocationManager from '../pages/admin/AdminLocationManager';
 import AdminJobs from '../pages/admin/AdminJobs';
 import AdminContactMessages from '../pages/admin/AdminContactMessages';
+import ManageTestimonials from '../pages/admin/ManageTestimonials';
+import ManageTeam from '../pages/admin/ManageTeam';
 import AdminPromotedJobs from '../pages/admin/AdminPromotedJobs';
 import AdminPromotionRequests from '../pages/admin/AdminPromotionRequests';
 import Notifications from '../pages/shared/Notifications';
@@ -201,6 +203,8 @@ const AppRoutes = () => {
                         <Route path="/admin/promotion-requests" element={<AdminPromotionRequests />} />
                         <Route path="/admin/notifications" element={<Notifications />} />
                         <Route path="/admin/contact-messages" element={<AdminContactMessages />} />
+                        <Route path="/admin/testimonials" element={<ManageTestimonials />} />
+                        <Route path="/admin/team" element={<ManageTeam />} />
                     </Route>
                 </Route>
 

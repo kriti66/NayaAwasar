@@ -1,4 +1,30 @@
 import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import api from '../../services/api';
+
+const TeamMemberPhoto = ({ photo, name }) => {
+    const [imgError, setImgError] = useState(false);
+    const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
+    const showPlaceholder = !photo?.trim() || imgError;
+    if (showPlaceholder) {
+        return (
+            <div
+                className="w-24 h-24 rounded-2xl mx-auto object-cover border-4 border-[#29a08e]/10 flex items-center justify-center text-2xl font-black text-white bg-gradient-to-br from-[#29a08e] to-[#228377] shrink-0"
+                aria-hidden
+            >
+                {initial}
+            </div>
+        );
+    }
+    return (
+        <img
+            className="w-24 h-24 rounded-2xl mx-auto object-cover border-4 border-[#29a08e]/10 group-hover:border-[#29a08e]/30 transition-colors"
+            src={photo}
+            alt={name || 'Team member'}
+            onError={() => setImgError(true)}
+        />
+    );
+};
 
 const About = () => {
     const values = [
@@ -8,11 +34,27 @@ const About = () => {
         { icon: '🌏', title: 'Inclusivity', desc: 'We believe everyone deserves an equal chance to succeed, regardless of background.', color: 'bg-[#29a08e]/5 border-[#29a08e]/15' },
     ];
 
-    const team = [
-        { name: 'Aisha Khan', role: 'CEO & Co-Founder', bio: 'Former talent lead at Fortune 500 companies. Passionate about democratizing career opportunities.', img: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=256&h=256&q=80', linkedin: '#' },
-        { name: 'Rohan Sharma', role: 'CTO & Co-Founder', bio: 'Full-stack engineer with 10+ years in building scalable platforms. AI/ML enthusiast.', img: 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=crop&w=256&h=256&q=80', linkedin: '#' },
-        { name: 'Priya Singh', role: 'Head of Product', bio: 'UX-first product leader who shipped products used by millions across South Asia.', img: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80', linkedin: '#' },
-    ];
+    const [team, setTeam] = useState([]);
+    const [teamLoading, setTeamLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                setTeamLoading(true);
+                const res = await api.get('/team');
+                const list = Array.isArray(res.data) ? res.data : [];
+                if (!cancelled) setTeam(list);
+            } catch {
+                if (!cancelled) setTeam([]);
+            } finally {
+                if (!cancelled) setTeamLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const milestones = [
         { year: '2022', title: 'Founded in Kathmandu', desc: 'Naya Awasar was born with a mission to fix Nepal\'s broken hiring process.' },
@@ -144,27 +186,36 @@ const About = () => {
                         <h2 className="text-4xl font-black text-gray-900">Meet Our <span className="text-[#29a08e]">Team</span></h2>
                         <p className="mt-4 text-gray-500 max-w-xl mx-auto">Passionate individuals driven by creating meaningful career opportunities for every Nepali professional.</p>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-4xl mx-auto">
-                        {team.map((m, i) => (
-                            <div key={i} className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
-                                <div className="relative inline-block mb-5">
-                                    <img
-                                        className="w-24 h-24 rounded-2xl mx-auto object-cover border-4 border-[#29a08e]/10 group-hover:border-[#29a08e]/30 transition-colors"
-                                        src={m.img}
-                                        alt={m.name}
-                                    />
-                                    <div className="absolute -bottom-2 -right-2 w-7 h-7 bg-[#29a08e] rounded-lg flex items-center justify-center shadow-md">
-                                        <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-                                        </svg>
+                    {teamLoading ? (
+                        <div className="flex flex-col items-center justify-center py-16 gap-4">
+                            <div
+                                className="w-12 h-12 border-[3px] border-[#29a08e]/25 border-t-[#29a08e] rounded-full animate-spin"
+                                aria-hidden
+                            />
+                            <p className="text-sm font-medium text-gray-500">Loading team…</p>
+                        </div>
+                    ) : team.length === 0 ? (
+                        <p className="text-center text-gray-500 text-sm font-medium py-12">Team info coming soon.</p>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-4xl mx-auto">
+                            {team.map((m) => {
+                                const id = m._id || m.id;
+                                return (
+                                    <div
+                                        key={id || m.name}
+                                        className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group"
+                                    >
+                                        <div className="inline-block mb-5">
+                                            <TeamMemberPhoto photo={m.photo} name={m.name} />
+                                        </div>
+                                        <h3 className="text-lg font-black text-gray-900 mb-1">{m.name}</h3>
+                                        <p className="text-sm text-[#29a08e] font-semibold mb-3">{m.role}</p>
+                                        <p className="text-gray-500 text-sm leading-relaxed text-justify">{m.bio || '—'}</p>
                                     </div>
-                                </div>
-                                <h3 className="text-lg font-black text-gray-900 mb-1">{m.name}</h3>
-                                <p className="text-sm text-[#29a08e] font-semibold mb-3">{m.role}</p>
-                                <p className="text-gray-500 text-sm leading-relaxed">{m.bio}</p>
-                            </div>
-                        ))}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
 

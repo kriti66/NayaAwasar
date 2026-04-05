@@ -1,6 +1,21 @@
 /**
  * Post-publish job moderation: public visibility + recruiter edit rules.
+ *
+ * Admin soft actions use Job.moderationStatus (enum: active | warned | hidden |
+ * pending_review | deleted). There is no adminStatus, isDeleted, or listing status
+ * value for admin removal.
  */
+
+/**
+ * Recruiter-facing job lists (dropdowns, aggregate job APIs, dashboard job counts):
+ * exclude admin-hidden and admin-deleted. Does not exclude "warned" (still visible in lists).
+ */
+export const RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED = {
+    moderationStatus: { $nin: ['deleted', 'hidden', 'Hidden'] }
+};
+
+/** My Jobs main column: exclude warned/hidden/deleted (and legacy Flagged/Hidden) from the normal list; admin alerts load those separately. */
+export const RECRUITER_MY_JOBS_ADMIN_MODERATION_VALUES = ['warned', 'hidden', 'deleted', 'Hidden', 'Flagged'];
 
 /** Mongo $or fragment: job is visible on public listing */
 export const PUBLIC_MODERATION_MATCH = {

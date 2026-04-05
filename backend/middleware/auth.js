@@ -25,15 +25,21 @@ export const requireAuth = (req, res, next) => {
         if (!uid) {
             return res.status(401).json({ message: 'Invalid token payload' });
         }
-        User.findById(uid).select('isDeleted').lean()
+        User.findById(uid).select('isDeleted isRemoved isSuspended').lean()
             .then((u) => {
                 if (!u) {
                     return res.status(401).json({ message: 'User not found' });
                 }
-                if (u.isDeleted) {
+                if (u.isDeleted || u.isRemoved) {
                     return res.status(401).json({
                         code: 'ACCOUNT_REMOVED',
                         message: 'This account is no longer active. If you believe this is a mistake, contact support or register again with the same email to restore your account.'
+                    });
+                }
+                if (u.isSuspended) {
+                    return res.status(401).json({
+                        code: 'ACCOUNT_SUSPENDED',
+                        message: 'Your account has been suspended. Please contact support.'
                     });
                 }
                 next();

@@ -6,8 +6,9 @@ import Company from '../models/Company.js';
 import Job from '../models/Job.js';
 import Application from '../models/Application.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { getActiveWarningsForRecruiter } from '../services/recruiterWarningService.js';
-import { normalizeModerationStatusForEdit } from '../utils/jobModeration.js';
+import { deactivateWarningsForJob, getActiveWarningsForRecruiter } from '../services/recruiterWarningService.js';
+import { cancelInterviewsForJob } from '../services/interviewJobCleanup.js';
+import { normalizeModerationStatusForEdit, RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED } from '../utils/jobModeration.js';
 
 const router = express.Router();
 
@@ -55,13 +56,14 @@ router.get('/profile-summary', requireAuth, async (req, res) => {
         const isCompanyVerified = company?.status === 'approved';
         const isVerified = isRecruiterVerified && isCompanyVerified;
 
+        const jobListFilter = { recruiter_id: userId, ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED };
         // Compute statistics dynamically
-        const totalJobs = await Job.countDocuments({ recruiter_id: userId });
-        const activeJobs = await Job.countDocuments({ recruiter_id: userId, status: 'Active' });
+        const totalJobs = await Job.countDocuments(jobListFilter);
+        const activeJobs = await Job.countDocuments({ ...jobListFilter, status: 'Active' });
 
         // Total applications linked to jobs posted by this recruiter
         // First find all job IDs by this recruiter
-        const recruiterJobs = await Job.find({ recruiter_id: userId }).select('_id');
+        const recruiterJobs = await Job.find(jobListFilter).select('_id');
         const jobIds = recruiterJobs.map(job => job._id);
 
         const totalApplications = await Application.countDocuments({ job_id: { $in: jobIds } });
@@ -100,12 +102,13 @@ router.get('/jobs/stats', requireAuth, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        const totalJobs = await Job.countDocuments({ recruiter_id: userId });
-        const activeJobs = await Job.countDocuments({ recruiter_id: userId, status: 'Active' });
-        const closedJobs = await Job.countDocuments({ recruiter_id: userId, status: 'Closed' });
+        const jobListFilter = { recruiter_id: userId, ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED };
+        const totalJobs = await Job.countDocuments(jobListFilter);
+        const activeJobs = await Job.countDocuments({ ...jobListFilter, status: 'Active' });
+        const closedJobs = await Job.countDocuments({ ...jobListFilter, status: 'Closed' });
 
         // Calculate total applicants across all jobs
-        const recruiterJobs = await Job.find({ recruiter_id: userId }).select('_id');
+        const recruiterJobs = await Job.find(jobListFilter).select('_id');
         const jobIds = recruiterJobs.map(job => job._id);
         const totalApplicants = await Application.countDocuments({ job_id: { $in: jobIds } });
 
@@ -129,7 +132,10 @@ router.get('/jobs', requireAuth, async (req, res) => {
         const { status, type, sort = 'recent' } = req.query;
 
         // Convert userId to ObjectId for aggregation
-        let query = { recruiter_id: new mongoose.Types.ObjectId(userId) };
+        let query = {
+            recruiter_id: new mongoose.Types.ObjectId(userId),
+            ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED
+        };
 
         // Filters
         if (status && status !== 'All Status') {
@@ -200,6 +206,10 @@ router.delete('/jobs/:id', requireAuth, async (req, res) => {
         }
 
         await Job.findByIdAndDelete(req.params.id);
+        await cancelInterviewsForJob(req.params.id, {
+            reason: 'Job listing was deleted',
+            cancelledByUserId: req.user.id
+        });
 
         // Optional: DELETE associated applications or keep for records?
         // Usually safer to keep or mark deleted. For now, just delete job.
@@ -260,6 +270,9 @@ router.put('/jobs/:id', requireAuth, async (req, res) => {
         }
 
         await job.save();
+        if (normalizedMs === 'warned') {
+            await deactivateWarningsForJob(job._id, req.user.id);
+        }
         res.json(job);
 
     } catch (error) {
@@ -273,8 +286,10 @@ router.get('/applications', requireAuth, async (req, res) => {
     try {
         const recruiterId = req.user.id;
 
-        // 1. Find all jobs posted by this recruiter
-        const jobs = await Job.find({ recruiter_id: recruiterId }).select('_id title status');
+        // 1. Find all jobs posted by this recruiter (exclude admin-hidden/deleted)
+        const jobs = await Job.find({ recruiter_id: recruiterId, ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED }).select(
+            '_id title status'
+        );
         const jobIds = jobs.map(j => j._id);
 
         if (jobIds.length === 0) {

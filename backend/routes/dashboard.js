@@ -7,6 +7,8 @@ import User from '../models/User.js';
 import Activity from '../models/Activity.js';
 import { getValidSavedJobIds } from '../utils/savedJobsUtils.js';
 import KYC from '../models/KYC.js';
+import IdentityKyc from '../models/kycModel.js';
+import RecruiterKyc from '../models/RecruiterKyc.js';
 import Company from '../models/Company.js';
 import Profile from '../models/Profile.js';
 import { calculateRecruiterStrength } from '../utils/recruiterStrength.js';
@@ -17,6 +19,7 @@ import {
 } from '../utils/seekerProfileScoring.js';
 import { getRecommendedJobs } from '../services/recommendationService.js';
 import { applyUserJobLabels } from '../services/userJobLabelEnrichment.js';
+import { RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED } from '../utils/jobModeration.js';
 
 const router = express.Router();
 
@@ -330,10 +333,11 @@ router.get('/recruiter/stats', async (req, res) => {
     }
 
     try {
-        const postedJobsCount = await Job.countDocuments({ recruiter_id: recruiterId });
+        const recruiterJobFilter = { recruiter_id: recruiterId, ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED };
+        const postedJobsCount = await Job.countDocuments(recruiterJobFilter);
 
         // Find jobs by this recruiter first to count their applications
-        const recruiterJobs = await Job.find({ recruiter_id: recruiterId }).select('_id');
+        const recruiterJobs = await Job.find(recruiterJobFilter).select('_id');
         const jobIds = recruiterJobs.map(j => j._id);
 
         // Inbound Talent: total applications across ALL jobs posted by this recruiter
@@ -390,7 +394,13 @@ router.get('/admin/stats', async (req, res) => {
         const totalUsers = await User.countDocuments({});
         const totalJobs = await Job.countDocuments({});
         const activeRecruiters = await User.countDocuments({ role: 'recruiter' });
-        const pendingKYC = await KYC.countDocuments({ status: 'pending' });
+        // Same definition as KYC panel queue: all non-approved seeker KYC + non-verified identity + recruiter rows not fully approved
+        const unresolvedSeekerKyc = await KYC.countDocuments({ status: { $ne: 'approved' } });
+        const unresolvedIdentityKyc = await IdentityKyc.countDocuments({ status: { $ne: 'verified' } });
+        const unresolvedRecruiterKyc = await RecruiterKyc.countDocuments({
+            $nor: [{ representativeStatus: 'approved', companyStatus: 'approved' }]
+        });
+        const pendingKYC = unresolvedSeekerKyc + unresolvedIdentityKyc + unresolvedRecruiterKyc;
         const approvedKYC = await KYC.countDocuments({ status: 'verified' });
 
         res.json({

@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './load-env.js';
 import './utils/puppeteerCacheDir.js';
 import express from 'express';
 import cors from 'cors';
@@ -53,6 +53,7 @@ const parseCsv = (value) =>
 
 const allowedOrigins = [
     'http://localhost:5173',
+    'http://localhost:3000',
     'http://localhost:5174',
     'http://127.0.0.1:5173',
     'http://127.0.0.1:5174',
@@ -84,6 +85,17 @@ function isVercelAppOrigin(origin) {
     }
 }
 
+/** Dev tunnels: allow https://*.devtunnels.ms */
+function isDevTunnelOrigin(origin) {
+    if (typeof origin !== 'string' || !origin.startsWith('https://')) return false;
+    try {
+        const { hostname } = new URL(origin);
+        return hostname === 'devtunnels.ms' || hostname.endsWith('.devtunnels.ms');
+    } catch {
+        return false;
+    }
+}
+
 const corsOptions = {
     origin(origin, callback) {
         // No Origin: same-origin, Postman, curl, many mobile clients
@@ -96,6 +108,10 @@ const corsOptions = {
         }
 
         if (isVercelAppOrigin(origin)) {
+            return callback(null, true);
+        }
+
+        if (isDevTunnelOrigin(origin)) {
             return callback(null, true);
         }
 
@@ -155,6 +171,8 @@ import zegoRoutes from './routes/zegoRoutes.js';
 import recommendationRoutes from './routes/recommendations.js';
 import contactRoutes from './routes/contact.js';
 import chatbotRoutes from './routes/chatbotRoutes.js';
+import testimonialRoutes from './routes/testimonialRoutes.js';
+import teamRoutes from './routes/teamRoutes.js';
 import promotionRoutes from './routes/promotions.js';
 import promotionPaymentRequestRoutes from './routes/promotionPaymentRequests.js';
 import identityKycRoutes from './routes/kycRoutes.js';
@@ -192,6 +210,8 @@ app.use('/api/companies', companyRoutes);
 app.use('/api/recruiter', recruiterRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/chatbot', chatbotRoutes);
+app.use('/api/testimonials', testimonialRoutes);
+app.use('/api/team', teamRoutes);
 app.use('/api/promotions', promotionRoutes);
 app.use('/api/promotion-payment-requests', promotionPaymentRequestRoutes);
 

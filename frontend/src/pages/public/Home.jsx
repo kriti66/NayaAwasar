@@ -1,6 +1,31 @@
 import { Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import FeaturedJobs from '../../components/jobs/FeaturedJobs';
+import api from '../../services/api';
+
+const TestimonialAvatar = ({ photo, name }) => {
+    const [imgError, setImgError] = useState(false);
+    const initial = (name || '?').trim().charAt(0).toUpperCase() || '?';
+    const showPlaceholder = !photo?.trim() || imgError;
+    if (showPlaceholder) {
+        return (
+            <div
+                className="w-11 h-11 rounded-full object-cover border-2 border-[#29a08e]/20 bg-gradient-to-br from-[#29a08e] to-[#228377] text-white text-sm font-bold flex items-center justify-center shrink-0"
+                aria-hidden
+            >
+                {initial}
+            </div>
+        );
+    }
+    return (
+        <img
+            className="w-11 h-11 rounded-full object-cover border-2 border-[#29a08e]/20 shrink-0"
+            src={photo}
+            alt={name || 'Reviewer'}
+            onError={() => setImgError(true)}
+        />
+    );
+};
 
 const AnimatedCounter = ({ end, suffix = '' }) => {
     const [count, setCount] = useState(0);
@@ -25,6 +50,8 @@ const AnimatedCounter = ({ end, suffix = '' }) => {
 
 const Home = () => {
     const [activeTab, setActiveTab] = useState('seeker');
+    const [testimonials, setTestimonials] = useState([]);
+    const [testimonialsLoading, setTestimonialsLoading] = useState(true);
 
     const categories = [
         { icon: '💻', label: 'Technology', count: '2.4K+' },
@@ -47,29 +74,24 @@ const Home = () => {
         { step: '03', title: 'Hire Top Talent', desc: 'Interview shortlisted candidates and make your next great hire.', icon: '🏆' },
     ];
 
-    const testimonials = [
-        {
-            name: 'Sunita Rai',
-            role: 'Software Engineer at TechCorp',
-            quote: 'Naya Awasar transformed my job search. I landed my dream job within 2 weeks of signing up. The AI matching is incredibly accurate!',
-            image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-            rating: 5
-        },
-        {
-            name: 'Rajesh Thapa',
-            role: 'Head of HR at GrowthCo',
-            quote: 'As a recruiter, finding quality candidates used to take weeks. With Naya Awasar, we hire in days. The KYC verification gives us confidence.',
-            image: 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-            rating: 5
-        },
-        {
-            name: 'Priya Sharma',
-            role: 'Product Designer',
-            quote: 'The platform is beautifully designed and incredibly intuitive. I received 5 interview requests in my first week!',
-            image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-            rating: 5
-        },
-    ];
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                setTestimonialsLoading(true);
+                const res = await api.get('/testimonials');
+                const list = Array.isArray(res.data) ? res.data : [];
+                if (!cancelled) setTestimonials(list);
+            } catch {
+                if (!cancelled) setTestimonials([]);
+            } finally {
+                if (!cancelled) setTestimonialsLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const partners = [
         { name: 'Microsoft', logo: 'MS' },
@@ -359,29 +381,55 @@ const Home = () => {
                         <p className="text-[#29a08e] font-semibold text-sm uppercase tracking-widest mb-3">Success Stories</p>
                         <h2 className="text-4xl font-black text-gray-900 tracking-tight">What Our <span className="text-[#29a08e]">Users Say</span></h2>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        {testimonials.map((t, i) => (
-                            <div key={i} className="bg-[#f8fafc] p-8 rounded-2xl border border-gray-100 hover:shadow-lg hover:border-[#29a08e]/20 transition-all duration-300 hover:-translate-y-1 flex flex-col">
-                                <div className="flex gap-1 mb-4">
-                                    {Array.from({ length: t.rating }).map((_, j) => (
-                                        <span key={j} className="text-amber-400 text-lg">★</span>
-                                    ))}
-                                </div>
-                                <p className="text-gray-700 leading-relaxed flex-1 mb-6 italic">"{t.quote}"</p>
-                                <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
-                                    <img
-                                        className="w-11 h-11 rounded-full object-cover border-2 border-[#29a08e]/20"
-                                        src={t.image}
-                                        alt={t.name}
-                                    />
-                                    <div>
-                                        <p className="font-bold text-gray-900 text-sm">{t.name}</p>
-                                        <p className="text-[#29a08e] text-xs font-medium">{t.role}</p>
+                    {testimonialsLoading ? (
+                        <div className="flex flex-col items-center justify-center py-20 gap-4">
+                            <div
+                                className="w-12 h-12 border-[3px] border-[#29a08e]/25 border-t-[#29a08e] rounded-full animate-spin"
+                                aria-hidden
+                            />
+                            <p className="text-sm font-medium text-gray-500">Loading testimonials…</p>
+                        </div>
+                    ) : testimonials.length === 0 ? (
+                        <p className="text-center text-gray-500 text-sm font-medium py-12">
+                            Success stories will appear here soon.
+                        </p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            {testimonials.map((t) => {
+                                const id = t._id || t.id;
+                                const rating = Math.min(5, Math.max(1, Number(t.rating) || 5));
+                                return (
+                                    <div
+                                        key={id || `${t.name}-${t.review?.slice(0, 20)}`}
+                                        className="bg-[#f8fafc] p-8 rounded-2xl border border-gray-100 hover:shadow-lg hover:border-[#29a08e]/20 transition-all duration-300 hover:-translate-y-1 flex flex-col"
+                                    >
+                                        <div className="flex gap-1 mb-4" aria-label={`${rating} out of 5 stars`}>
+                                            {Array.from({ length: rating }).map((_, j) => (
+                                                <span key={j} className="text-amber-400 text-lg">
+                                                    ★
+                                                </span>
+                                            ))}
+                                            {Array.from({ length: 5 - rating }).map((_, j) => (
+                                                <span key={`e-${j}`} className="text-gray-200 text-lg">
+                                                    ★
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <p className="text-gray-700 leading-relaxed flex-1 mb-6 italic text-justify">
+                                            &ldquo;{t.review}&rdquo;
+                                        </p>
+                                        <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+                                            <TestimonialAvatar photo={t.photo} name={t.name} />
+                                            <div>
+                                                <p className="font-bold text-gray-900 text-sm">{t.name}</p>
+                                                <p className="text-[#29a08e] text-xs font-medium">{t.role || '—'}</p>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
 

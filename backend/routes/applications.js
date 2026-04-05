@@ -39,6 +39,13 @@ const upload = multer({
 // JOBSEEKER ROUTES
 router.get('/my', requireAuth, applicationController.getMyApplications);
 router.get('/my-interviews', requireAuth, applicationController.getMyInterviews);
+// Must be registered before /:id/* so "recruiter" is not captured as an application id
+router.get(
+    '/recruiter',
+    requireKycApproved,
+    requireRole('recruiter', 'admin'),
+    applicationController.getRecruiterApplications
+);
 router.get('/:id/interview-detail', requireAuth, applicationController.getInterviewApplicationDetail);
 router.patch('/:id/mark-interview-joined', requireAuth, applicationController.markInterviewJoined);
 router.patch('/:id/cancel-reschedule-request', requireAuth, applicationController.cancelJobseekerRescheduleRequest);

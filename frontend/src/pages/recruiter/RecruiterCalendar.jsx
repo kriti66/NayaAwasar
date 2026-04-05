@@ -48,14 +48,27 @@ export default function RecruiterCalendar() {
         load();
     }, [load]);
 
-    const byDay = useMemo(() => groupInterviewsByUtcDay(interviews), [interviews]);
+    useEffect(() => {
+        const onRefetch = () => {
+            void load();
+        };
+        window.addEventListener('recruiter:calendarRefetch', onRefetch);
+        return () => window.removeEventListener('recruiter:calendarRefetch', onRefetch);
+    }, [load]);
+
+    const visibleInterviews = useMemo(
+        () => (interviews || []).filter((i) => i.status !== 'cancelled'),
+        [interviews]
+    );
+
+    const byDay = useMemo(() => groupInterviewsByUtcDay(visibleInterviews), [visibleInterviews]);
 
     const selectedList = selectedDayKey ? byDay.get(selectedDayKey) || [] : [];
 
     const { highlightedInterviewId, registerInterviewCardRef, interviewCardHighlightClass } =
         useInterviewCalendarDeepLink({
             loading,
-            interviews,
+            interviews: visibleInterviews,
             setYear,
             setMonthIndex,
             setSelectedDayKey
@@ -178,20 +191,27 @@ export default function RecruiterCalendar() {
                 <div className="mb-4 p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Legend</p>
                     <InterviewCalendarLegend />
+                    <p className="text-xs text-slate-500 mt-3 border-t border-slate-100 pt-3">
+                        Cancelled interviews are hidden from this calendar. You will be notified if interviews were
+                        cancelled because a job was hidden or removed by an admin.
+                    </p>
                 </div>
 
                 {loading ? (
                     <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-slate-500">
                         Loading calendar…
                     </div>
-                ) : interviews.length === 0 ? (
+                ) : visibleInterviews.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-600">
-                        No interviews scheduled yet. When you schedule interviews from applications, they will
-                        appear here.
+                        <p>No interviews on your calendar right now.</p>
+                        <p className="text-sm text-slate-500 mt-2">
+                            Schedule interviews from applications to see them here. Cancelled slots (including when a job
+                            is removed by an admin) are omitted; check notifications for details.
+                        </p>
                     </div>
                 ) : null}
 
-                {!loading && interviews.length > 0 && (
+                {!loading && visibleInterviews.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                         <div className="lg:col-span-2">
                             <InterviewCalendarGrid

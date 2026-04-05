@@ -147,6 +147,15 @@ const userSchema = new mongoose.Schema({
     deletedAt: { type: Date, default: null },
     deletedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 
+    /** Admin soft-remove — document stays in DB; hidden from default admin list & login when true. */
+    isRemoved: { type: Boolean, default: false, index: true },
+    removedAt: { type: Date, default: null },
+
+    /** Admin suspension (login blocked via isActive + requireAuth). */
+    isSuspended: { type: Boolean, default: false, index: true },
+    suspendedAt: { type: Date, default: null },
+    suspendReason: { type: String, default: '' },
+
     /** Free job promotions used (admin-approved free slots); max 3 before paid manual request flow */
     freePromotionUsed: { type: Number, default: 0, min: 0 },
 

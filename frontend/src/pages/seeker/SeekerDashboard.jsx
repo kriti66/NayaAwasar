@@ -95,6 +95,16 @@ const SeekerDashboard = () => {
     }, [setSavedJobIds, user?.kycStatus]);
 
 
+    const findJobsHref = (() => {
+        const p = new URLSearchParams();
+        const q = searchQuery.trim();
+        const loc = locationQuery.trim();
+        if (q) p.set('q', q);
+        if (loc) p.set('location', loc);
+        const s = p.toString();
+        return s ? `/seeker/jobs?${s}` : '/seeker/jobs';
+    })();
+
     const getGreeting = () => {
         const hour = new Date().getHours();
         if (hour < 12) return 'Good morning';
@@ -216,7 +226,7 @@ const SeekerDashboard = () => {
                                     />
                                 </div>
                                 <Link
-                                    to={`/seeker/jobs${searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : ''}`}
+                                    to={findJobsHref}
                                     className="bg-gradient-to-r from-[#29a08e] to-[#22877a] text-white px-8 py-3.5 rounded-xl font-bold text-sm hover:from-[#228377] hover:to-[#1a6b62] transition-all shrink-0 text-center shadow-lg shadow-[#29a08e]/20 active:scale-95"
                                 >
                                     Search Jobs

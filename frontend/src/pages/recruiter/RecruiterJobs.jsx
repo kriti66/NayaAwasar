@@ -11,11 +11,12 @@ import {
     Edit,
     Trash,
     PieChart,
-    Filter,
     ChevronDown,
     Briefcase,
     Plus,
-    Megaphone
+    Megaphone,
+    X,
+    ShieldAlert
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -62,10 +63,80 @@ function moderationBadgeLabel(eff) {
     }
 }
 
+/** Main list excludes admin-moderated jobs; badge covers pending review + listing status. */
+function primaryJobStatusBadge(job) {
+    const mod = effectiveModerationStatus(job);
+    if (mod === 'pending_review') {
+        return { label: moderationBadgeLabel('pending_review'), className: moderationBadgeClass('pending_review') };
+    }
+    const st = String(job.status || 'Active').trim();
+    const isActive = st === 'Active';
+    return {
+        label: isActive ? 'ACTIVE' : st.toUpperCase(),
+        className: isActive
+            ? 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20'
+            : 'bg-gray-100 text-gray-500 border-gray-200'
+    };
+}
+
+const ADMIN_ALERTS_STORAGE_PREFIX = 'nayaawasar:recruiter:admin-job-alerts-dismissed:';
+
+function loadDismissedAdminAlertIds(userId) {
+    try {
+        const raw = localStorage.getItem(`${ADMIN_ALERTS_STORAGE_PREFIX}${userId}`);
+        const arr = JSON.parse(raw || '[]');
+        return new Set(Array.isArray(arr) ? arr.map(String) : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function saveDismissedAdminAlertIds(userId, setIds) {
+    localStorage.setItem(`${ADMIN_ALERTS_STORAGE_PREFIX}${userId}`, JSON.stringify([...setIds]));
+}
+
+function adminActionCardStyles(actionType) {
+    switch (actionType) {
+        case 'deleted':
+            return {
+                wrap: 'border-red-200 bg-gradient-to-br from-red-50/90 to-white',
+                accent: 'border-l-[#29a08e] border-l-4',
+                pill: 'bg-red-100 text-red-800 border-red-200'
+            };
+        case 'warned':
+            return {
+                wrap: 'border-orange-200 bg-gradient-to-br from-orange-50/90 to-white',
+                accent: 'border-l-[#29a08e] border-l-4',
+                pill: 'bg-orange-100 text-orange-900 border-orange-200'
+            };
+        case 'hidden':
+            return {
+                wrap: 'border-amber-200 bg-gradient-to-br from-amber-50/90 to-white',
+                accent: 'border-l-[#29a08e] border-l-4',
+                pill: 'bg-amber-100 text-amber-900 border-amber-200'
+            };
+        default:
+            return {
+                wrap: 'border-gray-200 bg-white',
+                accent: 'border-l-[#29a08e] border-l-4',
+                pill: 'bg-gray-100 text-gray-700 border-gray-200'
+            };
+    }
+}
+
+function adminActionLabel(actionType) {
+    if (actionType === 'deleted') return 'Deleted';
+    if (actionType === 'warned') return 'Warned';
+    if (actionType === 'hidden') return 'Hidden';
+    return actionType || 'Notice';
+}
+
 const RecruiterJobs = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
     const [jobs, setJobs] = useState([]);
+    const [adminActions, setAdminActions] = useState([]);
+    const [dismissedAdminAlertIds, setDismissedAdminAlertIds] = useState(() => new Set());
     const [stats, setStats] = useState({ total: 0, active: 0, applicants: 0, closed: 0 });
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('All Status');
@@ -90,8 +161,9 @@ const RecruiterJobs = () => {
             if (sortBy === 'Most Recent') params.sort = 'recent';
             if (sortBy === 'Oldest') params.sort = 'oldest';
 
-            const res = await api.get('/recruiter/jobs', { params });
-            setJobs(res.data);
+            const res = await api.get('/jobs/recruiter/my-jobs', { params });
+            setJobs(res.data.activeJobs || []);
+            setAdminActions(res.data.adminActions || []);
         } catch (error) {
             console.error("Error fetching jobs:", error);
             toast.error(error.response?.data?.message || "Failed to load jobs");
@@ -101,11 +173,44 @@ const RecruiterJobs = () => {
     };
 
     useEffect(() => {
+        if (user?.id) {
+            setDismissedAdminAlertIds(loadDismissedAdminAlertIds(user.id));
+        }
+    }, [user?.id]);
+
+    useEffect(() => {
         if (user) {
             fetchStats();
             fetchJobs();
         }
     }, [user, filterStatus, filterType, sortBy]);
+
+    const dismissAdminAlert = (jobId) => {
+        if (!user?.id) return;
+        const id = String(jobId);
+        const next = new Set(dismissedAdminAlertIds);
+        next.add(id);
+        setDismissedAdminAlertIds(next);
+        saveDismissedAdminAlertIds(user.id, next);
+    };
+
+    const visibleAdminActions = adminActions.filter(
+        (a) => !dismissedAdminAlertIds.has(String(a._id || a.id))
+    );
+
+    const formatDateTime = (iso) => {
+        if (!iso) return '—';
+        const d = new Date(iso);
+        return isNaN(d.getTime())
+            ? '—'
+            : d.toLocaleString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+              });
+    };
 
     const handleDelete = async (jobId) => {
         if (window.confirm('Are you sure you want to delete this job? This action cannot be undone.')) {
@@ -125,7 +230,7 @@ const RecruiterJobs = () => {
         try {
             await api.patch(`/jobs/${jobId}/acknowledge-warning`);
             toast.success('Marked as acknowledged');
-            fetchJobs();
+            await fetchJobs();
         } catch (error) {
             toast.error(error.response?.data?.message || 'Could not update');
         }
@@ -216,6 +321,94 @@ const RecruiterJobs = () => {
                     </div>
                 </div>
 
+                {/* ─── Admin moderation notices (above main jobs list only) ─────────────────────────────── */}
+                {visibleAdminActions.length > 0 && (
+                    <section
+                        className="mb-6 rounded-2xl border border-[#29a08e]/20 bg-gradient-to-br from-[#0d2f2b]/[0.03] via-white to-[#29a08e]/[0.04] p-6 shadow-sm"
+                        aria-label="Admin notices on your listings"
+                    >
+                        <div className="flex items-start gap-3 mb-5">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#29a08e]/10 border border-[#29a08e]/25 text-[#29a08e]">
+                                <ShieldAlert size={22} strokeWidth={2} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-black text-gray-900 tracking-tight">Admin notices</h2>
+                                <p className="text-sm text-gray-600 mt-0.5">
+                                    These listings need your attention or were removed by an administrator. Dismissing only hides this card on your device.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            {visibleAdminActions.map((item) => {
+                                const jid = item.id || item._id;
+                                const styles = adminActionCardStyles(item.actionType);
+                                const isWarned = item.actionType === 'warned';
+                                const isHidden = item.actionType === 'hidden';
+                                return (
+                                    <div
+                                        key={String(jid)}
+                                        className={`rounded-2xl border shadow-sm p-5 flex flex-col sm:flex-row sm:items-start gap-4 ${styles.wrap} ${styles.accent}`}
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                                                <span
+                                                    className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest border ${styles.pill}`}
+                                                >
+                                                    {adminActionLabel(item.actionType)}
+                                                </span>
+                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                                                    {formatDateTime(item.actionAt)}
+                                                </span>
+                                            </div>
+                                            <h3 className="text-base font-black text-gray-900 tracking-tight">{item.title}</h3>
+                                            <p className="text-sm text-gray-700 mt-2 leading-relaxed">
+                                                <span className="font-semibold text-gray-900">Reason: </span>
+                                                {item.reason}
+                                            </p>
+                                            {isWarned && !item.warningAcknowledged && (
+                                                <p className="text-xs text-orange-900 mt-3 font-medium">
+                                                    Please address the notice and edit your post.
+                                                    {item.warningDeadline
+                                                        ? ` Deadline: ${formatDate(item.warningDeadline)}`
+                                                        : ''}
+                                                </p>
+                                            )}
+                                            <div className="flex flex-wrap gap-2 mt-4">
+                                                {isWarned && !item.warningAcknowledged && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleAcknowledgeWarning(jid)}
+                                                        className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold bg-[#29a08e] text-white hover:bg-[#228377] border border-[#29a08e] transition-colors"
+                                                    >
+                                                        Mark as acknowledged
+                                                    </button>
+                                                )}
+                                                {(isWarned || isHidden) && (
+                                                    <Link
+                                                        to={`/recruiter/jobs/${jid}/edit`}
+                                                        className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold bg-white text-[#29a08e] border border-[#29a08e]/40 hover:bg-[#29a08e]/5 transition-colors"
+                                                    >
+                                                        {isHidden ? 'Edit & resubmit' : 'Edit listing'}
+                                                    </Link>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => dismissAdminAlert(jid)}
+                                            className="shrink-0 self-start sm:self-center inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-gray-600 bg-white/80 border border-gray-200 hover:border-[#29a08e]/40 hover:text-[#29a08e] transition-colors"
+                                            aria-label="Dismiss notice"
+                                        >
+                                            <X size={16} strokeWidth={2.5} />
+                                            Dismiss
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </section>
+                )}
+
                 {/* ─── Jobs List ─────────────────────────────── */}
                 <div className="space-y-4">
                     {loading ? (
@@ -227,8 +420,8 @@ const RecruiterJobs = () => {
                         jobs.map((job) => {
                             const jid = job.id || job._id;
                             const mod = effectiveModerationStatus(job);
-                            const isModDeleted = mod === 'deleted';
-                            const showPublicPromote = mod === 'active' || mod === 'warned';
+                            const showPublicPromote = mod === 'active';
+                            const statusBadge = primaryJobStatusBadge(job);
 
                             return (
                             <div key={jid} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col md:flex-row justify-between hover:shadow-lg hover:border-[#29a08e]/10 transition-all duration-300 group relative overflow-hidden">
@@ -238,52 +431,14 @@ const RecruiterJobs = () => {
                                         <h3 className="text-lg font-black text-gray-900 group-hover:text-[#29a08e] transition-colors tracking-tight">
                                             {job.title}
                                         </h3>
-                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${moderationBadgeClass(mod)}`}>
-                                            {moderationBadgeLabel(mod)}
-                                        </span>
-                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border
-                                            ${(job.status || 'Active') === 'Active' ? 'bg-[#29a08e]/10 text-[#29a08e] border-[#29a08e]/20' : 'bg-gray-100 text-gray-500 border-gray-200'}
-                                        `}>
-                                            {job.status || 'Active'}
+                                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${statusBadge.className}`}>
+                                            {statusBadge.label}
                                         </span>
                                     </div>
-
-                                    {mod === 'warned' && job.warningMessage && !job.warningAcknowledged && (
-                                        <div className="mb-4 p-4 rounded-xl border border-amber-200 bg-amber-50 text-sm text-amber-900">
-                                            <p className="font-semibold">⚠ Admin notice: {job.warningMessage}</p>
-                                            {job.warningDeadline && (
-                                                <p className="mt-2 text-xs text-amber-800">
-                                                    Please fix this by {formatDate(job.warningDeadline)} or your post may be hidden.
-                                                </p>
-                                            )}
-                                        </div>
-                                    )}
-                                    {mod === 'warned' && job.warningAcknowledged && (
-                                        <p className="mb-4 text-xs text-gray-500">
-                                            Warning acknowledged. Please edit your job post to resolve the issue.
-                                        </p>
-                                    )}
-
-                                    {mod === 'hidden' && (
-                                        <div className="mb-4 p-4 rounded-xl border border-rose-200 bg-rose-50 text-sm text-rose-900">
-                                            {job.moderationNote && (
-                                                <p className="font-semibold">Reason: {job.moderationNote}</p>
-                                            )}
-                                            <p className="mt-2 text-xs text-rose-800">
-                                                Your job post has been hidden. Please edit and resubmit for admin review.
-                                            </p>
-                                        </div>
-                                    )}
 
                                     {mod === 'pending_review' && (
                                         <div className="mb-4 p-3 rounded-xl border border-yellow-200 bg-yellow-50 text-xs text-yellow-900">
                                             Your updated post is being reviewed by our team. It will go live once approved.
-                                        </div>
-                                    )}
-
-                                    {mod === 'deleted' && job.moderationNote && (
-                                        <div className="mb-4 p-4 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700">
-                                            <span className="font-semibold">Reason:</span> {job.moderationNote}
                                         </div>
                                     )}
 
@@ -311,15 +466,6 @@ const RecruiterJobs = () => {
                                             <Eye size={16} className="text-blue-500" />
                                             {job.views_count || 0} <span className="text-gray-400 font-normal text-xs">Views</span>
                                         </div>
-                                        {mod === 'warned' && job.warningMessage && !job.warningAcknowledged && (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleAcknowledgeWarning(jid)}
-                                                className="text-xs font-bold text-amber-800 underline-offset-2 hover:underline"
-                                            >
-                                                Mark as acknowledged
-                                            </button>
-                                        )}
                                     </div>
                                 </div>
 
@@ -333,7 +479,6 @@ const RecruiterJobs = () => {
                                         Promote
                                     </Link>
                                     )}
-                                    {!isModDeleted && (
                                     <button
                                         onClick={() => navigate(`/recruiter/jobs/${jid}/analytics`)}
                                         className="w-full md:w-auto px-5 py-2.5 bg-[#29a08e] text-white text-xs font-bold rounded-xl hover:bg-[#228377] shadow-md shadow-[#29a08e]/20 flex items-center justify-center gap-2 transition-all hover:shadow-lg"
@@ -341,21 +486,13 @@ const RecruiterJobs = () => {
                                         <PieChart size={14} />
                                         Analytics
                                     </button>
-                                    )}
-                                    {!isModDeleted && (
                                     <Link
                                         to={`/recruiter/jobs/${jid}/edit`}
-                                        className={`w-full md:w-auto px-5 py-2.5 text-xs font-bold rounded-xl border flex items-center justify-center gap-2 transition-all ${
-                                            mod === 'hidden' || mod === 'warned'
-                                                ? 'bg-[#29a08e] text-white border-[#29a08e] hover:bg-[#228377]'
-                                                : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
-                                        }`}
+                                        className="w-full md:w-auto px-5 py-2.5 text-xs font-bold rounded-xl border flex items-center justify-center gap-2 transition-all bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
                                     >
                                         <Edit size={14} />
-                                        {mod === 'hidden' ? 'Edit & resubmit' : 'Edit'}
+                                        Edit
                                     </Link>
-                                    )}
-                                    {!isModDeleted && (
                                     <button
                                         onClick={() => handleDelete(jid)}
                                         className="w-full md:w-auto px-5 py-2.5 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-100 hover:text-rose-700 border border-transparent hover:border-rose-200 flex items-center justify-center gap-2 transition-all"
@@ -363,7 +500,6 @@ const RecruiterJobs = () => {
                                         <Trash size={14} />
                                         Delete
                                     </button>
-                                    )}
                                 </div>
                             </div>
                             );

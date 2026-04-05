@@ -10,6 +10,8 @@ import {
     ShieldCheck,
     MessageSquare,
     MapPin,
+    Quote,
+    UsersRound,
     ChevronRight,
     ChevronLeft
 } from 'lucide-react';
@@ -41,7 +43,9 @@ const SECTIONS = {
         label: 'System',
         items: [
             { label: 'Location', path: '/admin/location', icon: MapPin },
-            { label: 'Contact Messages', path: '/admin/contact-messages', icon: MessageSquare }
+            { label: 'Contact Messages', path: '/admin/contact-messages', icon: MessageSquare },
+            { label: 'Testimonials', path: '/admin/testimonials', icon: Quote },
+            { label: 'Team', path: '/admin/team', icon: UsersRound }
         ]
     }
 };

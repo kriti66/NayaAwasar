@@ -7,6 +7,7 @@ import {
     deactivateWarningsForJob,
     resolveRecruiterWarningById
 } from '../services/recruiterWarningService.js';
+import { cancelInterviewsForJob } from '../services/interviewJobCleanup.js';
 
 const router = express.Router();
 
@@ -144,6 +145,10 @@ router.patch('/jobs/:id/hide', async (req, res) => {
             changedBy: new mongoose.Types.ObjectId(req.user.id)
         });
         await job.save();
+        await cancelInterviewsForJob(job._id, {
+            reason: 'Job was removed by admin',
+            cancelledByUserId: req.user.id
+        });
         const populated = await Job.findById(job._id)
             .populate('recruiter_id', 'fullName email')
             .populate('company_id', 'name status verificationStatus adminFields');
@@ -212,6 +217,10 @@ router.patch('/jobs/:id/delete', async (req, res) => {
         });
         await job.save();
         await deactivateWarningsForJob(job._id, req.user.id);
+        await cancelInterviewsForJob(job._id, {
+            reason: 'Job was removed by admin',
+            cancelledByUserId: req.user.id
+        });
         const populated = await Job.findById(job._id)
             .populate('recruiter_id', 'fullName email')
             .populate('company_id', 'name status verificationStatus adminFields');

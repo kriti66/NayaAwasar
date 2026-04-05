@@ -26,10 +26,52 @@ import {
     isJobPubliclyVisible,
     normalizeModerationStatusForEdit,
     isJobVisibleForPublicListing,
-    PUBLIC_MODERATION_MATCH
+    PUBLIC_MODERATION_MATCH,
+    RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED,
+    RECRUITER_MY_JOBS_ADMIN_MODERATION_VALUES
 } from '../utils/jobModeration.js';
+import { deactivateWarningsForJob } from '../services/recruiterWarningService.js';
+import { cancelInterviewsForJob } from '../services/interviewJobCleanup.js';
 
 const router = express.Router();
+
+function latestModerationHistoryAt(job, action) {
+    const hist = job.moderationHistory;
+    if (!Array.isArray(hist) || !hist.length) return null;
+    const want = String(action).toLowerCase();
+    for (let i = hist.length - 1; i >= 0; i--) {
+        const h = hist[i];
+        if (String(h.action || '').toLowerCase() === want) {
+            return h.changedAt || null;
+        }
+    }
+    return null;
+}
+
+function buildRecruiterAdminAction(job, mod) {
+    const actionAt =
+        latestModerationHistoryAt(job, mod) ||
+        job.updatedAt ||
+        job.createdAt ||
+        null;
+    let reason = '—';
+    if (mod === 'warned') {
+        reason = (job.warningMessage || job.moderationNote || job.flagReason || '').trim() || '—';
+    } else {
+        reason = (job.moderationNote || job.flagReason || job.warningMessage || '').trim() || '—';
+    }
+    return {
+        _id: job._id,
+        id: job._id,
+        title: job.title || 'Untitled listing',
+        actionType: mod,
+        reason,
+        actionAt: actionAt ? new Date(actionAt).toISOString() : null,
+        warningAcknowledged: !!job.warningAcknowledged,
+        warningDeadline: job.warningDeadline || null,
+        warningMessage: job.warningMessage || ''
+    };
+}
 
 function tryOptionalAuthPayload(req) {
     const h = req.headers.authorization;
@@ -69,7 +111,10 @@ router.get('/admin/all', requireAuth, requireAdmin, async (req, res) => {
 router.get('/my-jobs', requireAuth, async (req, res) => {
     try {
         const recruiter_id = req.user.id;
-        const jobs = await Job.find({ recruiter_id })
+        const jobs = await Job.find({
+            recruiter_id,
+            ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED
+        })
             .sort({ createdAt: -1 })
             .populate('company_id', 'logo name')
             .lean();
@@ -87,15 +132,102 @@ router.get('/my-jobs', requireAuth, async (req, res) => {
     }
 });
 
+// @route   GET /api/jobs/recruiter/my-jobs
+// @desc    Recruiter My Jobs: active/live list + admin moderation alerts (split)
+// @access  Private (recruiter)
+router.get('/recruiter/my-jobs', requireAuth, requireRole('recruiter'), async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { status, type, sort = 'recent' } = req.query;
+
+        const sortOption = sort === 'oldest' ? { createdAt: 1 } : { createdAt: -1 };
+
+        // Main list at DB level: no warned/hidden/deleted (admin cards loaded separately).
+        const activeRaw = await Job.find({
+            recruiter_id: userId,
+            $nor: [{ moderationStatus: { $in: RECRUITER_MY_JOBS_ADMIN_MODERATION_VALUES } }]
+        })
+            .sort(sortOption)
+            .lean();
+
+        const adminRaw = await Job.find({
+            recruiter_id: userId,
+            moderationStatus: { $in: RECRUITER_MY_JOBS_ADMIN_MODERATION_VALUES }
+        })
+            .sort(sortOption)
+            .lean();
+
+        const adminActions = adminRaw.map((job) =>
+            buildRecruiterAdminAction(job, normalizeModerationStatusForEdit(job.moderationStatus))
+        );
+
+        let activeCandidates = activeRaw;
+
+        if (status && status !== 'All Status') {
+            activeCandidates = activeCandidates.filter((j) => j.status === status);
+        }
+        if (type && type !== 'All Types') {
+            activeCandidates = activeCandidates.filter((j) => j.type === type);
+        }
+
+        activeCandidates.sort((a, b) => {
+            const ta = new Date(a.createdAt).getTime();
+            const tb = new Date(b.createdAt).getTime();
+            return sort === 'oldest' ? ta - tb : tb - ta;
+        });
+
+        const activeIds = activeCandidates.map((j) => j._id);
+        const countRows =
+            activeIds.length > 0
+                ? await Application.aggregate([
+                      { $match: { job_id: { $in: activeIds } } },
+                      { $group: { _id: '$job_id', applicants_count: { $sum: 1 } } }
+                  ])
+                : [];
+        const countMap = new Map(countRows.map((r) => [r._id.toString(), r.applicants_count]));
+
+        const activeJobs = activeCandidates.map((job) => ({
+            _id: job._id,
+            id: job._id,
+            title: job.title,
+            status: job.status,
+            type: job.type,
+            location: job.location,
+            createdAt: job.createdAt,
+            posted_at: job.posted_at,
+            views_count: job.views_count,
+            applicants_count: countMap.get(job._id.toString()) || 0,
+            moderationStatus: job.moderationStatus,
+            moderationNote: job.moderationNote,
+            warningMessage: job.warningMessage,
+            warningDeadline: job.warningDeadline,
+            warningAcknowledged: job.warningAcknowledged,
+            reportCount: job.reportCount
+        }));
+
+        adminActions.sort((a, b) => {
+            const da = a.actionAt ? new Date(a.actionAt).getTime() : 0;
+            const db = b.actionAt ? new Date(b.actionAt).getTime() : 0;
+            return db - da;
+        });
+
+        res.json({ activeJobs, adminActions });
+    } catch (error) {
+        console.error('GET /jobs/recruiter/my-jobs error:', error);
+        res.status(500).json({ message: 'Error fetching jobs' });
+    }
+});
+
 // Recruiter Dashboard Stats
 router.get('/stats/recruiter', requireAuth, async (req, res) => {
     try {
         const recruiter_id = req.user.id;
-        const totalJobs = await Job.countDocuments({ recruiter_id });
-        const activeJobs = await Job.countDocuments({ recruiter_id, status: 'Active' });
+        const jobListFilter = { recruiter_id, ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED };
+        const totalJobs = await Job.countDocuments(jobListFilter);
+        const activeJobs = await Job.countDocuments({ ...jobListFilter, status: 'Active' });
 
         // Find all job IDs for this recruiter to count total applications
-        const myJobs = await Job.find({ recruiter_id }).select('_id');
+        const myJobs = await Job.find(jobListFilter).select('_id');
         const jobIds = myJobs.map(j => j._id);
         const totalApplications = await Application.countDocuments({ job_id: { $in: jobIds } });
 
@@ -160,7 +292,8 @@ router.get('/check-duplicate', requireAuth, requireRole('recruiter', 'admin'), a
         const existing = await Job.findOne({
             recruiter_id,
             title: String(title).trim(),
-            createdAt: { $gte: since }
+            createdAt: { $gte: since },
+            ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED
         }).lean();
         res.json({ duplicate: !!existing });
     } catch (error) {
@@ -405,6 +538,10 @@ router.delete('/:id', requireAuth, requireKycApproved, requireCompanyApproved, a
         const job = await Job.findByIdAndDelete(id);
         if (!job) return res.status(404).json({ message: 'Job not found' });
         await invalidateJobLabelCacheForJob(id);
+        await cancelInterviewsForJob(job._id, {
+            reason: 'Job listing was deleted',
+            cancelledByUserId: req.user.id
+        });
 
         // Log job deletion activity
         // Log job deletion activity
@@ -489,6 +626,9 @@ router.put('/:id', requireAuth, requireKycApproved, requireCompanyApproved, asyn
         }
 
         await existingJob.save();
+        if (normalizedMs === 'warned') {
+            await deactivateWarningsForJob(existingJob._id, req.user.id);
+        }
         triggerEmbeddingUpdate(id, 'job');
         await invalidateJobLabelCacheForJob(id);
         res.json({ success: true, message: 'Job updated', job: existingJob });
@@ -550,6 +690,13 @@ router.patch('/:id/moderate', requireAuth, requireAdmin, async (req, res) => {
             `Job '${job.title}' moderation status updated to ${nextStatus}.`,
             { jobId: job._id }
         );
+
+        if (nextStatus === 'hidden' || nextStatus === 'deleted') {
+            await cancelInterviewsForJob(job._id, {
+                reason: 'Job was removed by admin',
+                cancelledByUserId: req.user.id
+            });
+        }
 
         await invalidateJobLabelCacheForJob(id);
         res.json({ success: true, message: `Job moderation status updated to ${nextStatus}`, job });

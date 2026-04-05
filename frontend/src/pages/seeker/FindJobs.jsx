@@ -70,13 +70,14 @@ const DebouncedTextInput = memo(function DebouncedTextInput({
     className,
     onDebouncedChange,
     resetToken,
-    debounceMs = 400
+    debounceMs = 400,
+    defaultValue = ''
 }) {
-    const [localValue, setLocalValue] = useState('');
+    const [localValue, setLocalValue] = useState(defaultValue);
 
     useEffect(() => {
-        setLocalValue('');
-    }, [resetToken]);
+        setLocalValue(defaultValue);
+    }, [defaultValue, resetToken]);
 
     useEffect(() => {
         const t = setTimeout(() => {
@@ -384,8 +385,8 @@ const FindJobs = () => {
 
     // Search & Filter State
     // Applied values drive fetching + heavy logic. Raw typing state lives inside the input components.
-    const [searchQuery, setSearchQuery] = useState('');
-    const [headerLocation, setHeaderLocation] = useState('');
+    const [searchQuery, setSearchQuery] = useState(() => (searchParams.get('q') || '').trim());
+    const [headerLocation, setHeaderLocation] = useState(() => (searchParams.get('location') || '').trim());
     const [sidebarTitle, setSidebarTitle] = useState('');
     const [inputResetToken, setInputResetToken] = useState(0);
     const [selectedLocation, setSelectedLocation] = useState('');
@@ -423,6 +424,13 @@ const FindJobs = () => {
         setCurrentPage(1);
     }, [filterQueryKey, showSavedOnly]);
 
+    const searchParamsKey = searchParams.toString();
+    useEffect(() => {
+        if (showSavedOnly) return;
+        const sp = new URLSearchParams(searchParamsKey);
+        setSearchQuery((sp.get('q') || '').trim());
+        setHeaderLocation((sp.get('location') || '').trim());
+    }, [searchParamsKey, showSavedOnly]);
 
     useEffect(() => {
         if (!showSavedOnly) return;
@@ -634,6 +642,7 @@ const FindJobs = () => {
                                 <DebouncedTextInput
                                     placeholder="Job title, keywords..."
                                     resetToken={inputResetToken}
+                                    defaultValue={searchQuery}
                                     onDebouncedChange={setSearchQuery}
                                     className="w-full py-3.5 bg-transparent outline-none font-medium text-sm text-white placeholder:text-gray-500"
                                 />
@@ -643,6 +652,7 @@ const FindJobs = () => {
                                 <DebouncedTextInput
                                     placeholder="City or location"
                                     resetToken={inputResetToken}
+                                    defaultValue={headerLocation}
                                     onDebouncedChange={setHeaderLocation}
                                     className="w-full py-3.5 bg-transparent outline-none font-medium text-sm text-white placeholder:text-gray-500"
                                 />

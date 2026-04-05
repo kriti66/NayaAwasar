@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import RecruiterWarning from '../models/RecruiterWarning.js';
+import { normalizeModerationStatusForEdit } from '../utils/jobModeration.js';
 
 /**
  * Create an account-level warning when an admin warns a recruiter about a job.
@@ -43,13 +44,18 @@ export async function deactivateWarningsForJob(jobId, resolvedByUserId) {
 }
 
 export async function getActiveWarningsForRecruiter(recruiterId) {
-    return RecruiterWarning.find({
+    const rows = await RecruiterWarning.find({
         recruiter: recruiterId,
         isActive: true
     })
         .sort({ warnedAt: -1 })
-        .populate('job', 'title')
+        .populate('job', 'title moderationStatus')
         .lean();
+
+    return rows.filter((w) => {
+        if (!w.job) return false;
+        return normalizeModerationStatusForEdit(w.job.moderationStatus) === 'warned';
+    });
 }
 
 export async function resolveRecruiterWarningById(warningId, resolvedByUserId) {

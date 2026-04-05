@@ -28,7 +28,19 @@ node_modules/
 dist
 dist-ssr
 *.local
+
+# ===============================
+# Environment / secrets (never commit real values)
+# ===============================
 .env
+.env.local
+.env.development.local
+.env.production.local
+.env.test.local
+backend/.env
+frontend/.env
+recommendation-service/.env
+ai-service/.env
 
 # ===============================
 # SQLite / AI index databases
@@ -43,4 +55,9 @@ dist-ssr
 .DS_Store
 Thumbs.db
 
-.env
+# Python
+__pycache__/
+*.pyc
+
+# Uploads (user files - should not go to GitHub)
+backend/uploads/

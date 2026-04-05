@@ -43,10 +43,17 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ message: 'No account found with this email.' });
         }
 
-        if (user.isDeleted) {
+        if (user.isDeleted || user.isRemoved) {
             return res.status(403).json({
                 code: 'ACCOUNT_REMOVED',
                 message: 'This account has been removed. You can register again with the same email to restore your account, or contact support.'
+            });
+        }
+
+        if (user.isSuspended) {
+            return res.status(403).json({
+                code: 'ACCOUNT_SUSPENDED',
+                message: 'Your account has been suspended. Please contact support.'
             });
         }
 
@@ -92,13 +99,19 @@ router.post('/login', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id)
-            .select('fullName email role kycStatus isKycSubmitted isKycVerified kycRejectionReason kycCompletedAt profileImage isDeleted')
+            .select('fullName email role kycStatus isKycSubmitted isKycVerified kycRejectionReason kycCompletedAt profileImage isDeleted isRemoved isSuspended')
             .lean();
         if (!user) return res.status(404).json({ message: 'User not found' });
-        if (user.isDeleted) {
+        if (user.isDeleted || user.isRemoved) {
             return res.status(401).json({
                 code: 'ACCOUNT_REMOVED',
                 message: 'This account is no longer active.'
+            });
+        }
+        if (user.isSuspended) {
+            return res.status(401).json({
+                code: 'ACCOUNT_SUSPENDED',
+                message: 'Your account has been suspended. Please contact support.'
             });
         }
         res.json({

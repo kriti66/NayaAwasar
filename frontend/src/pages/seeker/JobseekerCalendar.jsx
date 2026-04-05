@@ -50,13 +50,18 @@ export default function JobseekerCalendar() {
         load();
     }, [load]);
 
-    const byDay = useMemo(() => groupInterviewsByUtcDay(interviews), [interviews]);
+    const visibleInterviews = useMemo(
+        () => (interviews || []).filter((i) => i.status !== 'cancelled'),
+        [interviews]
+    );
+
+    const byDay = useMemo(() => groupInterviewsByUtcDay(visibleInterviews), [visibleInterviews]);
     const selectedList = selectedDayKey ? byDay.get(selectedDayKey) || [] : [];
 
     const { highlightedInterviewId, registerInterviewCardRef, interviewCardHighlightClass } =
         useInterviewCalendarDeepLink({
             loading,
-            interviews,
+            interviews: visibleInterviews,
             setYear,
             setMonthIndex,
             setSelectedDayKey
@@ -201,19 +206,27 @@ export default function JobseekerCalendar() {
                 <div className="mb-4 p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Legend</p>
                     <InterviewCalendarLegend />
+                    <p className="text-xs text-slate-500 mt-3 border-t border-slate-100 pt-3">
+                        Cancelled interviews no longer appear here. If a job was removed by an admin, you will get a
+                        notification explaining that your interview was cancelled.
+                    </p>
                 </div>
 
                 {loading ? (
                     <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-slate-500">
                         Loading calendar…
                     </div>
-                ) : interviews.length === 0 ? (
+                ) : visibleInterviews.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-600">
-                        You have no interviews yet. When a recruiter schedules one, it will show here.
+                        <p>You have no upcoming interviews on the calendar.</p>
+                        <p className="text-sm text-slate-500 mt-2">
+                            When a recruiter schedules one, it will show here. If an interview was cancelled (for example
+                            because a job was removed), check your notifications for details.
+                        </p>
                     </div>
                 ) : null}
 
-                {!loading && interviews.length > 0 && (
+                {!loading && visibleInterviews.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                         <div className="lg:col-span-2">
                             <InterviewCalendarGrid

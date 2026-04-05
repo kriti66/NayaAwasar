@@ -17,7 +17,7 @@ from models import (
     SimilarJobsRequest,
     SimilarJobsResponse,
 )
-from recommender import get_similar_jobs, hybrid_recommend
+from recommender import get_similar_jobs, hybrid_recommend, recommend_from_payload
 
 load_dotenv()
 
@@ -68,7 +68,17 @@ async def recommend(body: RecommendRequest):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    recs = await hybrid_recommend(body.user_id, top_n=body.limit)
+    # Prefer explicit payload-driven ranking when backend provides seeker_profile + jobs.
+    # Falls back to DB-driven hybrid recommendation when payload is not available.
+    if isinstance(body.seeker_profile, dict) and isinstance(body.jobs, list) and len(body.jobs) > 0:
+        recs = recommend_from_payload(
+            body.user_id,
+            body.seeker_profile,
+            body.jobs,
+            top_n=body.limit,
+        )
+    else:
+        recs = await hybrid_recommend(body.user_id, top_n=body.limit)
     items = [
         {
             "job_id": r["job_id"],

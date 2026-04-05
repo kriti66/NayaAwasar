@@ -10,8 +10,16 @@ import Interview from '../models/Interview.js';
 import { recordUserInteraction } from '../services/recommendationService.js';
 import { getEffectiveInterviewStart } from '../utils/interviewDateTime.js';
 import { computeInterviewLifecycle } from '../utils/interviewLifecycle.js';
-import { isJobVisibleForPublicListing } from '../utils/jobModeration.js';
+import {
+    isJobVisibleForPublicListing,
+    normalizeModerationStatusForEdit,
+    RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED
+} from '../utils/jobModeration.js';
 import { interviewCalendarMetadata } from '../utils/interviewNotificationMetadata.js';
+import {
+    ensurePlaceholderInterviewForPipeline,
+    syncInterviewDocumentAfterApplicationStatusChange
+} from '../services/applicationStatusInterviewSync.js';
 
 function getSeekerIdString(application) {
     const s = application?.seeker_id;
@@ -19,6 +27,158 @@ function getSeekerIdString(application) {
     if (typeof s === 'object' && s._id != null) return String(s._id);
     return String(s);
 }
+
+function emptyRecruiterPipelineStats() {
+    return { total: 0, applied: 0, inReview: 0, interview: 0, offered: 0, hired: 0, rejected: 0 };
+}
+
+function computeRecruiterPipelineStatsFromRows(rows) {
+    const next = emptyRecruiterPipelineStats();
+    next.total = rows.length;
+    rows.forEach(({ status }) => {
+        if (!status) return;
+        if (status === 'applied') next.applied++;
+        else if (status === 'in-review') next.inReview++;
+        else if (status === 'interview') next.interview++;
+        else if (status === 'offered') next.offered++;
+        else if (status === 'hired') next.hired++;
+        else if (status === 'rejected') next.rejected++;
+    });
+    return next;
+}
+
+function normalizeApplicationsStatusQuery(raw) {
+    if (raw == null || raw === '') return null;
+    const v = String(raw).toLowerCase().trim();
+    if (v === 'all' || v === 'all status') return null;
+    if (v === 'in_review') return 'in-review';
+    const allowed = new Set(['applied', 'in-review', 'interview', 'offered', 'hired', 'rejected']);
+    return allowed.has(v) ? v : null;
+}
+
+async function getAllowedRecruiterJobIdsForApplications(recruiterId, specificJobId) {
+    const base = {
+        recruiter_id: recruiterId,
+        ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED
+    };
+    if (specificJobId) {
+        const job = await Job.findOne({ _id: specificJobId, ...base }).select('_id').lean();
+        return job ? [job._id] : [];
+    }
+    const jobs = await Job.find(base).select('_id').lean();
+    return jobs.map((j) => j._id);
+}
+
+function applicantSortKey(app) {
+    return (app.personalInfo?.fullName || app.seeker_id?.fullName || '').trim().toLowerCase() || '\uffff';
+}
+
+function sortApplicationsForRecruiter(applications, sortRaw) {
+    const sort = String(sortRaw || 'newest').toLowerCase();
+    if (sort === 'oldest') {
+        applications.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+        return;
+    }
+    if (sort === 'name' || sort === 'name_asc' || sort === 'a-z') {
+        applications.sort((a, b) => applicantSortKey(a).localeCompare(applicantSortKey(b)));
+        return;
+    }
+    if (sort === 'name_desc' || sort === 'z-a' || sort === 'name_z_a') {
+        applications.sort((a, b) => applicantSortKey(b).localeCompare(applicantSortKey(a)));
+        return;
+    }
+    applications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+async function enrichApplicationsForRecruiterView(applications) {
+    const seekerIds = applications.filter((app) => app.seeker_id).map((app) => app.seeker_id._id);
+
+    const profiles = await Profile.find({ userId: { $in: seekerIds } }).lean();
+    const profileMap = profiles.reduce((acc, profile) => {
+        acc[profile.userId.toString()] = profile;
+        return acc;
+    }, {});
+
+    applications.forEach((app) => {
+        app.is_generated = app.resumeType === 'Generated';
+        app.display_resume_url = app.resumeUrl;
+
+        if (!app.personalInfo) {
+            app.personalInfo = {};
+        }
+
+        if (!app.personalInfo.address) {
+            if (app.applicantLocation) {
+                app.personalInfo.address = app.applicantLocation;
+            } else if (app.seeker_id?.location) {
+                app.personalInfo.address = app.seeker_id.location;
+            } else if (app.seeker_id?._id && profileMap[app.seeker_id._id.toString()]?.location) {
+                app.personalInfo.address = profileMap[app.seeker_id._id.toString()].location;
+            } else if (app.seeker_id?._id && profileMap[app.seeker_id._id.toString()]?.jobPreferences?.preferredLocation) {
+                app.personalInfo.address = profileMap[app.seeker_id._id.toString()].jobPreferences.preferredLocation;
+            } else {
+                app.personalInfo.address = '';
+            }
+        }
+
+        if (!app.personalInfo.fullName && app.seeker_id?.fullName) {
+            app.personalInfo.fullName = app.seeker_id.fullName;
+        }
+        if (!app.personalInfo.email && app.seeker_id?.email) {
+            app.personalInfo.email = app.seeker_id.email;
+        }
+        if (!app.personalInfo.phone && app.seeker_id?.phoneNumber) {
+            app.personalInfo.phone = app.seeker_id.phoneNumber;
+        }
+    });
+}
+
+/**
+ * GET /api/applications/recruiter
+ * Query: jobId (optional), status (optional), sort (newest | oldest | name_asc | name_desc)
+ */
+export const getRecruiterApplications = async (req, res) => {
+    const recruiterId = req.user.id;
+    const { jobId, status, sort } = req.query;
+
+    try {
+        const specificJobId = jobId && String(jobId).trim() !== '' ? String(jobId).trim() : null;
+        const jobIds = await getAllowedRecruiterJobIdsForApplications(recruiterId, specificJobId);
+
+        if (specificJobId && jobIds.length === 0) {
+            return res.status(403).json({ message: 'Job not found or applications are unavailable for this listing.' });
+        }
+
+        if (jobIds.length === 0) {
+            return res.json({ applications: [], stats: emptyRecruiterPipelineStats() });
+        }
+
+        const baseMatch = { job_id: { $in: jobIds } };
+
+        const statsRows = await Application.find(baseMatch).select('status').lean();
+        const stats = computeRecruiterPipelineStatsFromRows(statsRows);
+
+        const statusFilter = normalizeApplicationsStatusQuery(status);
+        const listMatch = { ...baseMatch };
+        if (statusFilter) {
+            listMatch.status = statusFilter;
+        }
+
+        const applications = await Application.find(listMatch)
+            .populate('seeker_id', 'fullName email location phoneNumber profileImage')
+            .populate('job_id', 'title status location company_name')
+            .populate('interview.interviewId')
+            .lean();
+
+        await enrichApplicationsForRecruiterView(applications);
+        sortApplicationsForRecruiter(applications, sort);
+
+        res.json({ applications, stats });
+    } catch (error) {
+        console.error('GET /applications/recruiter error:', error);
+        res.status(500).json({ message: 'Error fetching applications' });
+    }
+};
 
 // Get applications for a job (Recruiter view)
 export const getJobApplications = async (req, res) => {
@@ -40,54 +200,7 @@ export const getJobApplications = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
-        // Getting all seeker IDs for bulk fetching profiles
-        const seekerIds = applications
-            .filter(app => app.seeker_id)
-            .map(app => app.seeker_id._id);
-
-        const profiles = await Profile.find({ userId: { $in: seekerIds } }).lean();
-        const profileMap = profiles.reduce((acc, profile) => {
-            acc[profile.userId.toString()] = profile;
-            return acc;
-        }, {});
-
-        // Enhance application object with resume info for frontend display
-        applications.forEach(app => {
-            app.is_generated = app.resumeType === 'Generated';
-            app.display_resume_url = app.resumeUrl;
-
-            // Ensure personalInfo exists and has address
-            if (!app.personalInfo) {
-                app.personalInfo = {};
-            }
-
-            // Fallback Logic for Location/Address
-            // Order: Application Snapshot -> Applicant Location -> User Profile -> Job Seeker Profile (Main) -> Job Seeker Profile (Pref) -> Default
-            if (!app.personalInfo.address) {
-                if (app.applicantLocation) {
-                    app.personalInfo.address = app.applicantLocation;
-                } else if (app.seeker_id?.location) {
-                    app.personalInfo.address = app.seeker_id.location;
-                } else if (app.seeker_id?._id && profileMap[app.seeker_id._id.toString()]?.location) {
-                    app.personalInfo.address = profileMap[app.seeker_id._id.toString()].location;
-                } else if (app.seeker_id?._id && profileMap[app.seeker_id._id.toString()]?.jobPreferences?.preferredLocation) {
-                    app.personalInfo.address = profileMap[app.seeker_id._id.toString()].jobPreferences.preferredLocation;
-                } else {
-                    app.personalInfo.address = ''; // Ensure it's not undefined
-                }
-            }
-
-            // Other Fallbacks
-            if (!app.personalInfo.fullName && app.seeker_id?.fullName) {
-                app.personalInfo.fullName = app.seeker_id.fullName;
-            }
-            if (!app.personalInfo.email && app.seeker_id?.email) {
-                app.personalInfo.email = app.seeker_id.email;
-            }
-            if (!app.personalInfo.phone && app.seeker_id?.phoneNumber) {
-                app.personalInfo.phone = app.seeker_id.phoneNumber;
-            }
-        });
+        await enrichApplicationsForRecruiterView(applications);
 
         res.json(applications);
     } catch (error) {
@@ -417,6 +530,8 @@ export const advanceApplication = async (req, res) => {
         application.status = nextStatus;
         await application.save();
 
+        await syncInterviewDocumentAfterApplicationStatusChange(application, nextStatus, recruiterId);
+
         if (nextStatus === 'interview') {
             const invId = application.interview?.interviewId;
             await createNotification({
@@ -472,6 +587,8 @@ export const rejectApplication = async (req, res) => {
         application.status = 'rejected';
         application.cancelReason = reason;
         await application.save();
+
+        await syncInterviewDocumentAfterApplicationStatusChange(application, 'rejected', recruiterId);
 
         res.json({ success: true, message: 'Application rejected', application });
     } catch (error) {
@@ -558,6 +675,8 @@ export const updateApplicationStatus = async (req, res) => {
                 details: application.interview,
                 timestamp: new Date()
             });
+        } else if (normalizedStatus === 'interview' && !interviewDetails) {
+            await ensurePlaceholderInterviewForPipeline(application, recruiterId);
         }
 
         // 2. Offered
@@ -571,12 +690,14 @@ export const updateApplicationStatus = async (req, res) => {
 
         // 3. Rejected
         if (normalizedStatus === 'rejected') {
-            application.cancelReason = rejectionReason || 'Application rejected by recruiter';
+            application.cancelReason = rejectionReason || 'Application rejected';
         }
 
         // Update Status
         application.status = normalizedStatus;
         await application.save();
+
+        await syncInterviewDocumentAfterApplicationStatusChange(application, normalizedStatus, recruiterId);
 
         // --- Notifications & Logging ---
         if (normalizedStatus !== previousStatus) {
@@ -699,11 +820,18 @@ export const getMyInterviews = async (req, res) => {
             date: { $gte: startOfToday }
         })
             .populate('applicationId')
-            .populate('jobId', 'title company_name location')
+            .populate('jobId', 'title company_name location moderationStatus')
             .lean();
 
         const rows = interviewDocs
-            .filter((inv) => inv.applicationId && inv.applicationId.status === 'interview')
+            .filter(
+                (inv) =>
+                    inv.applicationId &&
+                    inv.applicationId.status === 'interview' &&
+                    inv.jobId != null &&
+                    !(typeof inv.jobId === 'object' &&
+                        ['hidden', 'deleted'].includes(normalizeModerationStatusForEdit(inv.jobId.moderationStatus)))
+            )
             .map((inv) => {
                 const app = inv.applicationId;
                 const appObj = app?.toObject ? app.toObject() : app;

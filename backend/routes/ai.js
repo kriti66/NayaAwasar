@@ -1,11 +1,13 @@
 import express from 'express';
 import axios from 'axios';
+import dotenv from 'dotenv';
 import { requireAuth } from '../middleware/auth.js';
-import Job from '../models/Job.js';
+
+dotenv.config();
 
 const router = express.Router();
 
-const AI_SERVICE_URL = (process.env.FLASK_AI_URL || 'https://naya-awasar-flask.onrender.com').replace(/\/+$/, '');
+const AI_SERVICE_URL = (process.env.FLASK_AI_URL || '').trim().replace(/\/+$/, '');
 
 /**
  * @desc Get Job Recommendations based on User Profile/Skills
@@ -16,6 +18,12 @@ router.post('/recommend', requireAuth, async (req, res) => {
     try {
         const userId = req.user.id;
         console.log(`🤖 Requesting AI recommendations for user: ${userId}`);
+        if (!AI_SERVICE_URL) {
+            console.warn('[ai route] FLASK_AI_URL is not configured; cannot call Flask service.');
+            return res.status(503).json({
+                message: 'FLASK_AI_URL is not configured. Set it in backend/.env (e.g. http://127.0.0.1:5000).'
+            });
+        }
 
         // Forward to new Flask Microservice endpoint
         try {

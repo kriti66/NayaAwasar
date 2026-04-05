@@ -1,4 +1,5 @@
 from collections import Counter, defaultdict
+import re
 from typing import Any, Dict, List, Set, Tuple
 import gc
 
@@ -16,6 +17,9 @@ def _job_match_filter() -> Dict[str, Any]:
             {
                 "$or": [
                     {"moderationStatus": "Approved"},
+                    {"moderationStatus": "approved"},
+                    {"moderationStatus": "Active"},
+                    {"moderationStatus": "active"},
                     {"moderationStatus": {"$exists": False}},
                 ]
             },
@@ -30,10 +34,44 @@ def _job_match_filter() -> Dict[str, Any]:
 
 
 def _user_skill_list(user: Dict[str, Any], profile: Any) -> List[str]:
-    u_skills = list(user.get("skills") or [])
+    def _flatten_skills(raw: Any) -> List[str]:
+        out: List[str] = []
+        if raw is None:
+            return out
+        if isinstance(raw, str):
+            out.extend([s.strip() for s in raw.split(",") if s.strip()])
+            return out
+        if isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, str):
+                    t = item.strip()
+                    if t:
+                        out.append(t)
+                elif isinstance(item, dict):
+                    for key in ("name", "skill", "title", "label", "value"):
+                        val = item.get(key)
+                        if isinstance(val, str) and val.strip():
+                            out.append(val.strip())
+                            break
+            return out
+        if isinstance(raw, dict):
+            for val in raw.values():
+                out.extend(_flatten_skills(val))
+        return out
+
+    u_skills = _flatten_skills(user.get("skills"))
+    u_skills.extend(_flatten_skills(user.get("coreSkills")))
+    u_skills.extend(_flatten_skills(user.get("skillSet")))
+    u_skills.extend(_flatten_skills(user.get("technicalSkills")))
+
     p_skills: List[str] = []
     if profile and isinstance(profile, dict):
-        p_skills = list(profile.get("skills") or [])
+        p_skills.extend(_flatten_skills(profile.get("skills")))
+        p_skills.extend(_flatten_skills(profile.get("coreSkills")))
+        p_skills.extend(_flatten_skills(profile.get("skillSet")))
+        p_skills.extend(_flatten_skills(profile.get("technicalSkills")))
+        p_skills.extend(_flatten_skills((profile.get("preferences") or {}).get("skills")))
+
     merged = []
     seen = set()
     for s in u_skills + p_skills:
@@ -76,6 +114,118 @@ def _job_to_rec(
     }
 
 
+def _normalize_skill_tokens(values: List[str]) -> Set[str]:
+    out: Set[str] = set()
+    for v in values:
+        t = str(v).strip().lower()
+        if not t:
+            continue
+        out.add(t)
+        for part in re.split(r"[,/]|(?:\s+)", t):
+            p = part.strip()
+            if len(p) >= 2:
+                out.add(p)
+    return out
+
+
+def _extract_seeker_skills_from_payload(seeker_profile: Dict[str, Any]) -> List[str]:
+    skills: List[str] = []
+    for key in ("skills", "profileSkills"):
+        raw = seeker_profile.get(key)
+        if isinstance(raw, list):
+            for s in raw:
+                if s:
+                    skills.append(str(s).strip())
+        elif isinstance(raw, str) and raw.strip():
+            skills.extend([x.strip() for x in raw.split(",") if x.strip()])
+    return [s for s in skills if s]
+
+
+def _build_job_blob_from_payload(job: Dict[str, Any]) -> str:
+    parts = [
+        job.get("title"),
+        job.get("job_title"),
+        job.get("description"),
+        job.get("job_description"),
+        job.get("requirements"),
+        job.get("company_name"),
+        job.get("location"),
+        job.get("type"),
+        job.get("job_type"),
+        job.get("experience_level"),
+        job.get("category"),
+    ]
+    tags = job.get("tags") or []
+    if isinstance(tags, list):
+        parts.extend([str(x) for x in tags if x])
+    req_skills = job.get("requiredSkills") or []
+    if isinstance(req_skills, list):
+        parts.extend([str(x) for x in req_skills if x])
+    return " ".join(str(x) for x in parts if x).lower()
+
+
+def recommend_from_payload(
+    user_id: str,
+    seeker_profile: Dict[str, Any],
+    jobs: List[Dict[str, Any]],
+    top_n: int = 10,
+) -> List[Dict[str, Any]]:
+    if not seeker_profile or not isinstance(seeker_profile, dict):
+        return []
+    if not jobs or not isinstance(jobs, list):
+        return []
+
+    seeker_skill_values = _extract_seeker_skills_from_payload(seeker_profile)
+    seeker_tokens = _normalize_skill_tokens(seeker_skill_values)
+    if not seeker_tokens:
+        return []
+
+    ranked: List[Tuple[float, Dict[str, Any], str]] = []
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        blob = _build_job_blob_from_payload(job)
+        if not blob.strip():
+            continue
+
+        matched: List[str] = []
+        for sk in seeker_skill_values:
+            s = sk.lower()
+            if s and s in blob:
+                matched.append(sk)
+
+        score = min(1.0, 0.18 * len(set(x.lower() for x in matched)))
+        if score <= 0:
+            continue
+
+        reason_skills = matched[:3]
+        reason = (
+            f"Matched with your skills: {', '.join(reason_skills)}"
+            if reason_skills
+            else "Matched based on your profile and job content overlap"
+        )
+        ranked.append((score, job, reason))
+
+    ranked.sort(key=lambda x: x[0], reverse=True)
+    out: List[Dict[str, Any]] = []
+    for score, job, reason in ranked[:top_n]:
+        jid = job.get("_id") or job.get("id")
+        if jid is None:
+            continue
+        out.append(
+            {
+                "job_id": str(jid),
+                "title": job.get("title") or job.get("job_title") or "Role",
+                "company": job.get("company_name") or "",
+                "location": job.get("location") or "",
+                "salary": job.get("salary_range"),
+                "similarity_score": float(score),
+                "reason": reason,
+            }
+        )
+    return out
+
+
 async def _fetch_applied_job_ids(user_oid: ObjectId) -> Set[str]:
     db = get_db()
     cursor = db["applications"].find(
@@ -114,7 +264,10 @@ async def content_based_recommend(user_id: str, top_n: int = 10) -> List[Dict[st
     if not user:
         return []
     profile = await db["profiles"].find_one({"userId": user_oid})
+    print("user_keys:", sorted(list(user.keys())))
+    print("profile_keys:", sorted(list((profile or {}).keys())))
     user_skills = _user_skill_list(user, profile)
+    print("user_skills:", user_skills)
     user_skills_lower = [s.lower() for s in user_skills if str(s).strip()]
     professional_headline = str(user.get("professionalHeadline") or "").strip()
     profile_headline = str((profile or {}).get("headline") or "").strip()
@@ -130,22 +283,28 @@ async def content_based_recommend(user_id: str, top_n: int = 10) -> List[Dict[st
         or ""
     ).strip().lower()
 
-    user_prefs = user.get("jobPreferences") or {}
-    profile_prefs = (profile or {}).get("jobPreferences") or {}
+    user_prefs = user.get("jobPreferences") or user.get("preferences") or {}
+    profile_prefs = (profile or {}).get("jobPreferences") or (profile or {}).get("preferences") or {}
     preferred_location = str(
         user_prefs.get("location")
+        or user.get("preferredLocation")
         or profile_prefs.get("preferredLocation")
         or profile_prefs.get("location")
+        or (profile or {}).get("location")
         or ""
     ).strip().lower()
     preferred_job_type = str(
         user_prefs.get("jobType")
+        or user_prefs.get("preferredJobType")
         or (profile_prefs.get("jobTypes") or [""])[0]
+        or profile_prefs.get("jobType")
         or ""
     ).strip().lower()
     preferred_seniority = str(
         user_prefs.get("seniority")
+        or user_prefs.get("experienceLevel")
         or profile_prefs.get("seniority")
+        or profile_prefs.get("experienceLevel")
         or ""
     ).strip().lower()
 

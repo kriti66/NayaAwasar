@@ -55,8 +55,8 @@ export const sendSignupOTP = async (req, res) => {
         const normalizedEmail = email.toLowerCase().trim();
         const normalizedRole = normalizeRole(role);
 
-        const existingUser = await User.findOne({ email: normalizedEmail }).select('_id isDeleted').lean();
-        if (existingUser && !existingUser.isDeleted) {
+        const existingUser = await User.findOne({ email: normalizedEmail }).select('_id isDeleted isRemoved').lean();
+        if (existingUser && !existingUser.isDeleted && !existingUser.isRemoved) {
             return res.status(409).json({ success: false, message: 'Email already exists.' });
         }
 
@@ -153,20 +153,25 @@ export const verifySignupOTP = async (req, res) => {
         }
 
         const existingUser = await User.findOne({ email: normalizedEmail });
-        if (existingUser && !existingUser.isDeleted) {
+        if (existingUser && !existingUser.isDeleted && !existingUser.isRemoved) {
             await PendingSignup.deleteOne({ _id: pending._id });
             return res.status(409).json({ success: false, message: 'Email already exists. Please login.' });
         }
 
         let user;
         let restored = false;
-        if (existingUser && existingUser.isDeleted) {
+        if (existingUser && (existingUser.isDeleted || existingUser.isRemoved)) {
             existingUser.fullName = pending.fullName;
             existingUser.password = pending.passwordHash;
             existingUser.role = normalizeRole(pending.role);
             existingUser.isDeleted = false;
             existingUser.deletedAt = null;
             existingUser.deletedBy = null;
+            existingUser.isRemoved = false;
+            existingUser.removedAt = null;
+            existingUser.isSuspended = false;
+            existingUser.suspendedAt = null;
+            existingUser.suspendReason = '';
             existingUser.isActive = true;
             existingUser.provider = 'local';
             existingUser.providerId = null;
@@ -286,10 +291,16 @@ export const sendOtp = async (req, res) => {
             console.warn(`⚠️ OTP request failed: User not found for ${email}`);
             return res.status(404).json({ success: false, message: "User not found with this email." });
         }
-        if (user.isDeleted) {
+        if (user.isDeleted || user.isRemoved) {
             return res.status(403).json({
                 success: false,
                 message: 'This account has been removed. Register again with the same email to restore it, or contact support.'
+            });
+        }
+        if (user.isSuspended) {
+            return res.status(403).json({
+                success: false,
+                message: 'This account has been suspended. Please contact support.'
             });
         }
 
@@ -356,8 +367,11 @@ export const verifyOtp = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found." });
         }
-        if (user.isDeleted) {
+        if (user.isDeleted || user.isRemoved) {
             return res.status(403).json({ success: false, message: 'This account has been removed.' });
+        }
+        if (user.isSuspended) {
+            return res.status(403).json({ success: false, message: 'This account has been suspended. Please contact support.' });
         }
 
         // Check if OTP exists and is not expired
@@ -388,8 +402,11 @@ export const resetPassword = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: "User not found." });
         }
-        if (user.isDeleted) {
+        if (user.isDeleted || user.isRemoved) {
             return res.status(403).json({ success: false, message: 'This account has been removed.' });
+        }
+        if (user.isSuspended) {
+            return res.status(403).json({ success: false, message: 'This account has been suspended. Please contact support.' });
         }
 
         // Verify again to ensure security (or check a "verified" flag in session/token)
@@ -418,28 +435,77 @@ export const resetPassword = async (req, res) => {
     }
 };
 
+function looksLikeJwtIdToken(t) {
+    return typeof t === 'string' && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(t.trim());
+}
+
 // 4. GOOGLE LOGIN
 export const googleLogin = async (req, res) => {
     const { token } = req.body;
     if (!token) return res.status(400).json({ success: false, message: "Google token is required." });
 
-    try {
-        const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-        const ticket = await client.verifyIdToken({
-            idToken: token,
-            audience: process.env.GOOGLE_CLIENT_ID,
-        });
+    const clientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
+    if (!clientId) {
+        console.error('Google login: GOOGLE_CLIENT_ID is missing (check backend/.env)');
+        return res.status(503).json({ success: false, message: 'Google sign-in is not configured on the server.' });
+    }
 
-        const payload = ticket.getPayload();
-        const { sub, email, name, picture } = payload;
+    try {
+        const client = new OAuth2Client(clientId);
+        let sub;
+        let email;
+        let name;
+        let picture;
+
+        if (looksLikeJwtIdToken(token)) {
+            const ticket = await client.verifyIdToken({
+                idToken: token.trim(),
+                audience: clientId
+            });
+            const payload = ticket.getPayload();
+            sub = payload.sub;
+            email = payload.email;
+            name = payload.name;
+            picture = payload.picture;
+        } else {
+            // @react-oauth/google useGoogleLogin returns an OAuth 2.0 access_token (not a JWT id_token).
+            const info = await client.getTokenInfo(token.trim());
+            const aud = String(info.audience || info.aud || '').trim();
+            if (aud && aud !== clientId) {
+                return res.status(401).json({ success: false, message: 'Invalid Google token.' });
+            }
+            const { data } = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${token.trim()}` }
+            });
+            sub = data.sub;
+            email = data.email;
+            name = data.name;
+            picture = data.picture;
+        }
+
+        if (!email) {
+            return res.status(400).json({ success: false, message: 'Google did not return an email for this account.' });
+        }
 
         let user = await User.findOne({ email: email.toLowerCase().trim() });
 
         if (user) {
-            if (user.isDeleted) {
+            if (user.isDeleted || user.isRemoved) {
                 return res.status(403).json({
                     success: false,
                     message: 'This account has been removed. Use email registration with the same address to restore your account, or contact support.'
+                });
+            }
+            if (user.isSuspended) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'This account has been suspended. Please contact support.'
+                });
+            }
+            if (user.isActive === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Your account has been deactivated by the administrator. Please contact support.'
                 });
             }
             if (user.role === 'admin') {
@@ -456,7 +522,7 @@ export const googleLogin = async (req, res) => {
             }
         } else {
             user = new User({
-                fullName: name.trim(),
+                fullName: (name || email.split('@')[0] || 'User').trim(),
                 email: email.toLowerCase().trim(),
                 provider: 'google',
                 providerId: sub,
@@ -521,10 +587,22 @@ export const facebookLogin = async (req, res) => {
         let user = await User.findOne({ email: email.toLowerCase().trim() });
 
         if (user) {
-            if (user.isDeleted) {
+            if (user.isDeleted || user.isRemoved) {
                 return res.status(403).json({
                     success: false,
                     message: 'This account has been removed. Use email registration with the same address to restore your account, or contact support.'
+                });
+            }
+            if (user.isSuspended) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'This account has been suspended. Please contact support.'
+                });
+            }
+            if (user.isActive === false) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Your account has been deactivated by the administrator. Please contact support.'
                 });
             }
             if (user.role === 'admin') {

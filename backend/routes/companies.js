@@ -4,7 +4,7 @@ import Job from '../models/Job.js';
 import RecruiterKyc from '../models/RecruiterKyc.js';
 import Application from '../models/Application.js';
 import { requireAuth, requireRole, requireKycApproved, requireCompanyApproved, requireAdmin, getJwtSecret } from '../middleware/auth.js';
-import { PUBLIC_MODERATION_MATCH } from '../utils/jobModeration.js';
+import { PUBLIC_MODERATION_MATCH, RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED } from '../utils/jobModeration.js';
 import { hasMeaningfulChanges } from '../utils/companyVerificationUtils.js';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
@@ -115,10 +115,11 @@ router.get('/my', requireAuth, async (req, res) => {
             return res.status(404).json({ message: 'No company found and no KYC data available to prefill.' });
         }
 
+        const companyJobFilter = { company_id: company._id, ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED };
         // Calculate Statistics for "my" company as well
-        const totalJobs = await Job.countDocuments({ company_id: company._id });
-        const activeOpenings = await Job.countDocuments({ company_id: company._id, status: 'Active' });
-        const companyJobIds = await Job.find({ company_id: company._id }).select('_id');
+        const totalJobs = await Job.countDocuments(companyJobFilter);
+        const activeOpenings = await Job.countDocuments({ ...companyJobFilter, status: 'Active' });
+        const companyJobIds = await Job.find(companyJobFilter).select('_id');
         const successfulHires = await Application.countDocuments({
             job_id: { $in: companyJobIds.map(j => j._id) },
             status: 'hired'
@@ -151,7 +152,8 @@ router.get('/me/jobs', requireAuth, async (req, res) => {
         const limit = parseInt(req.query.limit) || 3;
         const jobs = await Job.find({
             company_id: company._id,
-            status: 'Active'
+            status: 'Active',
+            ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED
         })
             .sort({ createdAt: -1 })
             .limit(limit)
@@ -251,11 +253,12 @@ router.get('/me/stats', requireAuth, async (req, res) => {
             return res.status(404).json({ message: 'Company not found' });
         }
 
+        const companyJobFilter = { company_id: company._id, ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED };
         const stats = {
-            totalJobs: await Job.countDocuments({ company_id: company._id }),
-            activeOpenings: await Job.countDocuments({ company_id: company._id, status: 'Active' }),
+            totalJobs: await Job.countDocuments(companyJobFilter),
+            activeOpenings: await Job.countDocuments({ ...companyJobFilter, status: 'Active' }),
             successfulHires: await Application.countDocuments({
-                job_id: { $in: await Job.find({ company_id: company._id }).distinct('_id') },
+                job_id: { $in: await Job.find(companyJobFilter).distinct('_id') },
                 status: 'hired'
             })
         };

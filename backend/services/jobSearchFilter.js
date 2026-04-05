@@ -38,6 +38,16 @@ function escapeRegex(s) {
     return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Express may pass a single string or an array for repeated query keys. */
+function firstQueryString(value) {
+    if (value == null) return '';
+    if (Array.isArray(value)) {
+        const first = value.find((v) => v != null && String(v).trim() !== '');
+        return first == null ? '' : String(first).trim();
+    }
+    return String(value).trim();
+}
+
 /**
  * Normalize tags from comma-separated string or array → lowercase trimmed strings.
  */
@@ -157,9 +167,9 @@ export function inferCategoriesFromSearch(searchText) {
  * - tags — comma-separated; job must match each tag (regex on tags array)
  */
 export function buildJobListMongoFilter(query = {}) {
-    const q = (query.q || query.search || '').trim();
+    const q = firstQueryString(query.q ?? query.search);
     const categories = normalizeCategoryParams(query.category);
-    const locations = (query.location || '').trim();
+    const locations = firstQueryString(query.location);
     const jobTypes = parseCommaParam(query.jobType);
     const experienceLevels = parseCommaParam(query.experienceLevel);
     const tagFilters = parseCommaParam(query.tags);

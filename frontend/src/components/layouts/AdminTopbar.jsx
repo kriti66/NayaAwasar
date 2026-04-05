@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { LogOut, Menu, X, LayoutDashboard, Users, Building2, Briefcase, Megaphone, ShieldCheck, MessageSquare, MapPin, CreditCard, Lock } from 'lucide-react';
+import { LogOut, Menu, X, LayoutDashboard, Users, Building2, Briefcase, Megaphone, ShieldCheck, MessageSquare, MapPin, CreditCard, Lock, Quote, UsersRound } from 'lucide-react';
 import { useNotifications } from '../../hooks/useNotifications';
 import NotificationBell from '../notifications/NotificationBell';
 import NotificationDropdown from '../notifications/NotificationDropdown';
@@ -17,6 +17,8 @@ const mobileNavItems = [
     { label: 'Promotion Requests', path: '/admin/promotion-requests', icon: CreditCard },
     { label: 'KYC Panel', path: '/admin/kyc', icon: ShieldCheck },
     { label: 'Contact Messages', path: '/admin/contact-messages', icon: MessageSquare },
+    { label: 'Testimonials', path: '/admin/testimonials', icon: Quote },
+    { label: 'Team', path: '/admin/team', icon: UsersRound },
     { label: 'Location', path: '/admin/location', icon: MapPin },
 ];
 

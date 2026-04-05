@@ -1,10 +1,12 @@
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 
 class RecommendRequest(BaseModel):
     user_id: str
+    seeker_profile: Optional[Dict[str, Any]] = None
+    jobs: Optional[List[Dict[str, Any]]] = None
     limit: int = Field(default=10, ge=1, le=100)
 
 

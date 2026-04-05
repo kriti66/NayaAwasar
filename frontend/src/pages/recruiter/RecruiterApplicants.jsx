@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
@@ -9,11 +9,25 @@ import ScheduleInterviewModal from './ScheduleInterviewModal';
 import RecruiterRescheduleModal from './RecruiterRescheduleModal';
 import { API_BASE_URL } from '../../config/api';
 
+function notifyRecruiterCalendarRefetch() {
+    window.dispatchEvent(new Event('recruiter:calendarRefetch'));
+}
+
+function resolveUserPhotoUrl(path) {
+    if (!path || typeof path !== 'string') return null;
+    const p = path.trim();
+    if (!p) return null;
+    if (p.startsWith('http://') || p.startsWith('https://')) return p;
+    return `${API_BASE_URL}${p.startsWith('/') ? '' : '/'}${p}`;
+}
+
 const RecruiterApplicants = () => {
     const { user } = useAuth();
     const location = useLocation();
     const [jobs, setJobs] = useState([]);
     const [selectedJobId, setSelectedJobId] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [sortBy, setSortBy] = useState('newest');
     const [applicants, setApplicants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [expandedAppId, setExpandedAppId] = useState(null);
@@ -64,58 +78,62 @@ const RecruiterApplicants = () => {
         return next;
     };
 
-    const refreshApplicantsAndStats = async () => {
-        if (!selectedJobId) return;
+    const refreshApplicantsAndStats = useCallback(async () => {
+        if (!user?.id) return;
         setLoading(true);
         try {
-            const res = await api.get(`/applications/job/${selectedJobId}`);
-            setApplicants(res.data || []);
-            setStats(computePipelineStats(res.data || []));
+            const params = { sort: sortBy };
+            if (selectedJobId) params.jobId = selectedJobId;
+            if (statusFilter && statusFilter !== 'all') params.status = statusFilter;
+
+            const res = await api.get('/applications/recruiter', { params });
+            const payload = res.data || {};
+            const list = payload.applications || [];
+            setApplicants(list);
+            setStats(
+                payload.stats && typeof payload.stats.total === 'number'
+                    ? payload.stats
+                    : computePipelineStats(list)
+            );
             window.dispatchEvent(new Event('recruiter:applicationsUpdated'));
         } catch (error) {
-            console.error("[RecruiterApplicants] Error fetching applicants:", error);
-            toast.error(error.response?.data?.message || "Failed to load applicants");
+            console.error('[RecruiterApplicants] Error fetching applicants:', error);
+            toast.error(error.response?.data?.message || 'Failed to load applicants');
         } finally {
             setLoading(false);
         }
-    };
+    }, [user?.id, selectedJobId, statusFilter, sortBy]);
 
     useEffect(() => {
+        if (!user?.id) return;
+
         const fetchJobs = async () => {
             try {
-                console.log('[RecruiterApplicants] Fetching recruiter jobs...');
                 const res = await api.get('/recruiter/jobs');
-                console.log('[RecruiterApplicants] Fetched jobs:', res.data);
-                setJobs(res.data);
-                if (res.data.length > 0) {
-                    const queryParams = new URLSearchParams(location.search);
-                    const queryJobId = queryParams.get('jobId');
+                const all = res.data || [];
+                setJobs(all);
 
-                    if (queryJobId && res.data.some(job => (job._id || job.id) === queryJobId)) {
-                        console.log('[RecruiterApplicants] Setting job from URL:', queryJobId);
-                        setSelectedJobId(queryJobId);
-                    } else {
-                        const firstJobId = res.data[0]._id || res.data[0].id;
-                        console.log('[RecruiterApplicants] Setting selected job:', firstJobId);
-                        setSelectedJobId(firstJobId);
-                    }
+                const queryParams = new URLSearchParams(location.search);
+                const queryJobId = queryParams.get('jobId');
+
+                if (queryJobId && all.some((job) => String(job._id || job.id) === queryJobId)) {
+                    setSelectedJobId(queryJobId);
                 } else {
-                    console.log('[RecruiterApplicants] No jobs found');
-                    setLoading(false);
+                    setSelectedJobId('');
                 }
             } catch (error) {
-                console.error("[RecruiterApplicants] Error fetching jobs:", error);
-                console.error("[RecruiterApplicants] Error response:", error.response?.data);
-                setLoading(false);
+                console.error('[RecruiterApplicants] Error fetching jobs:', error);
+                toast.error(error.response?.data?.message || 'Failed to load jobs');
             }
         };
+
         fetchJobs();
-    }, []);
+    }, [user?.id, location.search]);
 
     useEffect(() => {
-        if (!selectedJobId) return;
+        if (!user?.id) return;
         refreshApplicantsAndStats();
-    }, [selectedJobId]);
+    }, [user?.id, refreshApplicantsAndStats]);
 
     const handleStatusChange = async (appId, newStatus) => {
         if (newStatus === 'interview') {
@@ -171,6 +189,7 @@ const RecruiterApplicants = () => {
                 reason: reason || 'Declined'
             });
             toast.success("Reschedule request rejected.");
+            notifyRecruiterCalendarRefetch();
             await refreshApplicantsAndStats();
         } catch (error) {
             console.error("Reject reschedule error:", error);
@@ -187,7 +206,8 @@ const RecruiterApplicants = () => {
                 ...payload
             });
 
-            toast.success(`Application status updated to ${status.replace('-', ' ')}`);
+            toast.success('Status updated and calendar synced');
+            notifyRecruiterCalendarRefetch();
             await refreshApplicantsAndStats();
 
         } catch (error) {
@@ -202,6 +222,7 @@ const RecruiterApplicants = () => {
             if (rescheduleModalData) {
                 await api.put(`/applications/${selectedApplicantId}/approve-reschedule-request`, interviewData);
                 toast.success("Reschedule request APPROVED and interview updated.");
+                notifyRecruiterCalendarRefetch();
                 await refreshApplicantsAndStats();
             } else {
                 await updateApplicationStatus(selectedApplicantId, 'interview', { interviewDetails: interviewData });
@@ -241,6 +262,7 @@ const RecruiterApplicants = () => {
             });
 
             toast.success('Reschedule request sent');
+            notifyRecruiterCalendarRefetch();
 
             setIsRecruiterRescheduleModalOpen(false);
             setRecruiterRescheduleApplicationId(null);
@@ -290,6 +312,18 @@ const RecruiterApplicants = () => {
         { value: 'rejected', label: 'Rejected' }
     ];
 
+    const pipelineStatusFilterOptions = [
+        { value: 'all', label: 'All Status' },
+        ...availableStatuses
+    ];
+
+    const sortOptions = [
+        { value: 'newest', label: 'Newest First' },
+        { value: 'oldest', label: 'Oldest First' },
+        { value: 'name_asc', label: 'Name A–Z' },
+        { value: 'name_desc', label: 'Name Z–A' }
+    ];
+
     const toggleExpand = (appId) => {
         setExpandedAppId(prev => (prev === appId ? null : appId));
     };
@@ -317,19 +351,59 @@ const RecruiterApplicants = () => {
                             <p className="text-gray-300 text-lg">Track and manage candidates for your active job postings in real-time.</p>
                         </div>
 
-                        <div className="w-full md:w-72 relative">
-                            <Briefcase size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50 z-10" />
-                            <select
-                                id="job-select"
-                                className="appearance-none block w-full pl-11 pr-10 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl shadow-sm text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#29a08e]/30 focus:border-[#29a08e] transition-all cursor-pointer"
-                                value={selectedJobId}
-                                onChange={(e) => setSelectedJobId(e.target.value)}
-                            >
-                                {jobs.map(job => (
-                                    <option key={job._id || job.id} value={job._id || job.id} className="text-gray-900">{job.title}</option>
-                                ))}
-                            </select>
-                            <ChevronDown size={16} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white/50 pointer-events-none" />
+                        <div className="w-full md:flex-1 md:max-w-4xl grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div className="relative">
+                                <Briefcase size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50 z-10 pointer-events-none" />
+                                <select
+                                    id="job-select"
+                                    className="appearance-none block w-full pl-11 pr-10 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl shadow-sm text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#29a08e]/30 focus:border-[#29a08e] transition-all cursor-pointer"
+                                    value={selectedJobId}
+                                    onChange={(e) => setSelectedJobId(e.target.value)}
+                                    aria-label="Filter by job"
+                                >
+                                    <option value="" className="text-gray-900">All Jobs</option>
+                                    {jobs.map((job) => (
+                                        <option key={job._id || job.id} value={job._id || job.id} className="text-gray-900">
+                                            {job.title}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown size={16} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white/50 pointer-events-none" />
+                            </div>
+                            <div className="relative">
+                                <Clock size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50 z-10 pointer-events-none" />
+                                <select
+                                    id="status-filter"
+                                    className="appearance-none block w-full pl-11 pr-10 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl shadow-sm text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#29a08e]/30 focus:border-[#29a08e] transition-all cursor-pointer"
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    aria-label="Filter by application status"
+                                >
+                                    {pipelineStatusFilterOptions.map((opt) => (
+                                        <option key={opt.value} value={opt.value} className="text-gray-900">
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown size={16} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white/50 pointer-events-none" />
+                            </div>
+                            <div className="relative">
+                                <FileText size={16} className="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/50 z-10 pointer-events-none" />
+                                <select
+                                    id="sort-applicants"
+                                    className="appearance-none block w-full pl-11 pr-10 py-3.5 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl shadow-sm text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#29a08e]/30 focus:border-[#29a08e] transition-all cursor-pointer"
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    aria-label="Sort applicants"
+                                >
+                                    {sortOptions.map((opt) => (
+                                        <option key={opt.value} value={opt.value} className="text-gray-900">
+                                            {opt.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                <ChevronDown size={16} className="absolute right-4 top-1/2 transform -translate-y-1/2 text-white/50 pointer-events-none" />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -347,7 +421,7 @@ const RecruiterApplicants = () => {
                         { label: 'Interview', count: stats.interview, icon: PhoneIncoming, color: 'text-purple-600', bg: 'bg-purple-50', gradient: 'from-purple-50 to-violet-50' },
                         { label: 'Offered', count: stats.offered, icon: Star, color: 'text-emerald-600', bg: 'bg-emerald-50', gradient: 'from-emerald-50 to-green-50' },
                         { label: 'Hired', count: stats.hired, icon: Award, color: 'text-[#29a08e]', bg: 'bg-[#29a08e]/10', gradient: 'from-[#29a08e]/5 to-teal-50' },
-                        { label: 'Lost', count: stats.rejected, icon: XCircle, color: 'text-rose-600', bg: 'bg-rose-50', gradient: 'from-rose-50 to-red-50' },
+                        { label: 'Rejected', count: stats.rejected, icon: XCircle, color: 'text-rose-600', bg: 'bg-rose-50', gradient: 'from-rose-50 to-red-50' },
                     ].map((stat, i) => (
                         <div key={i} className={`bg-gradient-to-br ${stat.gradient} p-4 rounded-2xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-[#29a08e]/20 transition-all duration-300 hover:-translate-y-0.5 flex flex-col items-center justify-center group`}>
                             <div className={`w-9 h-9 rounded-xl ${stat.bg} ${stat.color} flex items-center justify-center mb-2.5 group-hover:scale-110 transition-transform`}>
@@ -382,6 +456,7 @@ const RecruiterApplicants = () => {
                             {applicants.map((app) => {
                                 const applicantName = app.personalInfo?.fullName || app.seeker_id?.fullName || 'Anonymous';
                                 const applicantEmail = app.personalInfo?.email || app.seeker_id?.email;
+                                const photoSrc = resolveUserPhotoUrl(app.seeker_id?.profileImage);
                                 const interviewDoc = app.interview?.interviewId;
                                 const recruiterProposalPending =
                                     ['PENDING', 'PROPOSED'].includes(
@@ -394,15 +469,31 @@ const RecruiterApplicants = () => {
                                         <div className="flex flex-col lg:flex-row items-start lg:items-center gap-5">
                                             {/* Avatar & Name */}
                                             <div className="flex items-start gap-4 min-w-[250px]">
-                                                <div className="w-12 h-12 bg-gradient-to-br from-[#29a08e]/10 to-teal-50 rounded-xl flex items-center justify-center text-[#29a08e] font-black text-lg border border-[#29a08e]/10">
-                                                    {applicantName.charAt(0)}
-                                                </div>
-                                                <div>
+                                                {photoSrc ? (
+                                                    <img
+                                                        src={photoSrc}
+                                                        alt=""
+                                                        className="w-12 h-12 rounded-xl object-cover border border-[#29a08e]/15 shrink-0"
+                                                    />
+                                                ) : (
+                                                    <div className="w-12 h-12 bg-gradient-to-br from-[#29a08e]/10 to-teal-50 rounded-xl flex items-center justify-center text-[#29a08e] font-black text-lg border border-[#29a08e]/10 shrink-0">
+                                                        {applicantName.charAt(0)}
+                                                    </div>
+                                                )}
+                                                <div className="min-w-0">
                                                     <h4 className="text-base font-bold text-gray-900">{applicantName}</h4>
-                                                    <p className="text-xs font-medium text-gray-500">{applicantEmail}</p>
+                                                    <p className="text-xs font-medium text-gray-500 truncate">{applicantEmail}</p>
+                                                    {!selectedJobId && (
+                                                        <p className="mt-1.5 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-[#29a08e] bg-[#29a08e]/10 border border-[#29a08e]/20 px-2.5 py-1 rounded-lg max-w-full">
+                                                            <Briefcase size={12} className="shrink-0" />
+                                                            <span className="truncate">
+                                                                Applied for: {app.job_id?.title || 'Job'}
+                                                            </span>
+                                                        </p>
+                                                    )}
                                                     <div className="flex items-center gap-1.5 mt-1.5 text-xs font-medium text-gray-400">
-                                                        <MapPin size={12} />
-                                                        {app.personalInfo?.address || 'Not Provided'}
+                                                        <MapPin size={12} className="shrink-0" />
+                                                        <span className="truncate">{app.personalInfo?.address || 'Not Provided'}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -668,7 +759,11 @@ const RecruiterApplicants = () => {
                                 </div>
                             </div>
                             <h3 className="text-xl font-black text-gray-900 mb-2">No candidates found</h3>
-                            <p className="text-gray-500 text-sm max-w-sm mx-auto font-medium leading-relaxed">When candidates apply to this job posting, their profiles, resumes, and statuses will appear here.</p>
+                            <p className="text-gray-500 text-sm max-w-sm mx-auto font-medium leading-relaxed">
+                                {selectedJobId
+                                    ? 'When candidates apply to this job posting, their profiles, resumes, and statuses will appear here.'
+                                    : 'When candidates apply to your active listings, they will appear here. Adjust filters to narrow the list.'}
+                            </p>
                         </div>
                     )}
                 </div>

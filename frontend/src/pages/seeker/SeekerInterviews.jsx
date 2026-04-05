@@ -26,9 +26,19 @@ const SeekerInterviews = () => {
     const [activeTab, setActiveTab] = useState('upcoming');
 
     const { interviews, loading, refetch } = useInterviews();
-    const { upcomingInterviews, pastInterviews } = useMemo(
-        () => getInterviewBuckets(interviews),
+    const interviewsWithValidJob = useMemo(
+        () =>
+            interviews.filter((app) => {
+                const job = app.job_id;
+                if (job == null || job === undefined) return false;
+                if (typeof job === 'object' && job.moderationStatus === 'deleted') return false;
+                return true;
+            }),
         [interviews]
+    );
+    const { upcomingInterviews, pastInterviews } = useMemo(
+        () => getInterviewBuckets(interviewsWithValidJob),
+        [interviewsWithValidJob]
     );
     const visibleInterviews = activeTab === 'upcoming' ? upcomingInterviews : pastInterviews;
     const [actionLoading, setActionLoading] = useState(false);

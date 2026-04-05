@@ -7,6 +7,14 @@ import { getInterviewJoinWindow, combineDateAndTimeNepal } from '../utils/interv
 import { createNotification } from './notificationController.js';
 import { interviewCalendarMetadata } from '../utils/interviewNotificationMetadata.js';
 import { RESCHEDULE_FSM } from '../constants/reschedule.js';
+import { normalizeModerationStatusForEdit } from '../utils/jobModeration.js';
+
+/** Hide calendar rows when the job was hidden or soft-removed by admin (even if interview doc was not updated). */
+function jobModerationHidesInterview(job) {
+    if (!job || typeof job !== 'object') return false;
+    const n = normalizeModerationStatusForEdit(job.moderationStatus);
+    return n === 'hidden' || n === 'deleted';
+}
 
 const require = createRequire(import.meta.url);
 const { generateToken04 } = require('../utils/zegoServerAssistant.cjs');
@@ -322,13 +330,14 @@ function assertSlotNotInPast(dateVal, timeStr) {
 export const getRecruiterInterviewCalendar = async (req, res) => {
     try {
         const uid = req.user.id;
-        const rows = await Interview.find({ recruiterId: uid })
+        const rows = await Interview.find({ recruiterId: uid, status: { $ne: 'Cancelled' } })
             .populate('seekerId', 'fullName')
-            .populate('jobId', 'title company_name')
+            .populate('jobId', 'title company_name moderationStatus')
             .sort({ date: 1, time: 1 })
             .lean();
 
-        res.json({ interviews: rows.map(toRecruiterCalendarItem) });
+        const visible = rows.filter((doc) => !jobModerationHidesInterview(doc.jobId));
+        res.json({ interviews: visible.map(toRecruiterCalendarItem) });
     } catch (e) {
         console.error('getRecruiterInterviewCalendar', e);
         res.status(500).json({ message: 'Failed to load interview calendar' });
@@ -338,13 +347,14 @@ export const getRecruiterInterviewCalendar = async (req, res) => {
 export const getSeekerInterviewCalendar = async (req, res) => {
     try {
         const uid = req.user.id;
-        const rows = await Interview.find({ seekerId: uid })
+        const rows = await Interview.find({ seekerId: uid, status: { $ne: 'Cancelled' } })
             .populate('recruiterId', 'fullName')
-            .populate('jobId', 'title company_name')
+            .populate('jobId', 'title company_name moderationStatus')
             .sort({ date: 1, time: 1 })
             .lean();
 
-        res.json({ interviews: rows.map(toSeekerCalendarItem) });
+        const visible = rows.filter((doc) => !jobModerationHidesInterview(doc.jobId));
+        res.json({ interviews: visible.map(toSeekerCalendarItem) });
     } catch (e) {
         console.error('getSeekerInterviewCalendar', e);
         res.status(500).json({ message: 'Failed to load interview calendar' });

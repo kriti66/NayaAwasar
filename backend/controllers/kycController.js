@@ -6,8 +6,7 @@ import { validateJobSeekerKYC, validateRecruiterKYC } from '../services/kycValid
 import { logActivity } from '../utils/activityLogger.js';
 import { createNotification, notifyAdmins } from './notificationController.js';
 import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { uploadKycBuffer, IDENTITY_KYC_FIELD_FOLDER } from '../services/cloudinaryKycUpload.js';
 
 /**
  * POST /api/kyc/submit
@@ -222,12 +221,12 @@ export const getKYCStatus = async (req, res) => {
  */
 export const getPendingKYC = async (req, res) => {
     try {
-        const list = await KYC.find({ status: 'pending' })
+        const list = await KYC.find({ status: { $ne: 'approved' } })
             .populate('userId', 'fullName email role')
             .sort({ updatedAt: -1 })
             .lean();
 
-        const identityList = await IdentityKyc.find({ status: 'pending' })
+        const identityList = await IdentityKyc.find({ status: { $ne: 'verified' } })
             .populate('user', 'fullName email role')
             .sort({ updatedAt: -1 })
             .lean();
@@ -480,13 +479,6 @@ export const rejectKYCByUserId = async (req, res) => {
     }
 };
 
-const getIdentityFilePath = (file) => {
-    if (!file) return null;
-    const __dirname = path.dirname(fileURLToPath(import.meta.url));
-    const rel = path.relative(path.join(__dirname, '..'), file.path).replace(/\\/g, '/');
-    return `/${rel}`;
-};
-
 const isAdult = (dobValue) => {
     const dob = new Date(dobValue);
     if (Number.isNaN(dob.getTime())) return false;
@@ -546,6 +538,24 @@ export const submitIdentityKyc = async (req, res, next) => {
             return res.status(400).json({ message: `Invalid ${idType || 'ID'} number format.` });
         }
 
+        const frontFile = req.files.frontDoc[0];
+        const selfieFile = req.files.selfie[0];
+        const backFile = req.files.backDoc?.[0];
+
+        const frontDoc = await uploadKycBuffer(
+            frontFile.buffer,
+            frontFile.mimetype,
+            IDENTITY_KYC_FIELD_FOLDER.frontDoc
+        );
+        const selfie = await uploadKycBuffer(
+            selfieFile.buffer,
+            selfieFile.mimetype,
+            IDENTITY_KYC_FIELD_FOLDER.selfie
+        );
+        const backDoc = backFile
+            ? await uploadKycBuffer(backFile.buffer, backFile.mimetype, IDENTITY_KYC_FIELD_FOLDER.backDoc)
+            : null;
+
         const payload = {
             user: req.user.id,
             fullName,
@@ -554,9 +564,9 @@ export const submitIdentityKyc = async (req, res, next) => {
             address,
             idType,
             idNumber,
-            frontDoc: getIdentityFilePath(req.files.frontDoc[0]),
-            backDoc: req.files.backDoc?.[0] ? getIdentityFilePath(req.files.backDoc[0]) : null,
-            selfie: getIdentityFilePath(req.files.selfie[0]),
+            frontDoc,
+            backDoc,
+            selfie,
             status: 'pending',
             adminNote: null,
             submittedAt: new Date()

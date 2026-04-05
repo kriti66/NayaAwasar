@@ -2,8 +2,8 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import Profile from '../models/Profile.js';
 import { fileURLToPath } from 'url';
+import { uploadKycBuffer, UPLOAD_KYC_FIELD_FOLDER } from '../services/cloudinaryKycUpload.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,13 +11,12 @@ const rootDir = path.resolve(__dirname, '..');
 
 const router = express.Router();
 
-// Ensure upload directories exist using absolute paths
+// Ensure upload directories exist using absolute paths (CV / avatar remain local)
 const uploadBaseDir = path.join(rootDir, 'uploads');
 const uploadDirs = [
     uploadBaseDir,
     path.join(uploadBaseDir, 'avatars'),
     path.join(uploadBaseDir, 'cvs'),
-    path.join(uploadBaseDir, 'kyc'),
     path.join(uploadBaseDir, 'promotions')
 ];
 
@@ -28,38 +27,23 @@ uploadDirs.forEach(dir => {
     }
 });
 
-// Configure storage
-const storage = multer.diskStorage({
+// Disk storage: /upload/cv and /upload/avatar only
+const diskStorage = multer.diskStorage({
     destination: (req, file, cb) => {
         try {
-            // Debug Log
-            const debugMsg = `[${new Date().toISOString()}] Processing file: ${file.fieldname}\n`;
-            fs.appendFileSync('upload_debug.txt', debugMsg);
-
-            let targetSubdir = 'kyc';
-            if (file.fieldname === 'avatar') targetSubdir = 'avatars';
-            else if (file.fieldname === 'cv') targetSubdir = 'cvs';
-
-            const dest = path.join(uploadBaseDir, targetSubdir);
-
-            // Log destination
-            fs.appendFileSync('upload_debug.txt', `Target Dir: ${dest}\n`);
-
-            // double check existence just in case
+            const subdir = file.fieldname === 'avatar' ? 'avatars' : 'cvs';
+            const dest = path.join(uploadBaseDir, subdir);
             if (!fs.existsSync(dest)) {
                 fs.mkdirSync(dest, { recursive: true });
-                fs.appendFileSync('upload_debug.txt', `Created Dir: ${dest}\n`);
             }
-
             cb(null, dest);
         } catch (error) {
-            console.error("Multer destination error:", error);
-            try { fs.appendFileSync('upload_debug.txt', `ERROR: ${error.message}\n`); } catch (e) { }
+            console.error('Multer destination error:', error);
             cb(error);
         }
     },
     filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
         cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
 });
@@ -85,20 +69,40 @@ const fileFilter = (req, file, cb) => {
     cb(null, true);
 };
 
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for KYC
-    fileFilter: fileFilter
+const diskFileFilter = (req, file, cb) => {
+    if (file.fieldname !== 'avatar' && file.fieldname !== 'cv') {
+        return cb(new Error('Unexpected field for this upload'), false);
+    }
+    return fileFilter(req, file, cb);
+};
+
+const uploadDisk = multer({
+    storage: diskStorage,
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: diskFileFilter
 });
 
-// Custom middleware to handle multer errors for KYC
+const kycMemoryFileFilter = (req, file, cb) => {
+    if (file.fieldname === 'cv' || file.fieldname === 'avatar') {
+        return cb(new Error('Use /upload/cv or /upload/avatar for this file type'), false);
+    }
+    return fileFilter(req, file, cb);
+};
+
+const uploadKycMemory = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: kycMemoryFileFilter
+});
+
+// KYC documents → Cloudinary (secure_url returned in files[fieldname])
 router.post('/kyc', (req, res) => {
     try {
         console.log(`📥 Received KYC upload request. Content-Length: ${req.headers['content-length']}`);
 
-        upload.any()(req, res, (err) => {
+        uploadKycMemory.any()(req, res, async (err) => {
             if (err) {
-                console.error("❌ Multer/Upload error during KYC:", err);
+                console.error('❌ Multer/Upload error during KYC:', err);
                 if (err instanceof multer.MulterError) {
                     if (err.code === 'LIMIT_FILE_SIZE') {
                         return res.status(400).json({ message: 'File too large. Maximum size is 10MB.' });
@@ -109,28 +113,34 @@ router.post('/kyc', (req, res) => {
             }
 
             if (!req.files || req.files.length === 0) {
-                console.warn("⚠️ KYC Upload: No files found in request");
+                console.warn('⚠️ KYC Upload: No files found in request');
                 return res.status(400).json({ message: 'No files uploaded' });
             }
 
-            const fileUrls = {};
-            req.files.forEach(file => {
-                // Store path relative to the uploads folder or as a full URL path
-                // The frontend expects paths like /uploads/kyc/...
-                const relativePath = path.relative(rootDir, file.path).replace(/\\/g, '/');
-                fileUrls[file.fieldname] = `/${relativePath}`;
-            });
+            try {
+                const fileUrls = {};
+                for (const file of req.files) {
+                    const subfolder = UPLOAD_KYC_FIELD_FOLDER[file.fieldname];
+                    if (!subfolder) {
+                        return res.status(400).json({ message: `Unsupported file field: ${file.fieldname}` });
+                    }
+                    fileUrls[file.fieldname] = await uploadKycBuffer(file.buffer, file.mimetype, subfolder);
+                }
 
-            console.log("✅ KYC files uploaded successfully:", Object.keys(fileUrls));
+                console.log('✅ KYC files uploaded to Cloudinary:', Object.keys(fileUrls));
 
-            res.json({
-                success: true,
-                message: 'KYC files uploaded successfully',
-                files: fileUrls
-            });
+                res.json({
+                    success: true,
+                    message: 'KYC files uploaded successfully',
+                    files: fileUrls
+                });
+            } catch (uploadErr) {
+                console.error('Cloudinary KYC upload error:', uploadErr);
+                return res.status(500).json({ message: 'Failed to upload files to storage' });
+            }
         });
     } catch (error) {
-        console.error("🔥 Critical Error in KYC upload handler:", error);
+        console.error('🔥 Critical Error in KYC upload handler:', error);
         res.status(500).json({ message: 'Internal Server Error during upload init' });
     }
 });
@@ -138,7 +148,7 @@ router.post('/kyc', (req, res) => {
 import User from '../models/User.js';
 
 // Route to upload CV
-router.post('/cv', upload.single('cv'), async (req, res) => {
+router.post('/cv', uploadDisk.single('cv'), async (req, res) => {
     console.log("📥 Received CV upload request");
     if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
 
@@ -167,7 +177,7 @@ router.post('/cv', upload.single('cv'), async (req, res) => {
 });
 
 // Route to upload Profile Picture
-router.post('/avatar', upload.single('avatar'), async (req, res) => {
+router.post('/avatar', uploadDisk.single('avatar'), async (req, res) => {
     console.log("📥 Received Avatar upload request");
     if (!req.file) return res.status(400).json({ message: 'No image uploaded' });
 
