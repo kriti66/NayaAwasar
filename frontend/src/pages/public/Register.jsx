@@ -1,6 +1,44 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** @returns {{ isValid: boolean, errors: string[] }} */
+function validatePassword(password) {
+    const p = password ?? '';
+    const errors = [];
+    if (p.length < 8) {
+        errors.push('Minimum 8 characters');
+    }
+    if (!/[A-Z]/.test(p)) {
+        errors.push('1 uppercase letter required');
+    }
+    if (!/[0-9]/.test(p)) {
+        errors.push('1 number required');
+    }
+    if (!/[@#!$%^&*]/.test(p)) {
+        errors.push('1 special character required');
+    }
+    return { isValid: errors.length === 0, errors };
+}
+
+function validateConfirmPassword(password, confirmPassword) {
+    const c = confirmPassword ?? '';
+    if (!c) return { isValid: false, state: 'idle', error: '' };
+    if (c === password) return { isValid: true, state: 'match', error: '' };
+    return { isValid: false, state: 'mismatch', error: 'Passwords do not match.' };
+}
+
+function resetFormForRoleChange(formData, role) {
+    return {
+        ...formData,
+        role,
+        password: '',
+        confirmPassword: '',
+    };
+}
 
 const steps = [
     { id: 1, label: 'Role', icon: '🎯' },
@@ -19,6 +57,10 @@ const Register = () => {
         confirmPassword: ''
     });
     const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [passwordFocused, setPasswordFocused] = useState(false);
+    const [touched, setTouched] = useState({});
+    const [step2SubmitAttempted, setStep2SubmitAttempted] = useState(false);
     const [loading, setLoading] = useState(false);
     const [otpStage, setOtpStage] = useState(false);
     const [otpCode, setOtpCode] = useState('');
@@ -68,23 +110,60 @@ const Register = () => {
         return () => clearInterval(timer);
     }, [otpCooldown]);
 
+    const getStep2Validation = (data = formData) => {
+        const next = {
+            name: '',
+            email: '',
+            password: [],
+            confirmPassword: '',
+        };
+
+        if (!data.name.trim()) next.name = 'Full name is required.';
+        const trimmedEmail = data.email.trim();
+        if (!trimmedEmail) next.email = 'Email is required.';
+        else if (!EMAIL_REGEX.test(trimmedEmail)) next.email = 'Please enter a valid email address.';
+
+        if (!data.password) {
+            next.password = ['Password is required.'];
+        } else {
+            const pwdValidation = validatePassword(data.password);
+            next.password = pwdValidation.errors;
+        }
+
+        if (!data.confirmPassword) {
+            next.confirmPassword = 'Please confirm your password.';
+        } else {
+            const confirmValidation = validateConfirmPassword(data.password, data.confirmPassword);
+            if (!confirmValidation.isValid && confirmValidation.error) {
+                next.confirmPassword = confirmValidation.error;
+            }
+        }
+
+        const isValid =
+            !next.name &&
+            !next.email &&
+            next.password.length === 0 &&
+            !next.confirmPassword;
+        return { isValid, errors: next };
+    };
+
     const handleNext = () => {
         if (currentStep === 2) {
-            if (!formData.name || !formData.email || !formData.password) {
-                setError('Please fill in all required fields');
-                return;
-            }
-            if (formData.password.length < 6) {
-                setError('Password must be at least 6 characters');
-                return;
-            }
-            if (formData.password !== formData.confirmPassword) {
-                setError('Passwords do not match');
+            setStep2SubmitAttempted(true);
+            setTouched({
+                name: true,
+                email: true,
+                password: true,
+                confirmPassword: true,
+            });
+            const validation = getStep2Validation();
+            if (!validation.isValid) {
+                setError('');
                 return;
             }
         }
         setError('');
-        setCurrentStep(prev => prev + 1);
+        setCurrentStep((prev) => prev + 1);
     };
 
     const handleBack = () => {
@@ -97,11 +176,35 @@ const Register = () => {
         if (error) setError('');
     };
 
+    const markTouched = (field) => {
+        setTouched((prev) => ({ ...prev, [field]: true }));
+    };
+
     const handleRoleSelect = (role) => {
-        setFormData(prev => ({ ...prev, role }));
+        if (formData.role === role) return;
+        setFormData((prev) => resetFormForRoleChange(prev, role));
+        setTouched({});
+        setStep2SubmitAttempted(false);
+        setError('');
+        if (currentStep > 2) {
+            setCurrentStep(2);
+        }
     };
 
     const handleSubmit = async () => {
+        const validation = getStep2Validation();
+        if (!validation.isValid) {
+            setStep2SubmitAttempted(true);
+            setTouched({
+                name: true,
+                email: true,
+                password: true,
+                confirmPassword: true,
+            });
+            setCurrentStep(2);
+            setError('');
+            return;
+        }
         setLoading(true);
         setError('');
         setSuccessMessage('');
@@ -199,6 +302,67 @@ const Register = () => {
     ];
 
     const currentTips = formData.role === 'jobseeker' ? seekerTips : recruiterTips;
+
+    const validation = getStep2Validation();
+    const emailInvalid = !!validation.errors.email;
+    const passwordResult = validatePassword(formData.password);
+    const confirmValidation = validateConfirmPassword(formData.password, formData.confirmPassword);
+    const confirmState = confirmValidation.state;
+
+    const nameBorderClass =
+        (touched.name || step2SubmitAttempted) && !!validation.errors.name
+            ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+            : 'border-gray-200 focus:border-gray-300 focus:ring-0';
+
+    const emailBorderClass =
+        (touched.email || step2SubmitAttempted) && emailInvalid
+            ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+            : 'border-gray-200 focus:border-gray-300 focus:ring-0';
+
+    const passwordBorderClass = (() => {
+        const shouldShowPasswordErrors = touched.password || step2SubmitAttempted;
+        if (passwordResult.isValid && formData.password) {
+            return 'border-emerald-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20';
+        }
+        if (shouldShowPasswordErrors && !passwordResult.isValid) {
+            return 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20';
+        }
+        if (passwordFocused) {
+            return 'border-[#29a08e] focus:border-[#29a08e] focus:ring-2 focus:ring-[#29a08e]/25';
+        }
+        return 'border-gray-200 focus:border-gray-300 focus:ring-0';
+    })();
+
+    const confirmBorderClass =
+        confirmState === 'match'
+            ? 'border-emerald-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+            : (confirmState === 'mismatch' || (step2SubmitAttempted && !formData.confirmPassword))
+              ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+              : 'border-gray-200 focus:border-gray-300 focus:ring-0';
+
+    const defaultPasswordHelper =
+        'Use 8+ chars, 1 uppercase, 1 number, 1 special char';
+
+    const nameErrorMsg =
+        (touched.name || step2SubmitAttempted) && validation.errors.name ? validation.errors.name : null;
+
+    const emailErrorMsg =
+        touched.email || step2SubmitAttempted
+            ? validation.errors.email
+            : null;
+
+    const confirmFeedback = (() => {
+        if (confirmState === 'match') {
+            return { tone: 'ok', text: 'Passwords match' };
+        }
+        if (confirmState === 'mismatch') {
+            return { tone: 'err', text: 'Passwords do not match' };
+        }
+        if (step2SubmitAttempted && !formData.confirmPassword) {
+            return { tone: 'err', text: 'Please confirm your password.' };
+        }
+        return null;
+    })();
 
     return (
         <div className="min-h-screen flex">
@@ -468,7 +632,6 @@ const Register = () => {
                                     <h3 className="text-xl font-black text-gray-900">Account Details</h3>
                                     <p className="text-sm text-gray-500 mt-1">Fill in your information to get started</p>
                                 </div>
-
                                 {error && (
                                     <div className="flex items-start gap-3 bg-red-50 border border-red-200 p-4 rounded-xl">
                                         <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shrink-0 mt-0.5">
@@ -483,34 +646,132 @@ const Register = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div className="sm:col-span-2">
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
-                                        <input type="text" name="name" value={formData.name} onChange={handleChange}
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-gray-900 text-sm transition-all placeholder-gray-400"
-                                            placeholder="John Doe" />
+                                        <input
+                                            type="text"
+                                            name="name"
+                                            value={formData.name}
+                                            onChange={handleChange}
+                                            onBlur={() => markTouched('name')}
+                                            className={`w-full bg-gray-50 border rounded-xl py-3 px-4 text-gray-900 text-sm transition-all placeholder-gray-400 ${nameBorderClass}`}
+                                            placeholder="John Doe"
+                                            aria-invalid={nameErrorMsg ? 'true' : 'false'}
+                                        />
+                                        {nameErrorMsg && (
+                                            <p className="mt-1.5 text-sm text-red-600 font-medium" role="alert">
+                                                {nameErrorMsg}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="sm:col-span-2">
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
-                                        <input type="email" name="email" value={formData.email} onChange={handleChange}
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-gray-900 text-sm transition-all placeholder-gray-400"
-                                            placeholder="you@example.com" />
+                                        <input
+                                            type="email"
+                                            name="email"
+                                            value={formData.email}
+                                            onChange={handleChange}
+                                            onBlur={() => markTouched('email')}
+                                            className={`w-full bg-gray-50 border rounded-xl py-3 px-4 text-gray-900 text-sm transition-all placeholder-gray-400 ${emailBorderClass}`}
+                                            placeholder="you@example.com"
+                                            aria-invalid={emailErrorMsg ? 'true' : 'false'}
+                                        />
+                                        {emailErrorMsg && (
+                                            <p className="mt-1.5 text-sm text-red-600 font-medium" role="alert">
+                                                {emailErrorMsg}
+                                            </p>
+                                        )}
                                     </div>
-                                    <div>
+                                    <div className="sm:col-span-1">
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
                                         <div className="relative">
-                                            <input type={showPassword ? 'text' : 'password'} name="password" value={formData.password} onChange={handleChange}
-                                                className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-4 pr-10 text-gray-900 text-sm transition-all placeholder-gray-400"
-                                                placeholder="Min. 6 characters" />
-                                            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                </svg>
+                                            <input
+                                                type={showPassword ? 'text' : 'password'}
+                                                name="password"
+                                                value={formData.password}
+                                                onChange={handleChange}
+                                                onFocus={() => setPasswordFocused(true)}
+                                                onBlur={() => {
+                                                    markTouched('password');
+                                                    setPasswordFocused(false);
+                                                }}
+                                                className={`w-full bg-gray-50 border rounded-xl py-3 pl-4 pr-11 text-gray-900 text-sm transition-all placeholder-gray-400 ${passwordBorderClass}`}
+                                                placeholder="Enter a strong password"
+                                                autoComplete="new-password"
+                                                aria-invalid={(touched.password || step2SubmitAttempted) && !passwordResult.isValid ? 'true' : 'false'}
+                                                aria-describedby="register-password-hint"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword((v) => !v)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-0.5 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#29a08e]/40"
+                                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                            >
+                                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                             </button>
                                         </div>
+                                        <p
+                                            id="register-password-hint"
+                                            className={`mt-1.5 min-h-[1.25rem] text-xs sm:text-sm leading-5 ${
+                                                !(touched.password || step2SubmitAttempted)
+                                                    ? 'text-gray-500'
+                                                    : passwordResult.isValid
+                                                      ? 'text-emerald-600 font-medium'
+                                                      : 'text-red-600 font-medium'
+                                            }`}
+                                        >
+                                            {!(touched.password || step2SubmitAttempted) ? (
+                                                defaultPasswordHelper
+                                            ) : passwordResult.isValid ? (
+                                                '✓ Password looks good'
+                                            ) : (
+                                                <span className="block space-y-0.5">
+                                                    {validation.errors.password.map((pwdError) => (
+                                                        <span key={pwdError} className="flex items-center gap-1.5">
+                                                            <span className="inline-block h-1 w-1 rounded-full bg-current shrink-0"></span>
+                                                            <span>{pwdError}</span>
+                                                        </span>
+                                                    ))}
+                                                </span>
+                                            )}
+                                        </p>
                                     </div>
-                                    <div>
+                                    <div className="sm:col-span-1">
                                         <label className="block text-sm font-semibold text-gray-700 mb-2">Confirm Password</label>
-                                        <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleChange}
-                                            className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 px-4 text-gray-900 text-sm transition-all placeholder-gray-400"
-                                            placeholder="••••••••" />
+                                        <div className="relative">
+                                            <input
+                                                type={showConfirmPassword ? 'text' : 'password'}
+                                                name="confirmPassword"
+                                                value={formData.confirmPassword}
+                                                onChange={handleChange}
+                                                onBlur={() => markTouched('confirmPassword')}
+                                                className={`w-full bg-gray-50 border rounded-xl py-3 pl-4 pr-11 text-gray-900 text-sm transition-all placeholder-gray-400 ${confirmBorderClass}`}
+                                                placeholder="Re-enter your password"
+                                                autoComplete="new-password"
+                                                aria-invalid={
+                                                    confirmState === 'mismatch' ||
+                                                    (step2SubmitAttempted && !formData.confirmPassword)
+                                                        ? 'true'
+                                                        : 'false'
+                                                }
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowConfirmPassword((v) => !v)}
+                                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-0.5 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-[#29a08e]/40"
+                                                aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                                            >
+                                                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                            </button>
+                                        </div>
+                                        {confirmFeedback && (
+                                            <p
+                                                className={`mt-1.5 min-h-[1.25rem] text-xs sm:text-sm font-medium ${
+                                                    confirmFeedback.tone === 'ok' ? 'text-emerald-600' : 'text-red-600'
+                                                }`}
+                                                role="status"
+                                            >
+                                                {confirmFeedback.text}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
