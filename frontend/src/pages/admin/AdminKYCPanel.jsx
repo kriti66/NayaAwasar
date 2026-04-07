@@ -296,7 +296,15 @@ const AdminKYCPanel = () => {
                 role: k.role || 'jobseeker'
             }));
 
-            const next = [...seekerData, ...recruiterData];
+            const next = [...seekerData, ...recruiterData].filter((k) => {
+                if ((k.role || '').toLowerCase() === 'jobseeker') {
+                    return (k.status || '').toLowerCase() === 'pending';
+                }
+                const rep = (k.representativeStatus || '').toLowerCase();
+                const comp = (k.companyStatus || '').toLowerCase();
+                const status = (k.status || '').toLowerCase();
+                return rep === 'pending' || comp === 'pending' || status === 'pending';
+            });
             setPendingKYC(next);
             if (preserveSelection) {
                 setSelectedKYC((prev) => {
@@ -450,10 +458,12 @@ const AdminKYCPanel = () => {
         return () => document.removeEventListener('keydown', onKeyDown);
     }, [rejectConfirmOpen, rejectModalSection, processing]);
 
-    const filteredKYC = pendingKYC.filter(kyc =>
-        kyc.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        kyc.role.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredKYC = pendingKYC.filter((kyc) => {
+        const fullName = String(kyc.fullName || '').toLowerCase();
+        const role = String(kyc.role || '').toLowerCase();
+        const term = searchTerm.toLowerCase();
+        return fullName.includes(term) || role.includes(term);
+    });
 
     const rejectionAttemptsUsed = selectedKYC?.rejectionHistory?.length ?? 0;
     const attemptsExhausted =

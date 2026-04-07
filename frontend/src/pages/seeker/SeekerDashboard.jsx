@@ -31,6 +31,44 @@ import {
     BarChart3
 } from 'lucide-react';
 
+/** Effective KYC state for dashboard banners (identity flow + legacy + user snapshot). */
+async function fetchSeekerKycBannerState(api, user) {
+    try {
+        const idRes = await api.get('/kyc/identity/status');
+        const idStatus = idRes.data?.status;
+        const idData = idRes.data?.data;
+        if (idData && idStatus && idStatus !== 'not_submitted') {
+            if (idStatus === 'verified') return { kind: 'none' };
+            if (idStatus === 'pending') return { kind: 'pending' };
+            if (idStatus === 'rejected') {
+                return { kind: 'rejected', note: idRes.data?.adminNote || user?.kycRejectionReason };
+            }
+        }
+    } catch {
+        /* fall through */
+    }
+    try {
+        const leg = await api.get('/kyc/status');
+        const kd = leg.data?.kycData;
+        const ks = leg.data?.kycStatus || user?.kycStatus || 'not_submitted';
+        if (kd?.status === 'approved' || ks === 'approved') return { kind: 'none' };
+        if (kd?.status === 'pending' || ks === 'pending') return { kind: 'pending' };
+        if (kd?.status === 'rejected' || ks === 'rejected') {
+            return { kind: 'rejected', note: kd?.rejectionReason || leg.data?.kycRejectionReason || user?.kycRejectionReason };
+        }
+        if (kd?.status === 'resubmission_locked') {
+            return { kind: 'rejected', note: 'Verification is locked. Please contact support.' };
+        }
+    } catch {
+        /* fall through */
+    }
+    const u = user?.kycStatus || 'not_submitted';
+    if (u === 'approved') return { kind: 'none' };
+    if (u === 'pending') return { kind: 'pending' };
+    if (u === 'rejected') return { kind: 'rejected', note: user?.kycRejectionReason };
+    return { kind: 'action_required' };
+}
+
 const SeekerDashboard = () => {
     const { user } = useAuth();
     const { savedJobIds, setSavedJobIds, toggleSaveJob } = useJobSaver();
@@ -44,6 +82,7 @@ const SeekerDashboard = () => {
     const [appliedJobIds, setAppliedJobIds] = useState([]);
     const [upcomingInterviews, setUpcomingInterviews] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [kycBanner, setKycBanner] = useState({ kind: 'loading' });
     const [searchQuery, setSearchQuery] = useState('');
     const [locationQuery, setLocationQuery] = useState('');
 
@@ -93,6 +132,21 @@ const SeekerDashboard = () => {
     useEffect(() => {
         fetchDashboardData();
     }, [setSavedJobIds, user?.kycStatus]);
+
+    useEffect(() => {
+        if (!user || (user.role !== 'jobseeker' && user.role !== 'job_seeker')) {
+            setKycBanner({ kind: 'none' });
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            const state = await fetchSeekerKycBannerState(api, user);
+            if (!cancelled) setKycBanner(state);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [user]);
 
 
     const findJobsHref = (() => {
@@ -306,14 +360,36 @@ const SeekerDashboard = () => {
 
             {/* Main Content */}
             <main className="flex-1 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full -mt-16 pb-12 relative z-10">
-                {user?.kycStatus !== 'approved' && (
+                {kycBanner.kind === 'action_required' && (
                     <ActionRequiredBanner
-                        message={user?.kycStatus === 'pending'
-                            ? "Your verification is under review. You can browse jobs but application is restricted."
-                            : "Please complete your KYC verification to unlock full features like applying for jobs."}
-                        linkTo="/kyc/status"
-                        linkText={user?.kycStatus === 'pending' ? "Check Status" : "Verify Identity"}
+                        variant="default"
+                        title="Action Required"
+                        message="Please complete your KYC verification to unlock applying for jobs. You can still browse listings."
+                        linkTo="/kyc/job-seeker"
+                        linkText="Verify Identity"
                         urgency="Important"
+                    />
+                )}
+                {kycBanner.kind === 'pending' && (
+                    <ActionRequiredBanner
+                        variant="info"
+                        title="Under review"
+                        message="Your KYC is under review. Please wait—we will notify you when it is processed."
+                        linkTo="/kyc/status"
+                        linkText="View status"
+                    />
+                )}
+                {kycBanner.kind === 'rejected' && (
+                    <ActionRequiredBanner
+                        variant="danger"
+                        title="KYC rejected"
+                        message={
+                            kycBanner.note
+                                ? `Your KYC was rejected. ${kycBanner.note} Please resubmit with corrected documents.`
+                                : 'Your KYC was rejected. Please review the feedback and resubmit.'
+                        }
+                        linkTo="/kyc/job-seeker"
+                        linkText="Resubmit KYC"
                     />
                 )}
 

@@ -477,20 +477,37 @@ const FindJobs = () => {
                 const expLevels = filters.experienceLevel.flatMap((l) => SEEKER_EXP_TO_API[l] || []);
                 if (expLevels.length) params.experienceLevel = [...new Set(expLevels)].join(',');
                 if (selectedTags.length) params.tags = selectedTags.join(',');
-                const [jobsRes, savedRes] = await Promise.all([
+                const [jobsOutcome, savedOutcome] = await Promise.allSettled([
                     api.get('/jobs/for-seeker', { params, signal: ctrl.signal }),
                     api.get('/jobs/saved', { signal: ctrl.signal })
                 ]);
                 if (ctrl.signal.aborted || gen !== listFetchGen.current) return;
-                const payload = jobsRes.data;
-                const list = Array.isArray(payload?.jobs)
-                    ? payload.jobs
-                    : Array.isArray(payload)
-                      ? payload
-                      : [];
-                setJobs(list);
-                setHasPersonalizationData(payload?.hasPersonalizationData !== false);
-                setSavedJobIds(normalizeIds(savedRes.data?.savedJobIds));
+
+                if (jobsOutcome.status === 'fulfilled') {
+                    const payload = jobsOutcome.value.data;
+                    const list = Array.isArray(payload?.jobs)
+                        ? payload.jobs
+                        : Array.isArray(payload)
+                          ? payload
+                          : [];
+                    setJobs(list);
+                    setHasPersonalizationData(payload?.hasPersonalizationData !== false);
+                } else {
+                    const err = jobsOutcome.reason;
+                    if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
+                    console.error('[FindJobs] Error fetching jobs:', err?.message || err);
+                    toast.error('Failed to load jobs');
+                    setJobs([]);
+                }
+
+                if (savedOutcome.status === 'fulfilled') {
+                    setSavedJobIds(normalizeIds(savedOutcome.value.data?.savedJobIds));
+                } else {
+                    const err = savedOutcome.reason;
+                    if (err?.code !== 'ERR_CANCELED' && err?.name !== 'CanceledError') {
+                        console.warn('[FindJobs] Saved jobs fetch failed (list still shown):', err?.message || err);
+                    }
+                }
             } catch (error) {
                 if (error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return;
                 console.error('[FindJobs] Error fetching jobs:', error?.message || error);

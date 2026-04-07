@@ -5,7 +5,7 @@ import Job from '../models/Job.js';
 import Application from '../models/Application.js';
 import Company from '../models/Company.js';
 import User from '../models/User.js';
-import { requireAuth, requireRole, requireKycApproved, requireAdmin, requireCompanyApproved, requireKycVerified, requireRecruiterKycApproved, getJwtSecret } from '../middleware/auth.js';
+import { requireAuth, requireRole, requireKycApproved, requireAdmin, requireCompanyApproved, requireRecruiterKycApproved, getJwtSecret } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { getPromotedJobs } from '../controllers/promotedJobController.js';
 import {
@@ -408,8 +408,8 @@ router.get('/for-seeker', requireAuth, requireRole('jobseeker', 'job_seeker'), a
     }
 });
 
-// Get saved jobs (single source of truth - valid, deduplicated)
-router.get('/saved', requireAuth, requireKycVerified, async (req, res) => {
+// Get saved jobs (browse/bookmark — KYC is enforced on apply, not here)
+router.get('/saved', requireAuth, async (req, res) => {
     const userId = req.user.id;
     try {
         const validIds = await getValidSavedJobIds(userId);
@@ -744,8 +744,8 @@ router.post('/admin/clean-saved-jobs', requireAuth, requireAdmin, async (req, re
     }
 });
 
-// Toggle Save Job (Jobseeker only)
-router.post('/:id/save', requireAuth, requireKycVerified, async (req, res) => {
+// Toggle Save Job (Jobseeker only; KYC enforced on apply only)
+router.post('/:id/save', requireAuth, async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 

@@ -126,10 +126,11 @@ export const submitKYC = async (req, res) => {
             }
         }
 
+        const isResubmitAfterRejection = priorKycForNotify?.status === 'rejected';
         await logActivity(
             userId,
-            'KYC_SUBMITTED',
-            `KYC application submitted by '${submittedRole}'.`,
+            isResubmitAfterRejection ? 'KYC_RESUBMITTED' : 'KYC_SUBMITTED',
+            isResubmitAfterRejection ? 'KYC resubmitted for review.' : 'KYC submitted for review.',
             { role: submittedRole }
         );
 
@@ -138,7 +139,6 @@ export const submitKYC = async (req, res) => {
         if (notifyFirstOrResubmitAfterReject) {
             const submitter = await User.findById(userId).select('fullName email').lean();
             const displayName = submitter?.fullName?.trim() || submitter?.email || 'A user';
-            const isResubmitAfterRejection = priorKycForNotify?.status === 'rejected';
             const isRecruiterSubmit = submittedRole === 'recruiter';
 
             if (isResubmitAfterRejection) {
@@ -181,13 +181,33 @@ export const submitKYC = async (req, res) => {
     }
 };
 
+function buildLegacyKycDocuments(kyc) {
+    if (!kyc) return [];
+    const out = [];
+    const push = (url, label, key) => {
+        const u = url && String(url).trim();
+        if (u) out.push({ key, label, url: u });
+    };
+    push(kyc.documentFront, 'Document (front)', 'documentFront');
+    push(kyc.documentBack, 'Document (back)', 'documentBack');
+    push(kyc.selfieWithId, 'Selfie with ID', 'selfieWithId');
+    push(kyc.idFront, 'ID (front)', 'idFront');
+    push(kyc.idBack, 'ID (back)', 'idBack');
+    push(kyc.registrationDocument, 'Registration document', 'registrationDocument');
+    push(kyc.taxDocument, 'Tax document', 'taxDocument');
+    push(kyc.companyLogo, 'Company logo', 'companyLogo');
+    return out;
+}
+
 /**
  * GET /api/kyc/status - Current user's KYC status (from User + KYC).
  */
 export const getKYCStatus = async (req, res) => {
     try {
         const userId = req.user.id;
-        const user = await User.findById(userId).select('kycStatus kycRejectionReason kycCompletedAt').lean();
+        const user = await User.findById(userId)
+            .select('kycStatus kycRejectionReason kycCompletedAt isKycSubmitted isKycVerified')
+            .lean();
         const kyc = await KYC.findOne({ userId }).lean();
 
         if (!user) return res.status(404).json({ message: 'User not found' });
@@ -206,6 +226,7 @@ export const getKYCStatus = async (req, res) => {
             isKycVerified: user.isKycVerified || false,
             kycRejectionReason: user.kycRejectionReason || null,
             kycData: kyc || null,
+            documents: buildLegacyKycDocuments(kyc),
             kycCompletedAt: user.kycCompletedAt || null,
             companyStatus: companyStatus,
             resubmissionCount: kyc?.resubmissionCount || 0
@@ -221,12 +242,12 @@ export const getKYCStatus = async (req, res) => {
  */
 export const getPendingKYC = async (req, res) => {
     try {
-        const list = await KYC.find({ status: { $ne: 'approved' } })
+        const list = await KYC.find({ status: 'pending' })
             .populate('userId', 'fullName email role')
             .sort({ updatedAt: -1 })
             .lean();
 
-        const identityList = await IdentityKyc.find({ status: { $ne: 'verified' } })
+        const identityList = await IdentityKyc.find({ status: 'pending' })
             .populate('user', 'fullName email role')
             .sort({ updatedAt: -1 })
             .lean();
@@ -321,10 +342,10 @@ export const approveKYCByUserId = async (req, res) => {
 
         const approvedUser = await User.findById(userId);
         await logActivity(
-            req.user.id,
+            userId,
             'KYC_APPROVED',
-            `KYC for '${approvedUser?.fullName || 'User'}' approved.`,
-            { userId }
+            'Your KYC was approved.',
+            { reviewedBy: req.user.id }
         );
 
         // Notify User
@@ -407,6 +428,13 @@ export const rejectKYCByUserId = async (req, res) => {
                 kycRejectionReason: reason
             });
 
+            await logActivity(
+                userId,
+                'KYC_REJECTED',
+                'Your KYC was rejected.',
+                { reason }
+            );
+
             await createNotification({
                 recipient: userId,
                 type: 'kyc_rejected',
@@ -439,13 +467,12 @@ export const rejectKYCByUserId = async (req, res) => {
             kycRejectionReason: reason
         });
 
-        // Log KYC rejection activity
-        const rejectedUser = await User.findById(userId);
+        // Log KYC rejection activity for the affected user
         await logActivity(
-            req.user.id,
+            userId,
             'KYC_REJECTED',
-            `KYC for '${rejectedUser?.fullName || 'User'}' rejected.`,
-            { userId }
+            'Your KYC was rejected.',
+            { reason }
         );
 
         // Notify User
@@ -495,13 +522,32 @@ const idPatterns = {
     'PAN Card': /^[0-9]{9}$/
 };
 
+/** Build a stable list of uploaded file URLs for the identity KYC form / clients. */
+function buildIdentityKycDocuments(kyc) {
+    if (!kyc) return [];
+    const out = [];
+    const push = (url, label, key) => {
+        const u = url && String(url).trim();
+        if (u) out.push({ key, label, url: u });
+    };
+    push(kyc.frontDoc, 'ID document (front)', 'frontDoc');
+    push(kyc.backDoc, 'ID document (back)', 'backDoc');
+    push(kyc.selfie, 'Selfie with ID', 'selfie');
+    return out;
+}
+
 export const getIdentityKycStatus = async (req, res, next) => {
     try {
         const kyc = await IdentityKyc.findOne({ user: req.user.id }).lean();
         if (!kyc) {
-            return res.json({ status: 'not_submitted', data: null });
+            return res.json({ status: 'not_submitted', data: null, documents: [] });
         }
-        return res.json({ status: kyc.status, adminNote: kyc.adminNote || null, data: kyc });
+        return res.json({
+            status: kyc.status,
+            adminNote: kyc.adminNote || null,
+            data: kyc,
+            documents: buildIdentityKycDocuments(kyc)
+        });
     } catch (err) {
         return next(err);
     }
@@ -576,6 +622,21 @@ export const submitIdentityKyc = async (req, res, next) => {
             { user: req.user.id },
             { $set: payload },
             { upsert: true, new: true, runValidators: true }
+        );
+
+        await User.findByIdAndUpdate(req.user.id, {
+            kycStatus: 'pending',
+            isKycSubmitted: true,
+            isKycVerified: false,
+            kycRejectionReason: null
+        });
+
+        const isResubmission = existing?.status === 'rejected';
+        await logActivity(
+            req.user.id,
+            isResubmission ? 'KYC_RESUBMITTED' : 'KYC_SUBMITTED',
+            isResubmission ? 'KYC resubmitted for review.' : 'KYC submitted for review.',
+            { flow: 'identity' }
         );
 
         const submitter = await User.findById(req.user.id).select('fullName email').lean();

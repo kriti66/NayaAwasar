@@ -157,6 +157,10 @@ router.get('/', async (req, res) => {
                 if (act.type === 'APPLIED_JOB') message = `You applied to ${act.meta?.jobTitle || 'a job'}`;
                 else if (act.type === 'RECRUITER_VIEW') message = `${act.meta?.companyName || 'A recruiter'} viewed your profile`;
                 else if (act.type === 'MESSAGE') message = `New message from ${act.meta?.senderName || 'Recruiter'}`;
+                else if (act.type === 'KYC_SUBMITTED') message = 'KYC submitted for review';
+                else if (act.type === 'KYC_RESUBMITTED') message = 'KYC resubmitted for review';
+                else if (act.type === 'KYC_APPROVED') message = 'Your KYC was approved';
+                else if (act.type === 'KYC_REJECTED') message = 'Your KYC was rejected';
                 else message = 'New activity';
 
                 return {
@@ -394,13 +398,17 @@ router.get('/admin/stats', async (req, res) => {
         const totalUsers = await User.countDocuments({});
         const totalJobs = await Job.countDocuments({});
         const activeRecruiters = await User.countDocuments({ role: 'recruiter' });
-        // Same definition as KYC panel queue: all non-approved seeker KYC + non-verified identity + recruiter rows not fully approved
-        const unresolvedSeekerKyc = await KYC.countDocuments({ status: { $ne: 'approved' } });
-        const unresolvedIdentityKyc = await IdentityKyc.countDocuments({ status: { $ne: 'verified' } });
-        const unresolvedRecruiterKyc = await RecruiterKyc.countDocuments({
-            $nor: [{ representativeStatus: 'approved', companyStatus: 'approved' }]
+        // Match Admin KYC queue exactly: only entries currently pending review.
+        const pendingSeekerKyc = await KYC.countDocuments({ status: 'pending' });
+        const pendingIdentityKyc = await IdentityKyc.countDocuments({ status: 'pending' });
+        const pendingRecruiterKyc = await RecruiterKyc.countDocuments({
+            $or: [
+                { representativeStatus: 'pending' },
+                { companyStatus: 'pending' },
+                { status: 'pending' }
+            ]
         });
-        const pendingKYC = unresolvedSeekerKyc + unresolvedIdentityKyc + unresolvedRecruiterKyc;
+        const pendingKYC = pendingSeekerKyc + pendingIdentityKyc + pendingRecruiterKyc;
         const approvedKYC = await KYC.countDocuments({ status: 'verified' });
 
         res.json({

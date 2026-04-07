@@ -41,9 +41,12 @@ const RecentActivityWidget = () => {
             case 'STATUS_CHANGE':
                 return { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-50', label: 'Status Update' };
             case 'KYC_SUBMITTED':
+            case 'KYC_RESUBMITTED':
+                return { icon: FileText, color: 'text-teal-500', bg: 'bg-teal-50', label: 'KYC Submitted' };
             case 'KYC_APPROVED':
+                return { icon: CheckCircle, color: 'text-emerald-600', bg: 'bg-emerald-50', label: 'KYC Approved' };
             case 'KYC_REJECTED':
-                return { icon: FileText, color: 'text-teal-500', bg: 'bg-teal-50', label: 'KYC Verification' };
+                return { icon: Clock, color: 'text-rose-600', bg: 'bg-rose-50', label: 'KYC Rejected' };
             default:
                 return { icon: Activity, color: 'text-gray-500', bg: 'bg-gray-50', label: 'System' };
         }

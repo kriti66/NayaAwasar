@@ -283,9 +283,13 @@ export const getRecruiterKycStatus = async (req, res) => {
 export const getPendingRecruiterKycs = async (req, res) => {
     try {
         console.log("[Admin] Fetching pending recruiter KYCs");
-        // Drop from queue only when both representative and company are approved
+        // Queue = only records currently pending review.
         const kycs = await RecruiterKyc.find({
-            $nor: [{ representativeStatus: 'approved', companyStatus: 'approved' }]
+            $or: [
+                { representativeStatus: 'pending' },
+                { companyStatus: 'pending' },
+                { status: 'pending' }
+            ]
         })
             .populate('userId', 'email fullName role') // Include role
             .sort({ createdAt: 1 });

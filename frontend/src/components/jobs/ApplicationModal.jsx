@@ -70,10 +70,12 @@ const ApplicationModal = ({ job, onClose, onSuccess }) => {
             const code = errorData.code;
             const msg = errorData.message || "Failed to apply.";
 
-            if (code === 'KYC_REQUIRED') {
+            const kycApplyCodes = ['KYC_REQUIRED', 'KYC_PENDING', 'KYC_REJECTED', 'KYC_NOT_APPROVED'];
+            if (kycApplyCodes.includes(code)) {
                 toast.error(msg);
-                onClose(); // Hide modal
-                navigate('/kyc/status');
+                onClose();
+                const next = errorData.redirectPath || '/kyc/status';
+                navigate(next);
             } else if (code === 'RESUME_REQUIRED' || code === 'SKILLS_REQUIRED' || code === 'PROFILE_WEAK') {
                 toast.error(msg);
                 onClose();

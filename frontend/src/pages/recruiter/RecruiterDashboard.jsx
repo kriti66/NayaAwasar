@@ -7,6 +7,29 @@ import KycGuard from '../../components/common/KycGuard';
 import CompanyLogo from '../../components/common/CompanyLogo';
 import RecruiterModerationWarningsBanner from '../../components/recruiter/RecruiterModerationWarningsBanner';
 
+async function fetchRecruiterKycBannerState(api, user) {
+    try {
+        const leg = await api.get('/kyc/status');
+        const kd = leg.data?.kycData;
+        const ks = leg.data?.kycStatus || user?.kycStatus || 'not_submitted';
+        if (kd?.status === 'approved' || ks === 'approved') return { kind: 'none' };
+        if (kd?.status === 'pending' || ks === 'pending') return { kind: 'pending' };
+        if (kd?.status === 'rejected' || ks === 'rejected') {
+            return { kind: 'rejected', note: kd?.rejectionReason || leg.data?.kycRejectionReason || user?.kycRejectionReason };
+        }
+        if (kd?.status === 'resubmission_locked') {
+            return { kind: 'rejected', note: 'Verification is locked. Please contact support.' };
+        }
+    } catch {
+        /* fall through */
+    }
+    const u = user?.kycStatus || 'not_submitted';
+    if (u === 'approved') return { kind: 'none' };
+    if (u === 'pending') return { kind: 'pending' };
+    if (u === 'rejected') return { kind: 'rejected', note: user?.kycRejectionReason };
+    return { kind: 'action_required' };
+}
+
 const AnimatedCounter = ({ end, suffix = '' }) => {
     const [count, setCount] = useState(0);
     useEffect(() => {
@@ -33,6 +56,7 @@ const RecruiterDashboard = () => {
     const [stats, setStats] = useState({ posted_jobs: 0, applicants: 0 });
     const [recentJobs, setRecentJobs] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [kycBanner, setKycBanner] = useState({ kind: 'loading' });
 
     const NumberSkeleton = ({ w = 40 }) => (
         <div
@@ -59,6 +83,18 @@ const RecruiterDashboard = () => {
         };
 
         fetchData();
+    }, [user]);
+
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        (async () => {
+            const state = await fetchRecruiterKycBannerState(api, user);
+            if (!cancelled) setKycBanner(state);
+        })();
+        return () => {
+            cancelled = true;
+        };
     }, [user]);
 
     useEffect(() => {
@@ -142,15 +178,41 @@ const RecruiterDashboard = () => {
             <main className="flex-1 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full -mt-16 pb-16 relative z-10">
 
                 {/* KYC Banner */}
-                {user?.kycStatus !== 'approved' && (
+                {kycBanner.kind === 'action_required' && (
                     <div className="mb-8">
                         <ActionRequiredBanner
-                            message={user?.kycStatus === 'pending'
-                                ? "Your verification is under review. You can browse but posting jobs is restricted."
-                                : "Please complete company verification to post jobs and view applicants."}
-                            linkTo="/kyc/status"
-                            linkText={user?.kycStatus === 'pending' ? "Check Status" : "Verify Company"}
+                            variant="default"
+                            title="Action Required"
+                            message="Please complete company verification to post jobs and manage applicants."
+                            linkTo="/kyc/recruiter"
+                            linkText="Verify Company"
                             urgency="Important"
+                        />
+                    </div>
+                )}
+                {kycBanner.kind === 'pending' && (
+                    <div className="mb-8">
+                        <ActionRequiredBanner
+                            variant="info"
+                            title="Under review"
+                            message="Your KYC is under review. Please wait—we will notify you when it is processed."
+                            linkTo="/kyc/status"
+                            linkText="View status"
+                        />
+                    </div>
+                )}
+                {kycBanner.kind === 'rejected' && (
+                    <div className="mb-8">
+                        <ActionRequiredBanner
+                            variant="danger"
+                            title="KYC rejected"
+                            message={
+                                kycBanner.note
+                                    ? `Your KYC was rejected. ${kycBanner.note} Please resubmit where allowed.`
+                                    : 'Your KYC was rejected. Please review feedback and resubmit.'
+                            }
+                            linkTo="/kyc/recruiter"
+                            linkText="Resubmit KYC"
                         />
                     </div>
                 )}

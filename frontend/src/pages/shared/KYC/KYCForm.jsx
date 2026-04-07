@@ -6,6 +6,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import api from '../../../services/api';
+import { resolveAssetUrl } from '../../../utils/assetUrl';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const allowedFileTypes = ['image/jpeg', 'image/png', 'application/pdf'];
@@ -64,16 +66,32 @@ const formSchema = z
         }
     });
 
+function isProbablyImageUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const u = url.split('?')[0].toLowerCase();
+    return /\.(jpe?g|png|gif|webp)$/i.test(u);
+}
+
 const KYCForm = () => {
     const navigate = useNavigate();
+    const { refreshUser } = useAuth();
     const [statusData, setStatusData] = useState({ status: 'not_submitted', adminNote: '' });
+    const [uploadedDocuments, setUploadedDocuments] = useState([]);
     const [loadingStatus, setLoadingStatus] = useState(true);
     const [loadingSubmit, setLoadingSubmit] = useState(false);
     const [files, setFiles] = useState({ frontDoc: null, backDoc: null, selfie: null });
 
+    const normalizedStatus = String(statusData.status || 'not_submitted').toLowerCase();
+    const hasKycRecord = normalizedStatus !== 'not_submitted';
+    const isPending = normalizedStatus === 'pending';
+    const isApproved = normalizedStatus === 'approved' || normalizedStatus === 'verified';
+    const isRejected = normalizedStatus === 'rejected';
+    const showDocumentPreview = (isPending || isApproved || isRejected) && uploadedDocuments.length > 0;
+    const showUploadInputs = isRejected || !hasKycRecord;
+    const showSubmitButton = isRejected || !hasKycRecord;
     const isReadOnly = useMemo(
-        () => statusData.status === 'pending' || statusData.status === 'verified',
-        [statusData.status]
+        () => isPending || isApproved,
+        [isPending, isApproved]
     );
 
     const {
@@ -104,6 +122,8 @@ const KYCForm = () => {
                     status: res.data?.status || 'not_submitted',
                     adminNote: res.data?.adminNote || ''
                 });
+                const docs = Array.isArray(res.data?.documents) ? res.data.documents : [];
+                setUploadedDocuments(docs);
                 if (res.data?.data) {
                     const d = res.data.data;
                     setValue('fullName', d.fullName || '');
@@ -112,6 +132,13 @@ const KYCForm = () => {
                     setValue('address', d.address || '');
                     setValue('idType', d.idType || 'Citizenship');
                     setValue('idNumber', d.idNumber || '');
+                    if (!docs.length) {
+                        const fallback = [];
+                        if (d.frontDoc) fallback.push({ key: 'frontDoc', label: 'ID document (front)', url: d.frontDoc });
+                        if (d.backDoc) fallback.push({ key: 'backDoc', label: 'ID document (back)', url: d.backDoc });
+                        if (d.selfie) fallback.push({ key: 'selfie', label: 'Selfie with ID', url: d.selfie });
+                        setUploadedDocuments(fallback);
+                    }
                 }
             } catch {
                 toast.error('Unable to load KYC status.');
@@ -169,6 +196,24 @@ const KYCForm = () => {
             });
             toast.success('KYC submitted successfully.');
             setStatusData((prev) => ({ ...prev, status: 'pending' }));
+            try {
+                const refreshed = await api.get('/kyc/identity/status');
+                const docs = Array.isArray(refreshed.data?.documents) ? refreshed.data.documents : [];
+                setUploadedDocuments(docs);
+                if (!docs.length && refreshed.data?.data) {
+                    const d = refreshed.data.data;
+                    const fallback = [];
+                    if (d.frontDoc) fallback.push({ key: 'frontDoc', label: 'ID document (front)', url: d.frontDoc });
+                    if (d.backDoc) fallback.push({ key: 'backDoc', label: 'ID document (back)', url: d.backDoc });
+                    if (d.selfie) fallback.push({ key: 'selfie', label: 'Selfie with ID', url: d.selfie });
+                    setUploadedDocuments(fallback);
+                }
+            } catch {
+                /* non-fatal */
+            }
+            if (typeof refreshUser === 'function') {
+                refreshUser().catch(() => {});
+            }
         } catch (err) {
             if (err.response) {
                 switch (err.response.status) {
@@ -252,7 +297,7 @@ const KYCForm = () => {
                 </p>
             )}
 
-            {isReadOnly && (
+            {isPending && (
                 <p className="mb-4 text-sm text-yellow-800 bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                     Your KYC is under review. You cannot resubmit.
                 </p>
@@ -310,23 +355,63 @@ const KYCForm = () => {
 
                 <section className="space-y-4">
                     <h2 className="text-lg font-semibold text-[#0a9e8f]">Section 3 - Upload Documents</h2>
-                    <input type="file" name="frontDoc" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={onFileChange} disabled={isReadOnly} />
-                    <input type="file" name="backDoc" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={onFileChange} disabled={isReadOnly} />
-                    <input type="file" name="selfie" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={onFileChange} disabled={isReadOnly} />
-                    <p className="text-xs text-gray-500">Allowed: PDF, JPG, PNG up to 5MB.</p>
+                    {showDocumentPreview && (
+                        <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-4 space-y-3">
+                            <h3 className="text-sm font-bold text-gray-800">Previously uploaded documents</h3>
+                            <ul className="grid gap-4 sm:grid-cols-1 md:grid-cols-3">
+                                {uploadedDocuments.map((doc) => {
+                                    const href = resolveAssetUrl(doc.url);
+                                    const img = isProbablyImageUrl(href);
+                                    return (
+                                        <li key={doc.key} className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+                                            <p className="text-xs font-semibold text-gray-700 mb-2">{doc.label}</p>
+                                            {img ? (
+                                                <a href={href} target="_blank" rel="noopener noreferrer" className="block">
+                                                    <img
+                                                        src={href}
+                                                        alt={doc.label}
+                                                        className="w-full max-h-40 object-contain rounded-md border border-gray-100 bg-gray-50"
+                                                    />
+                                                </a>
+                                            ) : (
+                                                <a
+                                                    href={href}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm font-medium text-[#0a9e8f] hover:underline break-all"
+                                                >
+                                                    Open file
+                                                </a>
+                                            )}
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </div>
+                    )}
+                    {showUploadInputs && (
+                        <>
+                            <input type="file" name="frontDoc" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={onFileChange} disabled={isReadOnly} />
+                            <input type="file" name="backDoc" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={onFileChange} disabled={isReadOnly} />
+                            <input type="file" name="selfie" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={onFileChange} disabled={isReadOnly} />
+                            <p className="text-xs text-gray-500">Allowed: PDF, JPG, PNG up to 5MB.</p>
+                        </>
+                    )}
                 </section>
 
                 <div className="flex gap-3 justify-end">
                     <Link to="/seeker/dashboard" className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium">
                         Cancel
                     </Link>
-                    <button
-                        type="submit"
-                        disabled={isReadOnly || loadingSubmit}
-                        className="px-6 py-2.5 rounded-lg bg-[#0a9e8f] text-white font-semibold disabled:opacity-60"
-                    >
-                        {loadingSubmit ? 'Submitting...' : 'Submit for Verification'}
-                    </button>
+                    {showSubmitButton && (
+                        <button
+                            type="submit"
+                            disabled={isReadOnly || loadingSubmit}
+                            className="px-6 py-2.5 rounded-lg bg-[#0a9e8f] text-white font-semibold disabled:opacity-60"
+                        >
+                            {loadingSubmit ? 'Submitting...' : 'Submit for Verification'}
+                        </button>
+                    )}
                 </div>
             </form>
         </div>

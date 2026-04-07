@@ -4,7 +4,6 @@ import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { Mail, MapPin, Phone, Building, Calendar, User, CheckCircle, Shield, Edit3, Lock } from 'lucide-react';
 import EditProfileModal from '../../components/profile/EditProfileModal';
-import ChangePasswordModal from '../../components/profile/ChangePasswordModal';
 import { resolveAssetUrl } from '../../utils/assetUrl';
 import { useNavigate } from 'react-router-dom';
 
@@ -14,7 +13,6 @@ const RecruiterProfile = () => {
     const [summary, setSummary] = useState(null);
     const [loading, setLoading] = useState(true);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     const fetchProfileSummary = async () => {
         try {
@@ -139,13 +137,6 @@ const RecruiterProfile = () => {
                                     <Edit3 size={16} />
                                     Edit Profile
                                 </button>
-                                <button
-                                    onClick={() => setIsPasswordModalOpen(true)}
-                                    className="inline-flex items-center gap-2 px-6 py-2.5 bg-gray-100 text-gray-700 text-sm font-bold rounded-xl hover:bg-gray-200 transition-colors border border-gray-200"
-                                >
-                                    <Lock size={16} />
-                                    Change Password
-                                </button>
                             </div>
 
                             {/* Details Grid */}
@@ -212,11 +203,6 @@ const RecruiterProfile = () => {
                 onClose={() => setIsEditModalOpen(false)}
                 user={user}
                 onUpdate={fetchProfileSummary}
-            />
-
-            <ChangePasswordModal
-                isOpen={isPasswordModalOpen}
-                onClose={() => setIsPasswordModalOpen(false)}
             />
         </>
     );
