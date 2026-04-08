@@ -282,6 +282,12 @@ function toRecruiterCalendarItem(doc) {
         status,
         seeker_name: seeker?.fullName || 'Candidate',
         job_title: job?.title || 'Job',
+        company_name: job?.company_name || '',
+        location: doc.location || '',
+        notes: doc.notes || '',
+        duration: doc.duration || 30,
+        interviewer: doc.interviewer || '',
+        timezone: doc.timezone || '',
         reschedule_request: serializeRescheduleRequest(doc),
         reschedule_fsm: serializeWorkflowReschedule(doc)
     };
@@ -316,6 +322,42 @@ async function syncApplicationInterviewSlot(interview) {
         'interview.location': interview.location
     };
     await Application.updateOne({ _id: interview.applicationId }, { $set: patch });
+}
+
+async function autoCompleteInterviewAfterCall(interview, actorUserId) {
+    const bothJoined = Boolean(interview.recruiterJoinedAt) && Boolean(interview.seekerJoinedAt);
+    const bothLeft = Boolean(interview.recruiterLeftAt) && Boolean(interview.seekerLeftAt);
+    if (!bothJoined || !bothLeft) return false;
+    if (interview.status === 'Completed' || interview.calendarStatus === 'completed') return false;
+
+    interview.status = 'Completed';
+    interview.calendarStatus = 'completed';
+    interview.completedAt = interview.callEndedAt || new Date();
+    await interview.save();
+
+    const jobTitle = interview.jobId?.title || 'Interview';
+    const metadata = interviewCalendarMetadata(interview, { applicationId: interview.applicationId });
+    await createNotification({
+        recipient: interview.seekerId,
+        type: 'interview_completed',
+        category: 'interview',
+        title: 'Interview completed',
+        message: `Your interview for ${jobTitle} has been marked as completed.`,
+        link: '/seeker/calendar',
+        sender: actorUserId,
+        metadata
+    });
+    await createNotification({
+        recipient: interview.recruiterId,
+        type: 'interview_completed',
+        category: 'interview',
+        title: 'Interview completed',
+        message: `Your interview for ${jobTitle} has been marked as completed.`,
+        link: '/recruiter/calendar',
+        sender: actorUserId,
+        metadata
+    });
+    return true;
 }
 
 function assertSlotNotInPast(dateVal, timeStr) {
@@ -517,7 +559,11 @@ export const requestInterviewReschedule = async (req, res) => {
             message: `${isRec ? 'The recruiter' : 'The candidate'} requested a new time for ${jobTitle}.`,
             link: isRec ? '/seeker/calendar' : '/recruiter/calendar',
             sender: userId,
-            metadata: interviewCalendarMetadata(interview, { applicationId: interview.applicationId })
+            metadata: interviewCalendarMetadata(interview, {
+                applicationId: interview.applicationId,
+                interviewDate: newDate,
+                scheduledAt: combineDateAndTimeNepal(newDate, newTime)
+            })
         });
 
         res.json({ success: true, message: 'Reschedule request sent' });
@@ -591,7 +637,10 @@ export const acceptInterviewReschedule = async (req, res) => {
         await syncApplicationInterviewSlot(interview);
 
         const jobTitle = interview.jobId?.title || 'Interview';
-        const metaAfter = interviewCalendarMetadata(interview, { applicationId: interview.applicationId });
+        const metaAfter = interviewCalendarMetadata(interview, {
+            applicationId: interview.applicationId,
+            scheduledAt: combineDateAndTimeNepal(interview.date, interview.time)
+        });
         await createNotification({
             recipient: interview.recruiterId,
             type: 'interview_rescheduled',
@@ -719,5 +768,54 @@ export const cancelInterview = async (req, res) => {
     } catch (e) {
         console.error('cancelInterview', e);
         res.status(500).json({ message: 'Failed to cancel interview' });
+    }
+};
+
+export const recordInterviewCallEvent = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const event = String(req.body?.event || '').trim().toLowerCase();
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid interview id' });
+    }
+    if (event !== 'joined' && event !== 'left') {
+        return res.status(400).json({ message: 'event must be "joined" or "left"' });
+    }
+
+    try {
+        const interview = await Interview.findById(id).populate('jobId', 'title');
+        if (!interview) return res.status(404).json({ message: 'Interview not found' });
+
+        const isRecruiter = interview.recruiterId.toString() === userId;
+        const isSeeker = interview.seekerId.toString() === userId;
+        if (!isRecruiter && !isSeeker) return res.status(403).json({ message: 'Unauthorized' });
+
+        if (String(interview.mode || '').toLowerCase() !== 'online') {
+            return res.json({ success: true, skipped: true, reason: 'not_online_mode' });
+        }
+        if (interview.status !== 'Scheduled') {
+            return res.json({ success: true, skipped: true, reason: 'not_scheduled' });
+        }
+
+        const now = new Date();
+        if (event === 'joined') {
+            if (isRecruiter) interview.recruiterJoinedAt = interview.recruiterJoinedAt || now;
+            if (isSeeker) {
+                interview.seekerJoinedAt = interview.seekerJoinedAt || now;
+                interview.joined = true;
+            }
+        } else {
+            if (isRecruiter) interview.recruiterLeftAt = now;
+            if (isSeeker) interview.seekerLeftAt = now;
+            interview.callEndedAt = now;
+        }
+
+        await interview.save();
+        const completed = await autoCompleteInterviewAfterCall(interview, userId);
+        return res.json({ success: true, completed });
+    } catch (e) {
+        console.error('recordInterviewCallEvent', e);
+        return res.status(500).json({ message: 'Failed to record call event' });
     }
 };

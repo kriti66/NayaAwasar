@@ -2,6 +2,18 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 
+function validateNewPassword(password) {
+    const value = String(password || '');
+    const errors = [];
+    if (value.length < 8) errors.push('Minimum 8 characters required');
+    if (!/[A-Z]/.test(value)) errors.push('1 uppercase letter required');
+    if (!/[^A-Za-z0-9]/.test(value)) errors.push('1 special character required');
+    return {
+        isValid: errors.length === 0,
+        errors
+    };
+}
+
 const ResetPassword = () => {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -9,6 +21,8 @@ const ResetPassword = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
+    const [passwordTouched, setPasswordTouched] = useState(false);
+    const [submitAttempted, setSubmitAttempted] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
     const email = location.state?.email;
@@ -32,8 +46,17 @@ const ResetPassword = () => {
         );
     }
 
+    const passwordValidation = validateNewPassword(password);
+    const showPasswordErrors = (passwordTouched || submitAttempted) && !passwordValidation.isValid;
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setSubmitAttempted(true);
+        setPasswordTouched(true);
+        if (!passwordValidation.isValid) {
+            setError('Please meet all password requirements.');
+            return;
+        }
         if (password !== confirmPassword) {
             setError('Passwords do not match');
             return;
@@ -78,9 +101,9 @@ const ResetPassword = () => {
                     </p>
                     <div className="mt-8 space-y-3">
                         {[
-                            { icon: '✓', text: 'At least 6 characters long' },
-                            { icon: '✓', text: 'Mix of letters and numbers recommended' },
-                            { icon: '✓', text: 'Avoid using personal information' },
+                            { icon: '✓', text: 'Minimum 8 characters' },
+                            { icon: '✓', text: 'At least 1 uppercase letter' },
+                            { icon: '✓', text: 'At least 1 special character' },
                         ].map((item, i) => (
                             <div key={i} className="flex items-center gap-3">
                                 <span className="w-5 h-5 bg-[#29a08e]/30 rounded-full flex items-center justify-center text-xs text-[#29a08e] font-bold">{item.icon}</span>
@@ -134,9 +157,13 @@ const ResetPassword = () => {
                                         type={showPassword ? 'text' : 'password'}
                                         required
                                         value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
+                                        onChange={(e) => {
+                                            setPassword(e.target.value);
+                                            if (!passwordTouched) setPasswordTouched(true);
+                                        }}
+                                        onBlur={() => setPasswordTouched(true)}
                                         className="w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-4 pr-10 text-gray-900 text-sm placeholder-gray-400"
-                                        placeholder="Min. 6 characters"
+                                        placeholder="Min. 8 characters"
                                     />
                                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -144,6 +171,15 @@ const ResetPassword = () => {
                                         </svg>
                                     </button>
                                 </div>
+                                {showPasswordErrors && (
+                                    <div className="mt-2 space-y-1">
+                                        {passwordValidation.errors.map((msg) => (
+                                            <p key={msg} className="text-xs font-medium text-red-600">
+                                                {msg}
+                                            </p>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">Confirm Password</label>
@@ -158,7 +194,7 @@ const ResetPassword = () => {
                             </div>
                             <button
                                 type="submit"
-                                disabled={loading || !!successMessage}
+                                disabled={loading || !!successMessage || !passwordValidation.isValid}
                                 className="w-full py-3.5 bg-[#29a08e] text-white rounded-xl font-bold text-sm hover:bg-[#228377] transition-all shadow-lg shadow-[#29a08e]/20 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                             >
                                 {loading ? (

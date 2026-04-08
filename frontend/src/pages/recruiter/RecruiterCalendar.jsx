@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CalendarDays } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../services/api';
@@ -6,8 +7,7 @@ import { getApiErrorMessage } from '../../utils/apiErrorMessage';
 import {
     groupInterviewsByUtcDay,
     statusBadgeClasses,
-    formatDisplayDayKey,
-    isInterviewUpcoming
+    formatDisplayDayKey
 } from '../../utils/interviewCalendarUi';
 import InterviewCalendarGrid from '../../components/interviews/InterviewCalendarGrid';
 import InterviewCalendarLegend from '../../components/interviews/InterviewCalendarLegend';
@@ -18,8 +18,11 @@ import {
     formatRescheduleInstantNepal,
     rescheduleProposerDisplayName
 } from '../../utils/interviewRescheduleUi';
+import { getAvailableInterviewActions } from '../../utils/interviewCalendarActions';
+import { buildInterviewDetailsRoute } from '../../utils/interviewViewRouting';
 
 export default function RecruiterCalendar() {
+    const navigate = useNavigate();
     const now = new Date();
     const [year, setYear] = useState(now.getUTCFullYear());
     const [monthIndex, setMonthIndex] = useState(now.getUTCMonth());
@@ -140,17 +143,8 @@ export default function RecruiterCalendar() {
         }
     };
 
-    const handleComplete = async (id) => {
-        setBusyId(id);
-        try {
-            await api.patch(`/interviews/${id}/complete`);
-            toast.success('Marked complete');
-            await load();
-        } catch (e) {
-            toast.error(getApiErrorMessage(e, 'Could not complete interview'));
-        } finally {
-            setBusyId(null);
-        }
+    const handleViewInterview = (interviewId, applicationId, date) => {
+        navigate(buildInterviewDetailsRoute('recruiter', { interviewId, applicationId, date }));
     };
 
     const handleCancel = async () => {
@@ -241,8 +235,7 @@ export default function RecruiterCalendar() {
                                         {selectedList.map((inv) => {
                                             const ui = getInterviewRescheduleUiState(inv, 'recruiter');
                                             const fsm = inv.reschedule_fsm || {};
-                                            const canCancelInterview =
-                                                inv.status !== 'completed' && inv.status !== 'cancelled';
+                                            const actions = getAvailableInterviewActions(inv, 'recruiter');
                                             return (
                                             <li
                                                 key={inv.id}
@@ -337,9 +330,23 @@ export default function RecruiterCalendar() {
                                                         </button>
                                                     )}
 
-                                                    {inv.status === 'scheduled' &&
-                                                        isInterviewUpcoming(inv) &&
-                                                        ui.showRequestReschedule && (
+                                                    {actions.canViewInterview && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                handleViewInterview(
+                                                                    inv.id,
+                                                                    inv.application_id,
+                                                                    inv.date
+                                                                )
+                                                            }
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg bg-[#29a08e] text-white font-semibold hover:bg-[#238276] shadow-sm"
+                                                        >
+                                                            View interview
+                                                        </button>
+                                                    )}
+
+                                                    {actions.canRequestReschedule && ui.showRequestReschedule && (
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
@@ -351,7 +358,7 @@ export default function RecruiterCalendar() {
                                                             </button>
                                                         )}
 
-                                                    {canCancelInterview && (
+                                                    {actions.canCancelInterview && (
                                                         <button
                                                             type="button"
                                                             disabled={busyId === inv.id}
@@ -365,16 +372,6 @@ export default function RecruiterCalendar() {
                                                         </button>
                                                     )}
 
-                                                    {inv.status === 'scheduled' && (
-                                                        <button
-                                                            type="button"
-                                                            disabled={busyId === inv.id}
-                                                            onClick={() => handleComplete(inv.id)}
-                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg bg-slate-800 text-white font-medium hover:bg-slate-900 disabled:opacity-50"
-                                                        >
-                                                            Mark complete
-                                                        </button>
-                                                    )}
                                                 </div>
 
                                                 {ui.activeFsm && fsm.proposed_at && (

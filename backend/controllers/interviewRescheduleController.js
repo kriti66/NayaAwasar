@@ -3,6 +3,7 @@ import Interview from '../models/Interview.js';
 import Application from '../models/Application.js';
 import { combineDateAndTimeNepal, NEPAL_OFFSET_MS } from '../utils/interviewDateTime.js';
 import { createNotification } from './notificationController.js';
+import { interviewCalendarMetadata } from '../utils/interviewNotificationMetadata.js';
 import {
     MAX_RESCHEDULE_ROUNDS,
     RESCHEDULE_EXPIRY_HOURS,
@@ -172,6 +173,7 @@ export const requestReschedule = async (req, res) => {
 
     const otherId = role === 'recruiter' ? interview.seekerId : interview.recruiterId;
     const jobTitle = interview.jobId?.title || 'Interview';
+    await interview.save();
     await createNotification({
         recipient: otherId,
         type: 'reschedule_requested',
@@ -180,15 +182,10 @@ export const requestReschedule = async (req, res) => {
         message: `A new interview time was proposed for ${jobTitle}. Please respond in your calendar.`,
         link: role === 'recruiter' ? '/seeker/calendar' : '/recruiter/calendar',
         sender: userId,
-        metadata: {
-            interviewId: String(interview._id),
-            interview_date: interview.date
-                ? `${interview.date.getUTCFullYear()}-${String(interview.date.getUTCMonth() + 1).padStart(2, '0')}-${String(interview.date.getUTCDate()).padStart(2, '0')}`
-                : undefined
-        }
+        metadata: interviewCalendarMetadata(interview, {
+            scheduledAt: instant
+        })
     });
-
-    await interview.save();
     res.json({ success: true, message: 'Reschedule requested', interview });
 };
 
@@ -248,7 +245,7 @@ export const acceptReschedule = async (req, res) => {
         message: `The interview for ${jobTitle} was moved to the agreed time.`,
         link: role === 'recruiter' ? '/seeker/calendar' : '/recruiter/calendar',
         sender: userId,
-        metadata: { interviewId: String(interview._id) }
+        metadata: interviewCalendarMetadata(interview, { scheduledAt: proposed })
     });
 
     res.json({ success: true, message: 'Reschedule accepted', interview });
@@ -296,7 +293,7 @@ export const rejectReschedule = async (req, res) => {
         message: `Your reschedule request for ${jobTitle} was declined. The original time remains.`,
         link: role === 'recruiter' ? '/seeker/calendar' : '/recruiter/calendar',
         sender: userId,
-        metadata: { interviewId: String(interview._id) }
+        metadata: interviewCalendarMetadata(interview)
     });
 
     res.json({ success: true, message: 'Reschedule rejected', interview });
@@ -353,6 +350,7 @@ export const counterReschedule = async (req, res) => {
 
     const otherId = role === 'recruiter' ? interview.seekerId : interview.recruiterId;
     const jobTitle = interview.jobId?.title || 'Interview';
+    await interview.save();
     await createNotification({
         recipient: otherId,
         type: 'reschedule_requested',
@@ -361,10 +359,8 @@ export const counterReschedule = async (req, res) => {
         message: `A different time was proposed for ${jobTitle}. Please review in your calendar.`,
         link: role === 'recruiter' ? '/seeker/calendar' : '/recruiter/calendar',
         sender: userId,
-        metadata: { interviewId: String(interview._id) }
+        metadata: interviewCalendarMetadata(interview, { scheduledAt: instant })
     });
-
-    await interview.save();
     res.json({ success: true, message: 'Counter proposal sent', interview });
 };
 
@@ -410,7 +406,7 @@ export const cancelRescheduleRequest = async (req, res) => {
         message: `The reschedule request for ${jobTitle} was withdrawn. The original time remains.`,
         link: role === 'recruiter' ? '/seeker/calendar' : '/recruiter/calendar',
         sender: userId,
-        metadata: { interviewId: String(interview._id) }
+        metadata: interviewCalendarMetadata(interview)
     });
 
     res.json({ success: true, message: 'Reschedule request cancelled', interview });
@@ -443,7 +439,7 @@ export async function expireStaleRescheduleWorkflows() {
         interview.interviewStatus = 'scheduled';
 
         const jobTitle = interview.jobId?.title || 'Interview';
-        const meta = { interviewId: String(interview._id) };
+        const meta = interviewCalendarMetadata(interview);
 
         await createNotification({
             recipient: interview.recruiterId,

@@ -164,6 +164,7 @@ const InterviewCall = () => {
             }
 
             const { appId, token, roomId, userId, userName } = tokenData;
+            const interviewId = tokenData?.interviewId ? String(tokenData.interviewId).trim() : '';
             const roomID = String(roomId || '').trim();
             const userID = String(userId || '').trim();
             const name = String(userName != null ? userName : 'User').trim();
@@ -242,17 +243,31 @@ const InterviewCall = () => {
                 }
             };
 
+            const postCallEvent = async (evt) => {
+                if (!interviewId) return;
+                try {
+                    await api.post(`/interviews/${encodeURIComponent(interviewId)}/call-event`, {
+                        event: evt
+                    });
+                } catch (e) {
+                    console.warn('[InterviewCall] call-event failed:', e?.message || e);
+                }
+            };
+
             try {
                 zp.joinRoom({
                     container,
                     scenario: { mode: ZegoUIKitPrebuilt.OneONoneCall },
                     showPreJoinView: false,
-                    onLeaveRoom: () => navigate(-1),
+                    onLeaveRoom: () => {
+                        postCallEvent('left').finally(() => navigate(-1));
+                    },
                     // SDK 2.17.x only documents onJoinRoom (not onJoinRoomSuccess / onJoinRoomFailed).
                     onJoinRoom: () => {
                         if (cancelled) return;
                         clearWatchdog();
                         setJoining(false);
+                        postCallEvent('joined');
                         const role = String(user?.role || '').trim();
                         if (role === 'job_seeker' && applicationIdForJoined) {
                             markInterviewJoined(applicationIdForJoined).catch((e) =>
@@ -264,6 +279,7 @@ const InterviewCall = () => {
                         if (cancelled) return;
                         clearWatchdog();
                         console.error('[InterviewCall] onYouRemovedFromRoom');
+                        postCallEvent('left');
                         setErrorCode('ERROR');
                         setErrorMessage(
                             'You were removed from this interview. Please contact the host if this was unexpected.'

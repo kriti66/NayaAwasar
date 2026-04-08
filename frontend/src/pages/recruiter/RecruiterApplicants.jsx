@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
 import { toast } from 'react-hot-toast';
@@ -24,6 +24,9 @@ function resolveUserPhotoUrl(path) {
 const RecruiterApplicants = () => {
     const { user } = useAuth();
     const location = useLocation();
+    const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const applicationIdToScroll = searchParams.get('applicationId');
     const [jobs, setJobs] = useState([]);
     const [selectedJobId, setSelectedJobId] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -134,6 +137,23 @@ const RecruiterApplicants = () => {
         if (!user?.id) return;
         refreshApplicantsAndStats();
     }, [user?.id, refreshApplicantsAndStats]);
+
+    useEffect(() => {
+        if (!applicationIdToScroll || loading) return;
+        const paramsSnapshot = searchParams.toString();
+        setExpandedAppId(applicationIdToScroll);
+        const t = window.setTimeout(() => {
+            const el = document.getElementById(`recruiter-application-${applicationIdToScroll}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const next = new URLSearchParams(paramsSnapshot);
+                next.delete('applicationId');
+                const qs = next.toString();
+                navigate(`/recruiter/applications${qs ? `?${qs}` : ''}`, { replace: true });
+            }
+        }, 350);
+        return () => clearTimeout(t);
+    }, [applicationIdToScroll, loading, applicants.length, searchParams, navigate]);
 
     const handleStatusChange = async (appId, newStatus) => {
         if (newStatus === 'interview') {
@@ -465,7 +485,15 @@ const RecruiterApplicants = () => {
                                 const jobseekerReschedulePending = app.reschedule?.requested && !app.reschedule?.reviewed;
 
                                 return (
-                                    <div key={app._id || app.id} className="p-6 hover:bg-gray-50/50 transition-colors flex flex-col gap-5">
+                                    <div
+                                        id={(app._id || app.id) ? `recruiter-application-${app._id || app.id}` : undefined}
+                                        key={app._id || app.id}
+                                        className={`p-6 hover:bg-gray-50/50 transition-colors flex flex-col gap-5 ${
+                                            String(app._id || app.id) === String(applicationIdToScroll || '')
+                                                ? 'ring-2 ring-[#29a08e]/35 rounded-xl'
+                                                : ''
+                                        }`}
+                                    >
                                         <div className="flex flex-col lg:flex-row items-start lg:items-center gap-5">
                                             {/* Avatar & Name */}
                                             <div className="flex items-start gap-4 min-w-[250px]">

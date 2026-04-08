@@ -46,6 +46,7 @@ import RecruiterJobs from '../pages/recruiter/RecruiterJobs';
 import EditJob from '../pages/recruiter/EditJob';
 import RecruiterApplicants from '../pages/recruiter/RecruiterApplicants';
 import RecruiterCalendar from '../pages/recruiter/RecruiterCalendar';
+import RecruiterInterviews from '../pages/recruiter/RecruiterInterviews';
 import RecruiterPromotions from '../pages/recruiter/RecruiterPromotions';
 import PromotionPayment from '../pages/recruiter/PromotionPayment';
 import JobAnalytics from '../pages/recruiter/JobAnalytics';
@@ -176,6 +177,7 @@ const AppRoutes = () => {
                         <Route path="/recruiter/jobs" element={<RecruiterJobs />} />
                         <Route path="/recruiter/jobs/:id/edit" element={<EditJob />} />
                         <Route path="/recruiter/applications" element={<RecruiterApplicants />} />
+                        <Route path="/recruiter/interviews" element={<RecruiterInterviews />} />
                         <Route path="/recruiter/calendar" element={<RecruiterCalendar />} />
                         <Route path="/recruiter/jobs/:jobId/analytics" element={<JobAnalytics />} />
                         <Route path="/recruiter/promotions" element={<RecruiterPromotions />} />

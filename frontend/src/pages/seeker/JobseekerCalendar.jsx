@@ -7,8 +7,7 @@ import { getApiErrorMessage } from '../../utils/apiErrorMessage';
 import {
     groupInterviewsByUtcDay,
     statusBadgeClasses,
-    formatDisplayDayKey,
-    isInterviewUpcoming
+    formatDisplayDayKey
 } from '../../utils/interviewCalendarUi';
 import InterviewCalendarGrid from '../../components/interviews/InterviewCalendarGrid';
 import InterviewCalendarLegend from '../../components/interviews/InterviewCalendarLegend';
@@ -19,6 +18,8 @@ import {
     formatRescheduleInstantNepal,
     rescheduleProposerDisplayName
 } from '../../utils/interviewRescheduleUi';
+import { getAvailableInterviewActions } from '../../utils/interviewCalendarActions';
+import { buildInterviewDetailsRoute } from '../../utils/interviewViewRouting';
 
 export default function JobseekerCalendar() {
     const navigate = useNavigate();
@@ -30,8 +31,6 @@ export default function JobseekerCalendar() {
     const [selectedDayKey, setSelectedDayKey] = useState(null);
     const [busyId, setBusyId] = useState(null);
     const [rescheduleModal, setRescheduleModal] = useState(null);
-    const [cancelForId, setCancelForId] = useState(null);
-    const [cancelReason, setCancelReason] = useState('');
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -82,14 +81,7 @@ export default function JobseekerCalendar() {
     };
 
     const handleViewInterview = (applicationId) => {
-        const id = applicationId != null ? String(applicationId).trim() : '';
-        if (id) {
-            navigate(
-                `/seeker/interviews?focused=true&from=calendar&applicationId=${encodeURIComponent(id)}`
-            );
-        } else {
-            navigate('/seeker/interviews?focused=true&from=calendar');
-        }
+        navigate(buildInterviewDetailsRoute('jobseeker', { applicationId }));
     };
 
     const handleAcceptInterview = async (id) => {
@@ -168,24 +160,6 @@ export default function JobseekerCalendar() {
         }
     };
 
-    const handleCancelInterview = async () => {
-        if (!cancelForId) return;
-        setBusyId(cancelForId);
-        try {
-            await api.patch(`/interviews/${cancelForId}/cancel`, {
-                cancel_reason: cancelReason.trim()
-            });
-            toast.success('Interview cancelled');
-            setCancelForId(null);
-            setCancelReason('');
-            await load();
-        } catch (e) {
-            toast.error(getApiErrorMessage(e, 'Could not cancel'));
-        } finally {
-            setBusyId(null);
-        }
-    };
-
     return (
         <div className="min-h-[calc(100vh-3.5rem)] bg-slate-50">
             <div className="max-w-6xl mx-auto px-4 py-6 sm:py-8">
@@ -256,8 +230,7 @@ export default function JobseekerCalendar() {
                                         {selectedList.map((inv) => {
                                             const ui = getInterviewRescheduleUiState(inv, 'jobseeker');
                                             const fsm = inv.reschedule_fsm || {};
-                                            const canCancelInterview =
-                                                inv.status !== 'completed' && inv.status !== 'cancelled';
+                                            const actions = getAvailableInterviewActions(inv, 'jobseeker');
                                             return (
                                             <li
                                                 key={inv.id}
@@ -302,6 +275,16 @@ export default function JobseekerCalendar() {
                                                 )}
 
                                                 <div className="flex flex-wrap gap-2 pt-1">
+                                                    {actions.canViewInterview && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleViewInterview(inv.application_id)}
+                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg bg-[#29a08e] text-white font-semibold hover:bg-[#238276] shadow-sm"
+                                                        >
+                                                            View interview
+                                                        </button>
+                                                    )}
+
                                                     {inv.status === 'pending_acceptance' && (
                                                         <>
                                                             <button
@@ -312,7 +295,7 @@ export default function JobseekerCalendar() {
                                                             >
                                                                 Accept interview
                                                             </button>
-                                                            {ui.showRequestReschedule && (
+                                                            {actions.canRequestReschedule && ui.showRequestReschedule && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() =>
@@ -380,16 +363,7 @@ export default function JobseekerCalendar() {
 
                                                     {inv.status === 'scheduled' && (
                                                         <>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    handleViewInterview(inv.application_id)
-                                                                }
-                                                                className="text-xs sm:text-sm px-3 py-1.5 rounded-lg bg-[#29a08e] text-white font-semibold hover:bg-[#238276] shadow-sm"
-                                                            >
-                                                                View interview
-                                                            </button>
-                                                            {isInterviewUpcoming(inv) && ui.showRequestReschedule && (
+                                                            {actions.canRequestReschedule && ui.showRequestReschedule && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() =>
@@ -406,19 +380,6 @@ export default function JobseekerCalendar() {
                                                         </>
                                                     )}
 
-                                                    {canCancelInterview && (
-                                                        <button
-                                                            type="button"
-                                                            disabled={busyId === inv.id}
-                                                            onClick={() => {
-                                                                setCancelForId(inv.id);
-                                                                setCancelReason('');
-                                                            }}
-                                                            className="text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-700 font-medium hover:bg-red-50"
-                                                        >
-                                                            Cancel interview
-                                                        </button>
-                                                    )}
                                                 </div>
 
                                                 {ui.activeFsm && fsm.proposed_at && (
@@ -448,45 +409,6 @@ export default function JobseekerCalendar() {
                 onSuccess={load}
             />
 
-            {cancelForId && (
-                <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
-                    <button
-                        type="button"
-                        className="absolute inset-0 bg-slate-900/50"
-                        aria-label="Close"
-                        onClick={() => !busyId && setCancelForId(null)}
-                    />
-                    <div className="relative w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-slate-200 p-4">
-                        <h3 className="text-lg font-semibold text-slate-900 mb-2">Cancel interview</h3>
-                        <p className="text-sm text-slate-600 mb-3">Optional message for the recruiter.</p>
-                        <textarea
-                            value={cancelReason}
-                            onChange={(e) => setCancelReason(e.target.value)}
-                            rows={2}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm mb-4"
-                            placeholder="Reason (optional)"
-                        />
-                        <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-                            <button
-                                type="button"
-                                disabled={!!busyId}
-                                onClick={() => setCancelForId(null)}
-                                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700"
-                            >
-                                Back
-                            </button>
-                            <button
-                                type="button"
-                                disabled={!!busyId}
-                                onClick={handleCancelInterview}
-                                className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium disabled:opacity-50"
-                            >
-                                {busyId ? 'Cancelling…' : 'Confirm cancel'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

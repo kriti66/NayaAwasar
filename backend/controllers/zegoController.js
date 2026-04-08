@@ -235,6 +235,7 @@ export const generateZegoToken = async (req, res) => {
             appId,
             token,
             roomId: roomIdString,
+            interviewId: String(interview._id),
             userId: zegoUserId,
             userName
         });

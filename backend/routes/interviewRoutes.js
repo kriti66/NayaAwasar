@@ -7,7 +7,8 @@ import {
     requestInterviewReschedule,
     acceptInterviewReschedule,
     completeInterview,
-    cancelInterview
+    cancelInterview,
+    recordInterviewCallEvent
 } from '../controllers/interviewController.js';
 import { requireAuth, requireRole, requireRecruiter } from '../middleware/auth.js';
 
@@ -23,6 +24,7 @@ router.patch('/:id/request-reschedule', requireAuth, requestInterviewReschedule)
 router.patch('/:id/accept-reschedule', requireAuth, acceptInterviewReschedule);
 router.patch('/:id/complete', requireAuth, requireRecruiter, completeInterview);
 router.patch('/:id/cancel', requireAuth, cancelInterview);
+router.post('/:id/call-event', requireAuth, recordInterviewCallEvent);
 
 router.post('/:id/zego-token', requireAuth, getZegoToken);
 

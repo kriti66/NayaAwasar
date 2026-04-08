@@ -25,6 +25,7 @@ const INTERVIEW_CALENDAR_TYPES = new Set([
     'interview_cancelled',
     'interview_accepted',
     'reschedule_rejected',
+    'reschedule_accepted',
     'interview_update',
     'reschedule_approved',
     'reschedule_declined'
@@ -42,7 +43,7 @@ export function extractInterviewCalendarPayload(notification) {
     };
     const interviewId = src.interviewId ?? src.interview_id;
     let date = null;
-    const rawDate = src.interview_date ?? src.interviewDate ?? src.date;
+    const rawDate = src.dateKey ?? src.interview_date ?? src.interviewDate ?? src.date ?? src.scheduledAt ?? src.scheduled_at;
     if (rawDate != null) {
         if (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate.trim())) {
             date = rawDate.trim();
@@ -105,7 +106,8 @@ function mapByType(type, role) {
         interview_completed: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
         interview_cancelled: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
         interview_accepted: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
-        reschedule_rejected: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar'
+        reschedule_rejected: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
+        reschedule_accepted: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar'
     };
     return commonMap[type] || null;
 }

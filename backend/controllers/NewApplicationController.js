@@ -8,7 +8,7 @@ import { logUserActivity } from '../utils/userActivityLogger.js';
 import { logActivity } from '../utils/activityLogger.js';
 import Interview from '../models/Interview.js';
 import { recordUserInteraction } from '../services/recommendationService.js';
-import { getEffectiveInterviewStart } from '../utils/interviewDateTime.js';
+import { combineDateAndTimeNepal, getEffectiveInterviewStart } from '../utils/interviewDateTime.js';
 import { computeInterviewLifecycle } from '../utils/interviewLifecycle.js';
 import {
     isJobVisibleForPublicListing,
@@ -1085,10 +1085,24 @@ export const requestReschedule = async (req, res) => {
             link: '/recruiter/calendar',
             sender: seekerId,
             metadata: interviewDocAfter
-                ? interviewCalendarMetadata(interviewDocAfter, { applicationId: application._id })
+                ? interviewCalendarMetadata(interviewDocAfter, {
+                      applicationId: application._id,
+                      interviewDate: preferredDate ? new Date(preferredDate) : undefined,
+                      scheduledAt:
+                          preferredDate && preferredTime
+                              ? combineDateAndTimeNepal(new Date(preferredDate), preferredTime)
+                              : undefined
+                  })
                 : interviewCalendarMetadata(
                       { _id: interviewId, date: application.interview?.date },
-                      { applicationId: application._id }
+                      {
+                          applicationId: application._id,
+                          interviewDate: preferredDate ? new Date(preferredDate) : application.interview?.date,
+                          scheduledAt:
+                              preferredDate && preferredTime
+                                  ? combineDateAndTimeNepal(new Date(preferredDate), preferredTime)
+                                  : undefined
+                      }
                   )
         });
 
@@ -1200,7 +1214,10 @@ export const approveReschedule = async (req, res) => {
             message: `Your interview for ${application.job_id.title} has been rescheduled to ${date} at ${time}.`,
             link: '/seeker/calendar',
             sender: recruiterId,
-            metadata: interviewCalendarMetadata(interviewDoc, { applicationId: application._id })
+            metadata: interviewCalendarMetadata(interviewDoc, {
+                applicationId: application._id,
+                scheduledAt: combineDateAndTimeNepal(interviewDoc.date, interviewDoc.time)
+            })
         });
 
         res.json({ success: true, message: 'Reschedule approved', application });
@@ -1360,7 +1377,11 @@ export const proposeRecruiterReschedule = async (req, res) => {
             message: `Recruiter wants to reschedule your interview for ${application.job_id.title} to ${proposedDateObj.toLocaleDateString()} at ${proposedTime}.`,
             link: '/seeker/calendar',
             sender: requesterId,
-            metadata: interviewCalendarMetadata(interviewDoc, { applicationId: application._id })
+            metadata: interviewCalendarMetadata(interviewDoc, {
+                applicationId: application._id,
+                interviewDate: proposedDateObj,
+                scheduledAt: combineDateAndTimeNepal(proposedDateObj, proposedTime)
+            })
         });
 
         res.json({ success: true, message: 'Reschedule request sent' });
@@ -1466,7 +1487,10 @@ export const acceptRecruiterReschedule = async (req, res) => {
             message: `${application.seeker_id.fullName} accepted the reschedule for ${application.job_id.title}.`,
             link: '/recruiter/calendar',
             sender: seekerId,
-            metadata: interviewCalendarMetadata(interviewDoc, { applicationId: application._id })
+            metadata: interviewCalendarMetadata(interviewDoc, {
+                applicationId: application._id,
+                scheduledAt: combineDateAndTimeNepal(interviewDoc.date, interviewDoc.time)
+            })
         });
 
         res.json({ success: true, message: 'Reschedule approved', application });
@@ -1545,7 +1569,10 @@ export const rejectRecruiterReschedule = async (req, res) => {
             message: `${application.seeker_id.fullName} rejected the reschedule for ${application.job_id.title}.`,
             link: '/recruiter/calendar',
             sender: seekerId,
-            metadata: interviewCalendarMetadata(interviewDoc, { applicationId: application._id })
+            metadata: interviewCalendarMetadata(interviewDoc, {
+                applicationId: application._id,
+                scheduledAt: combineDateAndTimeNepal(interviewDoc.date, interviewDoc.time)
+            })
         });
 
         res.json({ success: true, message: 'Reschedule rejected', application });

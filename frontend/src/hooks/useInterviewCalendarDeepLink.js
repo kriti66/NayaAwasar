@@ -66,10 +66,9 @@ export function useInterviewCalendarDeepLink({
             inv = interviews.find((i) => String(i.id) === idQ) || null;
         }
 
-        let dayKey = parsedDate?.dayKey ?? null;
-        if (!dayKey && inv) {
-            dayKey = interviewUtcDayKey(inv.date);
-        }
+        // Prefer the interview's actual day when interviewId resolves.
+        // This prevents stale query date values from opening the old day after a reschedule.
+        let dayKey = inv ? interviewUtcDayKey(inv.date) : parsedDate?.dayKey ?? null;
 
         if (dayKey) {
             const [y, mo] = dayKey.split('-').map(Number);

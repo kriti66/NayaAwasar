@@ -106,6 +106,11 @@ const interviewSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    recruiterJoinedAt: { type: Date, default: null },
+    seekerJoinedAt: { type: Date, default: null },
+    recruiterLeftAt: { type: Date, default: null },
+    seekerLeftAt: { type: Date, default: null },
+    callEndedAt: { type: Date, default: null },
     /** Set by recruiter after interview; drives COMPLETED_* lifecycle */
     result: {
         type: String,
