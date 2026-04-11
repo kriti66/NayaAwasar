@@ -49,18 +49,26 @@ export default function JobseekerCalendar() {
         load();
     }, [load]);
 
-    const visibleInterviews = useMemo(
+    useEffect(() => {
+        const onVis = () => {
+            if (document.visibilityState === 'visible') load();
+        };
+        document.addEventListener('visibilitychange', onVis);
+        return () => document.removeEventListener('visibilitychange', onVis);
+    }, [load]);
+
+    const nonCancelledInterviews = useMemo(
         () => (interviews || []).filter((i) => i.status !== 'cancelled'),
         [interviews]
     );
 
-    const byDay = useMemo(() => groupInterviewsByUtcDay(visibleInterviews), [visibleInterviews]);
+    const byDay = useMemo(() => groupInterviewsByUtcDay(nonCancelledInterviews), [nonCancelledInterviews]);
     const selectedList = selectedDayKey ? byDay.get(selectedDayKey) || [] : [];
 
     const { highlightedInterviewId, registerInterviewCardRef, interviewCardHighlightClass } =
         useInterviewCalendarDeepLink({
             loading,
-            interviews: visibleInterviews,
+            interviews: nonCancelledInterviews,
             setYear,
             setMonthIndex,
             setSelectedDayKey
@@ -171,10 +179,18 @@ export default function JobseekerCalendar() {
                         <div>
                             <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Interview calendar</h1>
                             <p className="text-sm text-slate-600 mt-0.5">
-                                Accept invites, respond to reschedule requests, and see your schedule.
+                                Accept invites, respond to reschedule requests, and see your schedule. For upcoming and
+                                past lists with full details, use Interview Center.
                             </p>
                         </div>
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/seeker/interviews')}
+                        className="shrink-0 inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold bg-[#29a08e] text-white shadow-sm hover:bg-[#238276] transition-colors w-full sm:w-auto"
+                    >
+                        View Interviews
+                    </button>
                 </div>
 
                 <div className="mb-4 p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">
@@ -190,9 +206,9 @@ export default function JobseekerCalendar() {
                     <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-slate-500">
                         Loading calendar…
                     </div>
-                ) : visibleInterviews.length === 0 ? (
+                ) : nonCancelledInterviews.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-600">
-                        <p>You have no upcoming interviews on the calendar.</p>
+                        <p>You have no interviews on the calendar.</p>
                         <p className="text-sm text-slate-500 mt-2">
                             When a recruiter schedules one, it will show here. If an interview was cancelled (for example
                             because a job was removed), check your notifications for details.
@@ -200,7 +216,7 @@ export default function JobseekerCalendar() {
                     </div>
                 ) : null}
 
-                {!loading && visibleInterviews.length > 0 && (
+                {!loading && nonCancelledInterviews.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
                         <div className="lg:col-span-2">
                             <InterviewCalendarGrid
@@ -219,7 +235,9 @@ export default function JobseekerCalendar() {
                                 <p className="text-sm text-slate-500">Select a date to see interviews.</p>
                             )}
                             {selectedDayKey && selectedList.length === 0 && (
-                                <p className="text-sm text-slate-500">No interviews on {formatDisplayDayKey(selectedDayKey)}.</p>
+                                <p className="text-sm text-slate-500">
+                                    No interviews on {formatDisplayDayKey(selectedDayKey)}.
+                                </p>
                             )}
                             {selectedDayKey && selectedList.length > 0 && (
                                 <>

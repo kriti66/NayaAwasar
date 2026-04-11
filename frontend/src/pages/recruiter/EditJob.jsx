@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Briefcase, Building2, MapPin, DollarSign, FileText, List, Edit, Tag } from 'lucide-react';
 import { JOB_CATEGORIES } from '../../constants/jobCategories';
+import { RECRUITER_WARNINGS_CHANGED_EVENT } from '../../components/recruiter/RecruiterModerationWarningsBanner';
 
 const EditJob = () => {
     const { id } = useParams();
@@ -59,6 +60,7 @@ const EditJob = () => {
         }
         try {
             await api.put(`/jobs/${id}`, formData);
+            window.dispatchEvent(new Event(RECRUITER_WARNINGS_CHANGED_EVENT));
             alert('Job updated successfully!');
             navigate('/recruiter/jobs');
         } catch (error) {

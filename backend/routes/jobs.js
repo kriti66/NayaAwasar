@@ -452,6 +452,7 @@ router.patch('/:id/acknowledge-warning', requireAuth, requireRole('recruiter'), 
         }
         job.warningAcknowledged = true;
         await job.save();
+        await deactivateWarningsForJob(job._id, req.user.id);
         res.json(job);
     } catch (error) {
         console.error('acknowledge-warning error:', error);
@@ -696,6 +697,10 @@ router.patch('/:id/moderate', requireAuth, requireAdmin, async (req, res) => {
                 reason: 'Job was removed by admin',
                 cancelledByUserId: req.user.id
             });
+        }
+
+        if (nextStatus === 'active') {
+            await deactivateWarningsForJob(job._id, req.user.id);
         }
 
         await invalidateJobLabelCacheForJob(id);

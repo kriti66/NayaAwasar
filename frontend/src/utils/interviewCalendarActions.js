@@ -17,7 +17,8 @@ export function getAvailableInterviewActions(interview, currentUserRole) {
     const isScheduled = status === 'scheduled';
     const isPendingAcceptance = status === 'pending_acceptance';
     const isRescheduleRequested = status === 'reschedule_requested';
-    const isTerminal = status === 'completed' || status === 'cancelled' || status === 'missed';
+    const isTerminal =
+        status === 'completed' || status === 'cancelled' || status === 'missed';
     const isUpcoming = !!interview && isInterviewUpcoming(interview);
 
     const canViewInterview = (isScheduled || isPendingAcceptance) && !isTerminal;

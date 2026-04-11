@@ -176,10 +176,18 @@ export default function RecruiterCalendar() {
                         <div>
                             <h1 className="text-xl sm:text-2xl font-bold text-slate-900">Interview calendar</h1>
                             <p className="text-sm text-slate-600 mt-0.5">
-                                View and manage candidate interviews by date.
+                                View and manage candidate interviews by date. For upcoming and past lists with full
+                                details, use Interview Center.
                             </p>
                         </div>
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/recruiter/interviews')}
+                        className="shrink-0 inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold bg-[#29a08e] text-white shadow-sm hover:bg-[#238276] transition-colors w-full sm:w-auto"
+                    >
+                        View Interviews
+                    </button>
                 </div>
 
                 <div className="mb-4 p-3 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-sm">

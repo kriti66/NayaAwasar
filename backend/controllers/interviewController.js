@@ -3,7 +3,7 @@ import User from '../models/User.js';
 import Application from '../models/Application.js';
 import mongoose from 'mongoose';
 import { createRequire } from 'module';
-import { getInterviewJoinWindow, combineDateAndTimeNepal } from '../utils/interviewDateTime.js';
+import { getInterviewJoinWindow, combineDateAndTimeNepal, getEffectiveInterviewStart } from '../utils/interviewDateTime.js';
 import { createNotification } from './notificationController.js';
 import { interviewCalendarMetadata } from '../utils/interviewNotificationMetadata.js';
 import { RESCHEDULE_FSM } from '../constants/reschedule.js';
@@ -239,6 +239,7 @@ function deriveCalendarStatus(i) {
     const top = String(i.status || '');
     if (top === 'Completed') return 'completed';
     if (top === 'Cancelled') return 'cancelled';
+    if (top === 'Missed') return 'missed';
 
     const wf = String(i.workflowRescheduleStatus || RESCHEDULE_FSM.NONE).toLowerCase();
     if (wf === RESCHEDULE_FSM.PENDING || wf === RESCHEDULE_FSM.COUNTERED) {
@@ -269,6 +270,11 @@ function modeToApi(m) {
     return s.toLowerCase() === 'onsite' ? 'onsite' : 'online';
 }
 
+function effectiveStartIsoFromInterviewDoc(doc) {
+    const t = getEffectiveInterviewStart(doc);
+    return t && !Number.isNaN(t.getTime()) ? t.toISOString() : null;
+}
+
 function toRecruiterCalendarItem(doc) {
     const seeker = doc.seekerId;
     const job = doc.jobId;
@@ -278,6 +284,9 @@ function toRecruiterCalendarItem(doc) {
         application_id: doc.applicationId,
         date: doc.date,
         time: doc.time,
+        start_time: doc.startTime ? new Date(doc.startTime).toISOString() : null,
+        effective_start: effectiveStartIsoFromInterviewDoc(doc),
+        duration: typeof doc.duration === 'number' ? doc.duration : 30,
         mode: modeToApi(doc.mode),
         status,
         seeker_name: seeker?.fullName || 'Candidate',
@@ -302,6 +311,9 @@ function toSeekerCalendarItem(doc) {
         application_id: doc.applicationId,
         date: doc.date,
         time: doc.time,
+        start_time: doc.startTime ? new Date(doc.startTime).toISOString() : null,
+        effective_start: effectiveStartIsoFromInterviewDoc(doc),
+        duration: typeof doc.duration === 'number' ? doc.duration : 30,
         mode: modeToApi(doc.mode),
         status,
         job_title: job?.title || 'Job',
@@ -322,6 +334,45 @@ async function syncApplicationInterviewSlot(interview) {
         'interview.location': interview.location
     };
     await Application.updateOne({ _id: interview.applicationId }, { $set: patch });
+}
+
+/**
+ * When the effective slot (Nepal wall clock + date, or startTime) is in the past, persist terminal status
+ * so lists and tabs stay accurate. Skips active reschedule workflows.
+ */
+async function applyPastInterviewAutoStatus(interview, now = new Date()) {
+    const top = String(interview.status || '');
+    if (top === 'Cancelled' || top === 'Completed' || top === 'Missed') return false;
+
+    const start = getEffectiveInterviewStart(interview);
+    if (!start || start.getTime() > now.getTime()) return false;
+
+    const wf = String(interview.workflowRescheduleStatus || RESCHEDULE_FSM.NONE).toLowerCase();
+    if (wf === RESCHEDULE_FSM.PENDING || wf === RESCHEDULE_FSM.COUNTERED) return false;
+
+    const cal = deriveCalendarStatus(interview);
+    if (cal === 'reschedule_requested') return false;
+
+    if (cal === 'pending_acceptance') {
+        if (interview.status === 'Scheduled') {
+            interview.status = 'Missed';
+            await interview.save();
+            return true;
+        }
+        return false;
+    }
+
+    if (cal === 'scheduled' && interview.status === 'Scheduled') {
+        interview.status = 'Completed';
+        interview.calendarStatus = 'completed';
+        interview.interviewStatus = 'confirmed';
+        interview.completedAt = now;
+        await interview.save();
+        await syncApplicationInterviewSlot(interview);
+        return true;
+    }
+
+    return false;
 }
 
 async function autoCompleteInterviewAfterCall(interview, actorUserId) {
@@ -375,11 +426,21 @@ export const getRecruiterInterviewCalendar = async (req, res) => {
         const rows = await Interview.find({ recruiterId: uid, status: { $ne: 'Cancelled' } })
             .populate('seekerId', 'fullName')
             .populate('jobId', 'title company_name moderationStatus')
-            .sort({ date: 1, time: 1 })
-            .lean();
+            .sort({ date: 1, time: 1 });
+
+        const now = new Date();
+        for (const inv of rows) {
+            try {
+                await applyPastInterviewAutoStatus(inv, now);
+            } catch (err) {
+                if (process.env.NODE_ENV !== 'test') {
+                    console.error('applyPastInterviewAutoStatus (recruiter calendar)', err?.message || err);
+                }
+            }
+        }
 
         const visible = rows.filter((doc) => !jobModerationHidesInterview(doc.jobId));
-        res.json({ interviews: visible.map(toRecruiterCalendarItem) });
+        res.json({ interviews: visible.map((d) => toRecruiterCalendarItem(d)) });
     } catch (e) {
         console.error('getRecruiterInterviewCalendar', e);
         res.status(500).json({ message: 'Failed to load interview calendar' });
@@ -392,11 +453,21 @@ export const getSeekerInterviewCalendar = async (req, res) => {
         const rows = await Interview.find({ seekerId: uid, status: { $ne: 'Cancelled' } })
             .populate('recruiterId', 'fullName')
             .populate('jobId', 'title company_name moderationStatus')
-            .sort({ date: 1, time: 1 })
-            .lean();
+            .sort({ date: 1, time: 1 });
+
+        const now = new Date();
+        for (const inv of rows) {
+            try {
+                await applyPastInterviewAutoStatus(inv, now);
+            } catch (err) {
+                if (process.env.NODE_ENV !== 'test') {
+                    console.error('applyPastInterviewAutoStatus (seeker calendar)', err?.message || err);
+                }
+            }
+        }
 
         const visible = rows.filter((doc) => !jobModerationHidesInterview(doc.jobId));
-        res.json({ interviews: visible.map(toSeekerCalendarItem) });
+        res.json({ interviews: visible.map((d) => toSeekerCalendarItem(d)) });
     } catch (e) {
         console.error('getSeekerInterviewCalendar', e);
         res.status(500).json({ message: 'Failed to load interview calendar' });

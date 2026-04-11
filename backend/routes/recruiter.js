@@ -6,7 +6,11 @@ import Company from '../models/Company.js';
 import Job from '../models/Job.js';
 import Application from '../models/Application.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
-import { deactivateWarningsForJob, getActiveWarningsForRecruiter } from '../services/recruiterWarningService.js';
+import {
+    deactivateWarningsForJob,
+    dismissRecruiterWarningForRecruiter,
+    getActiveWarningsForRecruiter
+} from '../services/recruiterWarningService.js';
 import { cancelInterviewsForJob } from '../services/interviewJobCleanup.js';
 import { normalizeModerationStatusForEdit, RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED } from '../utils/jobModeration.js';
 
@@ -32,6 +36,22 @@ router.get('/warnings', requireAuth, requireRole('recruiter'), async (req, res) 
     } catch (error) {
         console.error('GET /recruiter/warnings error:', error);
         res.status(500).json({ message: 'Error fetching warnings' });
+    }
+});
+
+// @route   PATCH /api/recruiter/warnings/:id/dismiss
+// @desc    Recruiter removes a moderation warning from their dashboard (does not change job moderation)
+// @access  Private (recruiter)
+router.patch('/warnings/:id/dismiss', requireAuth, requireRole('recruiter'), async (req, res) => {
+    try {
+        const updated = await dismissRecruiterWarningForRecruiter(req.params.id, req.user.id);
+        if (!updated) {
+            return res.status(404).json({ message: 'Warning not found' });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error('PATCH /recruiter/warnings/:id/dismiss error:', error);
+        res.status(500).json({ message: 'Error dismissing warning' });
     }
 });
 

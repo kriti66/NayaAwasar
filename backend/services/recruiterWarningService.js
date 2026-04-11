@@ -68,3 +68,19 @@ export async function resolveRecruiterWarningById(warningId, resolvedByUserId) {
     await w.save();
     return w;
 }
+
+/** Recruiter dismisses a dashboard warning; verifies the warning belongs to this recruiter. */
+export async function dismissRecruiterWarningForRecruiter(warningId, recruiterUserId) {
+    if (!warningId || !recruiterUserId) return null;
+    const w = await RecruiterWarning.findOne({
+        _id: warningId,
+        recruiter: new mongoose.Types.ObjectId(String(recruiterUserId))
+    });
+    if (!w) return null;
+    if (!w.isActive) return w;
+    w.isActive = false;
+    w.resolvedAt = new Date();
+    w.resolvedBy = new mongoose.Types.ObjectId(String(recruiterUserId));
+    await w.save();
+    return w;
+}

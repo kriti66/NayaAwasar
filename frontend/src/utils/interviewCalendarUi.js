@@ -57,6 +57,8 @@ export function statusBadgeClasses(status) {
             return 'bg-sky-100 text-sky-900 ring-sky-200';
         case 'cancelled':
             return 'bg-red-100 text-red-900 ring-red-200';
+        case 'missed':
+            return 'bg-slate-200 text-slate-800 ring-slate-300';
         default:
             return 'bg-slate-100 text-slate-800 ring-slate-200';
     }
@@ -74,13 +76,26 @@ export function statusDotClass(status) {
             return 'bg-sky-500';
         case 'cancelled':
             return 'bg-red-500';
+        case 'missed':
+            return 'bg-slate-500';
         default:
             return 'bg-slate-400';
     }
 }
 
-/** Effective start for "upcoming" checks (current slot, not proposed reschedule). */
+/**
+ * Instant for calendar past/upcoming (server sends `effective_start` using Nepal wall clock + reschedule rules).
+ */
 export function getCalendarInterviewStart(inv) {
+    if (!inv) return null;
+    if (inv.effective_start) {
+        const t = new Date(inv.effective_start);
+        if (!Number.isNaN(t.getTime())) return t;
+    }
+    if (inv.start_time) {
+        const t = new Date(inv.start_time);
+        if (!Number.isNaN(t.getTime())) return t;
+    }
     return combineDateAndTimeNepal(inv.date, inv.time);
 }
 

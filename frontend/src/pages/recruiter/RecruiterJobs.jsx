@@ -19,6 +19,7 @@ import {
     ShieldAlert
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { RECRUITER_WARNINGS_CHANGED_EVENT } from '../../components/recruiter/RecruiterModerationWarningsBanner';
 
 function effectiveModerationStatus(job) {
     const m = job?.moderationStatus;
@@ -229,6 +230,7 @@ const RecruiterJobs = () => {
     const handleAcknowledgeWarning = async (jobId) => {
         try {
             await api.patch(`/jobs/${jobId}/acknowledge-warning`);
+            window.dispatchEvent(new Event(RECRUITER_WARNINGS_CHANGED_EVENT));
             toast.success('Marked as acknowledged');
             await fetchJobs();
         } catch (error) {

@@ -7,7 +7,14 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "postinstall": "node scripts/install-puppeteer-chrome.mjs"
+    "postinstall": "node scripts/install-puppeteer-chrome.mjs",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.js"
+    ]
   },
   "dependencies": {
     "axios": "^1.13.6",
@@ -24,5 +31,9 @@
     "nodemailer": "^7.0.12",
     "pdf-parse": "^2.4.5",
     "puppeteer": "^24.37.1"
+  },
+  "devDependencies": {
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2"
   }
 }

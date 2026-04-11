@@ -1,7 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import api from '../../services/api';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+
+export const RECRUITER_WARNINGS_CHANGED_EVENT = 'recruiter:warningsChanged';
 
 function formatWarnedAt(value) {
     if (!value) return '';
@@ -13,31 +16,73 @@ const RecruiterModerationWarningsBanner = () => {
     const { user } = useAuth();
     const [warnings, setWarnings] = useState([]);
     const [loaded, setLoaded] = useState(false);
+    const [dismissingId, setDismissingId] = useState(null);
 
-    useEffect(() => {
+    const refetchWarnings = useCallback(async () => {
         if (!user || user.role !== 'recruiter') {
             setWarnings([]);
-            setLoaded(true);
             return;
         }
+        try {
+            const res = await api.get('/recruiter/warnings');
+            setWarnings(res.data?.warnings || []);
+        } catch {
+            setWarnings([]);
+        }
+    }, [user]);
 
+    useEffect(() => {
         let cancelled = false;
         (async () => {
+            if (!user || user.role !== 'recruiter') {
+                setWarnings([]);
+                setLoaded(true);
+                return;
+            }
+            setLoaded(false);
             try {
                 const res = await api.get('/recruiter/warnings');
-                const list = res.data?.warnings || [];
-                if (!cancelled) setWarnings(list);
+                if (!cancelled) setWarnings(res.data?.warnings || []);
             } catch {
                 if (!cancelled) setWarnings([]);
             } finally {
                 if (!cancelled) setLoaded(true);
             }
         })();
-
         return () => {
             cancelled = true;
         };
     }, [user]);
+
+    useEffect(() => {
+        const onRefresh = () => {
+            refetchWarnings();
+        };
+        window.addEventListener(RECRUITER_WARNINGS_CHANGED_EVENT, onRefresh);
+        const onVisible = () => {
+            if (document.visibilityState === 'visible' && user?.role === 'recruiter') {
+                refetchWarnings();
+            }
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => {
+            window.removeEventListener(RECRUITER_WARNINGS_CHANGED_EVENT, onRefresh);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
+    }, [refetchWarnings, user?.role]);
+
+    const handleDismiss = async (warningId) => {
+        setDismissingId(warningId);
+        try {
+            await api.patch(`/recruiter/warnings/${warningId}/dismiss`);
+            setWarnings((prev) => prev.filter((w) => w._id !== warningId));
+            toast.success('Warning dismissed');
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Could not dismiss warning');
+        } finally {
+            setDismissingId(null);
+        }
+    };
 
     if (!loaded || warnings.length === 0) return null;
 
@@ -56,9 +101,18 @@ const RecruiterModerationWarningsBanner = () => {
                             {warnings.map((w) => (
                                 <li
                                     key={w._id}
-                                    className="rounded-xl border border-amber-200 bg-white/80 px-4 py-3 text-sm text-amber-950 shadow-sm"
+                                    className="relative rounded-xl border border-amber-200 bg-white/80 pl-4 pr-12 py-3 text-sm text-amber-950 shadow-sm"
                                 >
-                                    <p className="font-semibold text-amber-900">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDismiss(w._id)}
+                                        disabled={dismissingId === w._id}
+                                        className="absolute top-2 right-2 p-1.5 rounded-lg text-amber-800/70 hover:text-amber-950 hover:bg-amber-100/80 disabled:opacity-50 transition-colors"
+                                        aria-label="Dismiss warning"
+                                    >
+                                        <X className="w-4 h-4" strokeWidth={2.5} aria-hidden />
+                                    </button>
+                                    <p className="font-semibold text-amber-900 pr-1">
                                         Reason: {w.reason}
                                         {w.job?.title ? ` — ${w.job.title}` : ''}
                                     </p>

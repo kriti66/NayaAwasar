@@ -2,6 +2,7 @@ const LEGEND = [
     { label: 'Pending acceptance', dot: 'bg-amber-500' },
     { label: 'Scheduled', dot: 'bg-yellow-500' },
     { label: 'Completed', dot: 'bg-emerald-500' },
+    { label: 'Missed', dot: 'bg-slate-500' },
     { label: 'Reschedule requested', dot: 'bg-sky-500' },
     { label: 'Cancelled', dot: 'bg-red-500' }
 ];
