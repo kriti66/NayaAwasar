@@ -9,7 +9,11 @@ import * as promotionService from './promotionService.js';
 import { mergeWithBaseFilter } from './jobSearchFilter.js';
 import { PUBLIC_MODERATION_MATCH } from '../utils/jobModeration.js';
 import { isJobActivelyPromoted } from '../utils/jobPromotionUtils.js';
-import { applyUserJobLabels } from './userJobLabelEnrichment.js';
+import {
+    applyUserJobLabels,
+    loadSeekerRecommendationContext
+} from './userJobLabelEnrichment.js';
+import { getRecommendationProviderFromSource } from './recommendationService.js';
 
 /** Maps Job promotionType to display label */
 export const PROMOTION_LABELS = {
@@ -100,13 +104,17 @@ export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn
     const now = new Date();
 
     const filter = mergeWithBaseFilter(BASE_VISIBLE_FILTER, query);
-    const [jobsRaw, recResult] = await Promise.all([
+    const [jobsRaw, recResult, recCtx] = await Promise.all([
         Job.find(filter)
             .sort({ promotionPriority: -1, createdAt: -1 })
             .populate('company_id', 'name logo location')
             .lean(),
-        getRecommendedJobsFn(userId)
+        getRecommendedJobsFn(userId),
+        loadSeekerRecommendationContext(userId)
     ]);
+
+    const recommendationSource = recResult?.source ?? 'unknown';
+    const recommendationProvider = getRecommendationProviderFromSource(recommendationSource);
 
     const recJobs = recResult?.jobs || [];
     const recMap = new Map();
@@ -117,21 +125,27 @@ export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn
                 matchScore: rj.matchScore ?? null,
                 matchReason: rj.matchReason,
                 aiScore: typeof rj.aiScore === 'number' && Number.isFinite(rj.aiScore) ? rj.aiScore : null,
-                recommendationType: rj.recommendationType ?? null
+                recommendationType: rj.recommendationType ?? null,
+                recommendationMatchScope: rj.recommendationMatchScope ?? null
             });
         }
     });
+
+    const blockedSet = new Set(recCtx.blockedCategories || []);
 
     const enriched = jobsRaw.map((job) => {
         const id = (job._id || job.id)?.toString();
         const recData = recMap.get(id);
         const base = enrichJobWithPromotion(job, now);
+        const c = String(job.category || '').trim();
+        const hardBlocked = blockedSet.size > 0 && c && blockedSet.has(c);
         return {
             ...base,
-            matchScore: recData?.matchScore ?? null,
-            matchReason: recData?.matchReason ?? null,
-            aiScore: recData?.aiScore ?? null,
-            recommendationType: recData?.recommendationType ?? null
+            matchScore: hardBlocked ? null : recData?.matchScore ?? null,
+            matchReason: hardBlocked ? null : recData?.matchReason ?? null,
+            aiScore: hardBlocked ? null : recData?.aiScore ?? null,
+            recommendationType: hardBlocked ? null : recData?.recommendationType ?? null,
+            recommendationMatchScope: hardBlocked ? null : recData?.recommendationMatchScope ?? null
         };
     });
 
@@ -148,6 +162,37 @@ export async function getJobsForSeekerWithPromotion(userId, getRecommendedJobsFn
         return bDate - aDate;
     });
 
-    const { jobs: labeled, hasPersonalizationData } = await applyUserJobLabels(userId, enriched);
-    return { jobs: labeled, hasPersonalizationData };
+    const categoryGateOn = recCtx.categoryGateActive === true;
+    const { jobs: labeled, hasPersonalizationData } = await applyUserJobLabels(userId, enriched, {
+        recommendationProvider,
+        overallStrength: recCtx.overallStrength,
+        kycVerified: recCtx.kycVerified,
+        professionCategories: recCtx.professionCategories,
+        categoryGate: categoryGateOn
+            ? { blocked: new Set(recCtx.blockedCategories || []) }
+            : null,
+        matchTierCategories: categoryGateOn ? recCtx.matchAllowedCategories : undefined
+    });
+
+    const showMatchScores =
+        recCtx.kycVerified === true &&
+        typeof recCtx.overallStrength === 'number' &&
+        recCtx.overallStrength >= 40;
+
+    return {
+        jobs: labeled,
+        hasPersonalizationData,
+        recommendationMeta: {
+            provider: recommendationProvider,
+            source: recommendationSource,
+            overallStrength: recCtx.overallStrength,
+            kycVerified: recCtx.kycVerified,
+            showMatchScores,
+            professionCategories: recCtx.professionCategories,
+            categoryGateActive: categoryGateOn,
+            allowedCategories: recCtx.matchAllowedCategories || [],
+            adjacentCategories: recCtx.adjacentCategories || [],
+            blockedCategories: recCtx.blockedCategories || []
+        }
+    };
 }

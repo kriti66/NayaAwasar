@@ -5,17 +5,13 @@ from typing import Any, Dict, List, Optional
 from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
-from sklearn.feature_extraction.text import HashingVectorizer
+from sentence_transformers import SentenceTransformer
 
 from database import get_db
 
 load_dotenv()
 
-_model: Optional[HashingVectorizer] = HashingVectorizer(
-    n_features=300,
-    norm="l2",
-    alternate_sign=False,
-)
+_model: Optional[SentenceTransformer] = None
 
 
 def load_model() -> None:
@@ -23,14 +19,10 @@ def load_model() -> None:
     pass
 
 
-def get_model() -> HashingVectorizer:
+def get_model() -> SentenceTransformer:
     global _model
     if _model is None:
-        _model = HashingVectorizer(
-            n_features=300,
-            norm="l2",
-            alternate_sign=False,
-        )
+        _model = SentenceTransformer("all-MiniLM-L6-v2")
     return _model
 
 
@@ -41,7 +33,9 @@ def is_model_loaded() -> bool:
 def generate_embedding(text: str) -> List[float]:
     raw = (text or "").strip() or " "
     model = get_model()
-    vec = model.transform([raw]).toarray()[0]
+    vec = model.encode(raw, convert_to_numpy=True)
+    if vec.ndim > 1:
+        vec = vec[0]
     return [float(x) for x in vec.tolist()]
 
 

@@ -40,7 +40,6 @@ dist-ssr
 backend/.env
 frontend/.env
 recommendation-service/.env
-ai-service/.env
 
 # ===============================
 # SQLite / AI index databases

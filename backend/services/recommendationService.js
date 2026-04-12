@@ -7,9 +7,12 @@ import Profile from '../models/Profile.js';
 import Application from '../models/Application.js';
 import { PUBLIC_MODERATION_MATCH, isJobVisibleForPublicListing } from '../utils/jobModeration.js';
 import {
+    buildFallbackFilterContext,
     extractRequiredSkillsFromJob,
+    FALLBACK_CROSS_FILL_THRESHOLD,
     FALLBACK_MIN_INCLUSION_SCORE,
-    getAllowedJobCategoriesForSeeker,
+    hasFallbackFilterSignals,
+    jobPassesPrimaryFallbackFilter,
     joinFallbackReasons,
     MAX_FALLBACK_JOBS_RETURNED,
     scoreFallbackJob
@@ -17,40 +20,33 @@ import {
 
 dotenv.config();
 
-/** FastAPI / embedding service — env only; no localhost default (avoids silent prod misconfig). */
-const PYTHON_URL = (process.env.PYTHON_SERVICE_URL?.trim() || '').replace(/\/+$/, '');
-/** Flask TF-IDF service — env only. */
-const getFlaskAiUrl = () => (process.env.FLASK_AI_URL?.trim() || '').replace(/\/+$/, '');
-const FLASK_TIMEOUT_MS = Number(process.env.FLASK_AI_TIMEOUT_MS) || 90000;
-const PYTHON_TIMEOUT_MS = 90000;
+/** FastAPI recommendation-service base URL (no trailing slash). */
+const RECOMMENDATION_SERVICE_URL = (process.env.RECOMMENDATION_SERVICE_URL?.trim() || '').replace(
+    /\/+$/,
+    ''
+);
+const RECOMMENDATION_TIMEOUT_MS =
+    Number(process.env.RECOMMENDATION_SERVICE_TIMEOUT_MS) || 90000;
 
-const MAX_JOBS_SENT_TO_FLASK = 250;
+const MAX_JOBS_SENT_TO_RECOMMENDATION = 250;
 
 if (process.env.NODE_ENV !== 'test') {
-    const flaskAiUrl = getFlaskAiUrl();
-    console.info('[recommendations] AI service config:', {
-        FLASK_AI_URL_set: Boolean(flaskAiUrl),
-        PYTHON_SERVICE_URL_set: Boolean(PYTHON_URL)
+    console.info('[recommendations] config:', {
+        RECOMMENDATION_SERVICE_URL_set: Boolean(RECOMMENDATION_SERVICE_URL)
     });
-    if (!flaskAiUrl) {
+    if (!RECOMMENDATION_SERVICE_URL) {
         console.warn(
-            '[recommendations] FLASK_AI_URL is not set or empty — Flask TF-IDF recommendations will be skipped. Set FLASK_AI_URL in production (e.g. your Render Flask service URL).'
-        );
-    }
-    if (!PYTHON_URL) {
-        console.warn(
-            '[recommendations] PYTHON_SERVICE_URL is not set or empty — FastAPI /recommend and similar-jobs will be skipped. Set PYTHON_SERVICE_URL when that service is deployed.'
+            '[recommendations] RECOMMENDATION_SERVICE_URL is not set — personalized recommendations will use offline fallback_scored until it is configured (e.g. http://127.0.0.1:8001).'
         );
     }
 }
 
 /**
- * Log a failed AI provider request for production debugging.
- * @param {'Flask TF-IDF'|'FastAPI'} serviceName
+ * Log a failed recommendation-service request for production debugging.
  * @param {string} baseUrl
  * @param {unknown} err
  */
-function logRecommendationProviderFailure(serviceName, baseUrl, err) {
+function logRecommendationProviderFailure(baseUrl, err) {
     const status = err?.response?.status;
     const data = err?.response?.data;
     const bodyMsg =
@@ -59,16 +55,16 @@ function logRecommendationProviderFailure(serviceName, baseUrl, err) {
         '';
     const code = err?.code || '';
     const msg = bodyMsg || err?.message || String(err);
-    const parts = [`[recommendations] ${serviceName} request failed`];
+    const parts = ['[recommendations] recommendation-service request failed'];
     if (baseUrl) parts.push(`url=${baseUrl}`);
     if (status != null) parts.push(`HTTP ${status}`);
     if (code) parts.push(`code=${code}`);
     parts.push(`message=${msg}`);
     console.warn(parts.join(' | '));
 
-    if (process.env.NODE_ENV !== 'production' && serviceName === 'Flask TF-IDF' && !err?.response) {
+    if (process.env.NODE_ENV !== 'production' && !err?.response) {
         console.warn(
-            '  → Local dev: npm run dev:flask (repo root), or npm run dev:all. If port 5000 is busy, set PORT in ai-service and FLASK_AI_URL accordingly.'
+            '  → Local dev: npm run dev:recommendation-service (repo root) and set RECOMMENDATION_SERVICE_URL in backend/.env.'
         );
     }
 }
@@ -83,13 +79,13 @@ function logRecommendationPath(userId, provider, details = {}) {
 }
 
 /**
- * Fire-and-forget: refresh cached embedding in the Python (FastAPI) service.
+ * Fire-and-forget: refresh cached embedding in the recommendation service.
  */
 export function triggerEmbeddingUpdate(docId, docType) {
-    if (!docId || !docType || !PYTHON_URL) return;
+    if (!docId || !docType || !RECOMMENDATION_SERVICE_URL) return;
     axios
         .post(
-            `${PYTHON_URL}/recompute-embeddings`,
+            `${RECOMMENDATION_SERVICE_URL}/recompute-embeddings`,
             { doc_id: String(docId), doc_type: docType },
             { timeout: 60000 }
         )
@@ -135,6 +131,9 @@ async function loadSeekerProfilePayload(userId) {
     const workFromProfile = (profile?.experience || []).map((e) => e.role).filter(Boolean);
     const workExperienceTitles = [...new Set([...workFromUser, ...workFromProfile])];
     const jobTitle = [user.professionalHeadline, profile?.headline].find((x) => x && String(x).trim()) || '';
+    const profession =
+        String(user.profession || user.category || user.jobPreferences?.category || '').trim() ||
+        String(profile?.jobPreferences?.category || '').trim();
     return {
         userProfileText: user.userProfileText || '',
         cvText: user.cvText || '',
@@ -154,11 +153,13 @@ async function loadSeekerProfilePayload(userId) {
         jobTitle,
         experienceLevel,
         preferredJobType,
-        workExperienceTitles
+        workExperienceTitles,
+        profession,
+        userCategory: String(user.category || '').trim()
     };
 }
 
-function jobDocumentToFlaskPayload(job) {
+function jobDocumentToRecommendationPayload(job) {
     return {
         _id: job._id?.toString?.() ?? String(job._id),
         title: job.title,
@@ -194,128 +195,98 @@ async function loadActiveJobDocsForRecommendation(userId) {
         ]
     })
         .sort({ createdAt: -1 })
-        .limit(MAX_JOBS_SENT_TO_FLASK)
+        .limit(MAX_JOBS_SENT_TO_RECOMMENDATION)
         .lean();
 
     return jobDocs.filter((j) => !appliedIds.has(String(j._id)));
 }
 
-async function loadActiveJobsForFlask(userId) {
+async function loadActiveJobsForRecommendation(userId) {
     const jobDocs = await loadActiveJobDocsForRecommendation(userId);
-    return jobDocs.map(jobDocumentToFlaskPayload);
-}
-
-async function postFlaskRecommend(seeker_profile, jobs, limit, userId, flaskAiUrl) {
-    const recommendUrl = `${flaskAiUrl}/recommend`;
-    if (process.env.NODE_ENV !== 'test') {
-        console.log('[recommendations] sending seeker_profile to Flask /recommend:', {
-            userId: String(userId),
-            flaskAiUrl,
-            recommendUrl,
-            limit,
-            jobCount: Array.isArray(jobs) ? jobs.length : 0,
-            seeker_profile
-        });
-    }
-
-    const requestBody = { user_id: String(userId), seeker_profile, jobs, limit };
-    let { data, status } = await axios.post(
-        recommendUrl,
-        requestBody,
-        { timeout: FLASK_TIMEOUT_MS, validateStatus: () => true }
-    );
-
-    if (process.env.NODE_ENV !== 'test') {
-        console.log('[recommendations] raw Flask /recommend response:', {
-            userId: String(userId),
-            recommendUrl,
-            status,
-            data,
-            requestBodyKeys: Object.keys(requestBody)
-        });
-    }
-
-    if (status >= 400) {
-        const err = new Error(data?.error || 'Flask recommendation error');
-        err.response = { status, data };
-        throw err;
-    }
-
-    return data;
+    return jobDocs.map(jobDocumentToRecommendationPayload);
 }
 
 /**
- * Calls FastAPI /recommend without throwing on 4xx/5xx so we can avoid
- * mislabeling "trending" jobs as AI when Python returns [] or an error body.
+ * POST /recommend — does not throw on 4xx/5xx so callers can fall back to scored offline matches.
  */
-async function fetchPythonRecommendations(userId, limit) {
-    if (!PYTHON_URL) {
+async function fetchRecommendationServiceRecommendations(userId, limit, seekerProfile, jobs) {
+    if (!RECOMMENDATION_SERVICE_URL) {
         if (process.env.NODE_ENV !== 'test') {
-            console.warn('[recommendations] FastAPI: PYTHON_SERVICE_URL not set; skipping POST /recommend.');
+            console.warn(
+                '[recommendations] RECOMMENDATION_SERVICE_URL not set; skipping POST /recommend.'
+            );
         }
         return {
             recommendations: [],
-            __pythonError: false,
+            __serviceError: false,
             __networkError: false,
             __skippedNoUrl: true,
-            __pythonStatus: null,
-            __pythonBody: null,
-            __pythonMessage: null,
-            __pythonCode: null
+            __serviceStatus: null,
+            __serviceBody: null,
+            __serviceMessage: null,
+            __serviceCode: null
         };
     }
     try {
+        const body = {
+            user_id: String(userId),
+            limit,
+            seeker_profile: seekerProfile && typeof seekerProfile === 'object' ? seekerProfile : {},
+            jobs: Array.isArray(jobs) ? jobs : []
+        };
         const { data, status } = await axios.post(
-            `${PYTHON_URL}/recommend`,
-            { user_id: String(userId), limit },
-            { timeout: PYTHON_TIMEOUT_MS, validateStatus: () => true }
+            `${RECOMMENDATION_SERVICE_URL}/recommend`,
+            body,
+            { timeout: RECOMMENDATION_TIMEOUT_MS, validateStatus: () => true }
         );
         if (status >= 400) {
             return {
                 recommendations: [],
-                __pythonError: true,
-                __pythonStatus: status,
-                __pythonBody: data
+                __serviceError: true,
+                __serviceStatus: status,
+                __serviceBody: data
             };
         }
-        return { ...data, __pythonError: false };
+        return { ...data, __serviceError: false };
     } catch (e) {
         return {
             recommendations: [],
-            __pythonError: true,
+            __serviceError: true,
             __networkError: true,
-            __pythonStatus: null,
-            __pythonBody: null,
-            __pythonMessage: e.message,
-            __pythonCode: e.code
+            __serviceStatus: null,
+            __serviceBody: null,
+            __serviceMessage: e.message,
+            __serviceCode: e.code
         };
     }
 }
 
-function formatPythonServiceMessage(pyResult) {
-    const body = pyResult?.__pythonBody;
+function formatRecommendationServiceMessage(svcResult) {
+    const body = svcResult?.__serviceBody;
     const d = body?.detail;
     if (typeof d === 'string') return d;
     if (Array.isArray(d) && d[0]?.msg) return String(d[0].msg);
     if (typeof body?.message === 'string') return body.message;
-    if (pyResult?.__pythonStatus) {
-        return `Recommendation service returned HTTP ${pyResult.__pythonStatus}.`;
+    if (svcResult?.__serviceStatus) {
+        return `Recommendation service returned HTTP ${svcResult.__serviceStatus}.`;
     }
     return 'Personalized recommendations are temporarily unavailable.';
 }
 
 export async function getSimilarJobs(jobId, limit = 5) {
-    if (!PYTHON_URL) {
+    if (!RECOMMENDATION_SERVICE_URL) {
         if (process.env.NODE_ENV !== 'test') {
-            console.warn('[recommendations] getSimilarJobs: PYTHON_SERVICE_URL not set; returning empty.');
+            console.warn(
+                '[recommendations] getSimilarJobs: RECOMMENDATION_SERVICE_URL not set; returning empty.'
+            );
         }
         return { job_id: String(jobId), similar_jobs: [], total: 0 };
     }
     try {
         const { data } = await axios.post(
-            `${PYTHON_URL}/similar-jobs`,
+            `${RECOMMENDATION_SERVICE_URL}/similar-jobs`,
             { job_id: String(jobId), limit },
-            { timeout: PYTHON_TIMEOUT_MS }
+            { timeout: RECOMMENDATION_TIMEOUT_MS }
         );
         return data;
     } catch {
@@ -323,7 +294,7 @@ export async function getSimilarJobs(jobId, limit = 5) {
     }
 }
 
-async function hydratePythonJobCards(recs) {
+async function hydrateRecommendationJobCards(recs) {
     if (!recs?.length) return [];
     const ids = recs.map((r) => r.job_id || r.jobId).filter(Boolean);
     const oids = ids.map((id) => new mongoose.Types.ObjectId(id));
@@ -357,7 +328,7 @@ async function hydratePythonJobCards(recs) {
 }
 
 /**
- * Profile-based ranking when Flask and FastAPI are unreachable (no generic "trending" list).
+ * Profile-based ranking when recommendation-service is unreachable (safety net).
  */
 async function getScoredFallbackJobs(
     userId,
@@ -375,24 +346,22 @@ async function getScoredFallbackJobs(
         };
     }
 
-    const jobDocs = await loadActiveJobDocsForRecommendation(userId);
-    const titleBlob = [
-        profilePayload.jobTitle,
-        profilePayload.professionalHeadline,
-        profilePayload.headline
-    ]
-        .filter((x) => x && String(x).trim())
-        .join(' ');
+    let jobDocs = await loadActiveJobDocsForRecommendation(userId);
+    const filterCtx = buildFallbackFilterContext(profilePayload);
+    const titleBlob = filterCtx.titleBlob;
 
-    const allowed = getAllowedJobCategoriesForSeeker(titleBlob);
-    let candidates = jobDocs;
-    if (allowed !== null) {
-        if (allowed.length === 0) {
-            candidates = [];
-        } else {
-            candidates = jobDocs.filter((j) => allowed.includes(j.category));
-        }
+    const blockedSet = new Set(filterCtx.blockedCategories || []);
+    const adjacentSet = new Set(filterCtx.adjacentCategories || []);
+    const categoryGateOn = blockedSet.size > 0;
+    if (categoryGateOn) {
+        jobDocs = jobDocs.filter((j) => {
+            const c = String(j.category || '').trim();
+            return c && !blockedSet.has(c);
+        });
     }
+
+    const allowed = filterCtx.allowed;
+    const hasSignals = hasFallbackFilterSignals(filterCtx);
 
     const experienceLevel =
         profilePayload.experienceLevel ||
@@ -422,23 +391,84 @@ async function getScoredFallbackJobs(
         skills: profilePayload.skills || []
     };
 
-    const categoryFilterApplied = allowed !== null && allowed.length > 0;
+    const target = Math.min(limit, MAX_FALLBACK_JOBS_RETURNED);
 
-    let scored = candidates
-        .map((job) => {
-            const { score, reasons } = scoreFallbackJob(job, seeker, { categoryFilterApplied });
-            return { job, score, reasons };
-        })
-        .filter((x) => x.score >= FALLBACK_MIN_INCLUSION_SCORE);
+    /**
+     * @param {typeof jobDocs} pool
+     * @param {boolean} categoryFilterApplied
+     * @param {'primary'|'cross_category'} scope
+     */
+    function scorePool(pool, categoryFilterApplied, scope) {
+        return pool
+            .map((job) => {
+                const { score, reasons } = scoreFallbackJob(job, seeker, { categoryFilterApplied });
+                return { job, score, reasons, scope };
+            })
+            .filter((x) => x.score >= FALLBACK_MIN_INCLUSION_SCORE);
+    }
 
-    scored.sort((a, b) => b.score - a.score);
-    const top = scored.slice(0, Math.min(limit, MAX_FALLBACK_JOBS_RETURNED));
+    let combined = [];
 
-    if (top.length === 0) {
+    if (hasSignals) {
+        const primaryPool = jobDocs.filter((j) => jobPassesPrimaryFallbackFilter(j, filterCtx));
+        const categoryFilterAppliedPrimary = primaryPool.length < jobDocs.length;
+        let primaryScored = scorePool(
+            primaryPool.length > 0 ? primaryPool : [],
+            categoryFilterAppliedPrimary || primaryPool.length > 0,
+            'primary'
+        );
+        primaryScored.sort((a, b) => b.score - a.score);
+        combined = primaryScored.slice(0, target);
+
+        if (combined.length < FALLBACK_CROSS_FILL_THRESHOLD && primaryPool.length > 0) {
+            const taken = new Set(combined.map((x) => x.job._id.toString()));
+            const crossPool = jobDocs.filter((j) => {
+                if (taken.has(j._id.toString())) return false;
+                if (categoryGateOn && adjacentSet.size > 0) {
+                    const c = String(j.category || '').trim();
+                    if (!c || !adjacentSet.has(c)) return false;
+                }
+                return true;
+            });
+            let crossScored = scorePool(crossPool, false, 'cross_category');
+            crossScored.sort((a, b) => b.score - a.score);
+            for (const row of crossScored) {
+                if (combined.length >= target) break;
+                combined.push(row);
+            }
+        }
+
+        if (combined.length === 0 && primaryPool.length === 0) {
+            const categoryFilterApplied = allowed !== null && allowed.length > 0;
+            let pool = jobDocs;
+            if (allowed !== null) {
+                if (allowed.length === 0) pool = [];
+                else pool = jobDocs.filter((j) => allowed.includes(j.category));
+            }
+            let scored = scorePool(pool, categoryFilterApplied, 'primary');
+            scored.sort((a, b) => b.score - a.score);
+            combined = scored.slice(0, target);
+        }
+    } else {
+        let candidates = jobDocs;
+        if (allowed !== null) {
+            if (allowed.length === 0) {
+                candidates = [];
+            } else {
+                candidates = jobDocs.filter((j) => allowed.includes(j.category));
+            }
+        }
+        const categoryFilterApplied = allowed !== null && allowed.length > 0;
+        let scored = scorePool(candidates, categoryFilterApplied, 'primary');
+        scored.sort((a, b) => b.score - a.score);
+        combined = scored.slice(0, target);
+    }
+
+    if (combined.length === 0) {
         const genericProfileHint =
             'Add a clear job title, skills, and preferences so we can improve your matching results.';
         const offlineProfileHint =
-            'Add a clear job title, skills, and preferences so we can match you when AI is offline.';
+            'Add a clear job title, skills, and preferences so we can match you when the recommendation service is offline.';
         return {
             jobs: [],
             isComplete: false,
@@ -452,20 +482,20 @@ async function getScoredFallbackJobs(
             ...(aiOffline
                 ? {
                     recommendationNotice:
-                        'AI matching is offline. Complete your profile headline and skills for better offline matches.'
+                        'The recommendation service is offline. Complete your profile headline and skills for better offline matches.'
                 }
                 : {})
         };
     }
 
-    const oids = top.map((t) => t.job._id);
+    const oids = combined.map((t) => t.job._id);
     const populated = await Job.find({ _id: { $in: oids } })
         .populate('company_id', 'name logo location')
         .lean();
     const byId = new Map(populated.map((j) => [j._id.toString(), j]));
 
-    const jobs = top
-        .map(({ job: j0, score, reasons }) => {
+    const jobs = combined
+        .map(({ job: j0, score, reasons, scope }) => {
             const j = byId.get(j0._id.toString());
             if (!j || !isJobVisibleForPublicListing(j)) return null;
             const matchReason = joinFallbackReasons(reasons);
@@ -476,6 +506,7 @@ async function getScoredFallbackJobs(
                 matchScore: Math.min(100, score),
                 matchReason,
                 recommendationType: 'fallback_scored',
+                recommendationMatchScope: scope,
                 recommendationConfidence: score >= 75 ? 'high' : score >= 55 ? 'medium' : 'low'
             };
         })
@@ -488,21 +519,19 @@ async function getScoredFallbackJobs(
         ...(aiOffline
             ? {
                 recommendationNotice:
-                    'AI matching is offline. These picks use your skills, job area, and preferences instead of the AI engine.'
+                    'The recommendation service is offline. These picks use your skills, job area, and preferences instead of the AI engine.'
             }
             : {})
     };
 }
 
 /**
- * TF-IDF recommendations from Flask when FLASK_AI_URL is set; then FastAPI when PYTHON_SERVICE_URL is set;
- * then scored offline fallback. No silent localhost defaults — missing env skips that provider cleanly.
+ * recommendation-service (FastAPI) when RECOMMENDATION_SERVICE_URL is set;
+ * otherwise scored offline fallback (no silent remote defaults).
  */
 export async function getRecommendedJobs(userId, options = {}) {
     const limit = Math.min(Number(options.limit) || 50, 100);
-    const flaskLimit = Math.min(Math.max(limit, 1), 10);
-    const flaskAiUrl = getFlaskAiUrl();
-    const shouldForceBasicFallback = !flaskAiUrl;
+    const serviceLimit = Math.min(Math.max(limit, 1), 10);
     const profilePayload = await loadSeekerProfilePayload(userId);
     if (!profilePayload) {
         return {
@@ -513,193 +542,112 @@ export async function getRecommendedJobs(userId, options = {}) {
         };
     }
 
-    const jobs = await loadActiveJobsForFlask(userId);
+    const jobs = await loadActiveJobsForRecommendation(userId);
 
-    if (flaskAiUrl) {
-        try {
-            const data = await postFlaskRecommend(profilePayload, jobs, flaskLimit, userId, flaskAiUrl);
-            const recs = data?.recommendations || [];
-            const hydrated = await hydratePythonJobCards(recs);
-            const flaskQuality = hydrated.filter((j) => j.matchScore >= 50);
-            if (flaskQuality.length > 0) {
-                logRecommendationPath(userId, 'flask_tfidf', {
-                    resultCount: flaskQuality.length
-                });
-                return {
-                    jobs: flaskQuality,
-                    isComplete: true,
-                    source: 'flask_tfidf'
-                };
-            }
-            if (recs.length > 0 && hydrated.length === 0) {
-                logRecommendationPath(userId, 'flask_filtered', {
-                    flaskRecommendationCount: recs.length
-                });
-                return {
-                    jobs: [],
-                    isComplete: false,
-                    message:
-                        'The AI ranked jobs, but none can be shown (removed, hidden, or not visible on the public board).',
-                    source: 'flask_filtered'
-                };
-            }
-            if (recs.length === 0) {
-                logRecommendationPath(userId, 'flask_empty', {
-                    activeJobCount: jobs.length
-                });
-                if (jobs.length === 0) {
-                    return {
-                        jobs: [],
-                        isComplete: false,
-                        message: 'No open jobs to match against yet.',
-                        source: 'flask_empty'
-                    };
-                }
-                return getScoredFallbackJobs(userId, Math.min(limit, 5), { aiOffline: false });
-            }
-        } catch (err) {
-            const status = err.response?.status;
-            const msg = err.response?.data?.error || err.message;
-            if (process.env.NODE_ENV !== 'test') {
-                console.warn('[recommendations] Flask connectivity/details:', {
-                    userId: String(userId),
-                    flaskAiUrl,
-                    code: err?.code || null,
-                    message: err?.message || null,
-                    errno: err?.errno || null,
-                    syscall: err?.syscall || null,
-                    address: err?.address || null,
-                    port: err?.port || null,
-                    httpStatus: status || null,
-                    responseBody: err?.response?.data || null
-                });
-            }
-
-            if (status === 400 && typeof msg === 'string') {
-                if (process.env.NODE_ENV !== 'test') {
-                    console.warn('[recommendations] Flask TF-IDF validation (HTTP 400):', msg);
-                }
-                return {
-                    jobs: [],
-                    isComplete: false,
-                    message: msg,
-                    source: 'flask_validation'
-                };
-            }
-
-            if (process.env.NODE_ENV !== 'test') {
-                logRecommendationProviderFailure('Flask TF-IDF', flaskAiUrl, err);
-                if (PYTHON_URL) {
-                    console.warn('[recommendations] Attempting FastAPI fallback after Flask failure.');
-                }
-            }
-        }
-    } else if (process.env.NODE_ENV !== 'test') {
-        console.warn(
-            '[recommendations] FLASK_AI_URL is not configured. Falling back to basic profile-based matching.'
-        );
-        logRecommendationPath(userId, 'fallback_scored', {
-            reason: 'missing_flask_ai_url'
+    const seekerRecFilterCtx = buildFallbackFilterContext(profilePayload);
+    const blockedRecCategories = new Set(seekerRecFilterCtx.blockedCategories || []);
+    const stripHardBlockedRecommendations = (list) => {
+        if (!Array.isArray(list) || blockedRecCategories.size === 0) return list;
+        return list.filter((j) => {
+            const c = String(j?.category || '').trim();
+            return c && !blockedRecCategories.has(c);
         });
+    };
+
+    if (!RECOMMENDATION_SERVICE_URL) {
+        logRecommendationPath(userId, 'fallback_scored', {
+            reason: 'recommendation_service_url_missing'
+        });
+        return getScoredFallbackJobs(userId, Math.min(limit, 5), { aiOffline: true });
     }
 
-    const pyResult = await fetchPythonRecommendations(userId, flaskLimit);
-    const recs = pyResult.recommendations || [];
-    const hydrated = await hydratePythonJobCards(recs);
-    const pyQuality = hydrated.filter((j) => j.matchScore >= 50);
+    const svcResult = await fetchRecommendationServiceRecommendations(
+        userId,
+        serviceLimit,
+        profilePayload,
+        jobs
+    );
+    const recs = svcResult.recommendations || [];
+    const hydrated = await hydrateRecommendationJobCards(recs);
+    const aiQuality = stripHardBlockedRecommendations(hydrated.filter((j) => j.matchScore >= 50));
 
-    if (pyQuality.length > 0) {
-        logRecommendationPath(userId, 'python', {
-            resultCount: pyQuality.length
+    if (aiQuality.length > 0) {
+        logRecommendationPath(userId, 'recommendation_service', {
+            resultCount: aiQuality.length
         });
         return {
-            jobs: pyQuality,
+            jobs: aiQuality,
             isComplete: true,
-            source: 'python'
+            source: 'recommendation_service'
         };
     }
 
     if (recs.length > 0 && hydrated.length === 0) {
-        if (shouldForceBasicFallback) {
-            logRecommendationPath(userId, 'fallback_scored', {
-                reason: 'python_filtered_after_missing_flask_url'
-            });
-            return getScoredFallbackJobs(userId, Math.min(limit, 5), { aiOffline: true });
-        }
-        return {
-            jobs: [],
-            isComplete: false,
-            message:
-                'FastAPI returned matches, but none are visible on the job board (moderation or removed).',
-            source: 'python_filtered'
-        };
+        logRecommendationPath(userId, 'fallback_scored', {
+            reason: 'recommendation_filtered'
+        });
+        return getScoredFallbackJobs(userId, Math.min(limit, 5), { aiOffline: true });
     }
 
-    if (recs.length > 0 && hydrated.length > 0 && pyQuality.length === 0) {
+    if (recs.length > 0 && hydrated.length > 0 && aiQuality.length === 0) {
         logRecommendationPath(userId, 'fallback_scored', {
-            reason: 'python_low_quality_scores'
+            reason: 'recommendation_low_quality_scores'
         });
         return getScoredFallbackJobs(userId, Math.min(limit, 5), { aiOffline: false });
     }
 
-    if (pyResult.__skippedNoUrl || pyResult.__networkError) {
-        if (pyResult.__networkError && process.env.NODE_ENV !== 'test') {
+    if (svcResult.__skippedNoUrl || svcResult.__networkError) {
+        if (svcResult.__networkError && process.env.NODE_ENV !== 'test') {
             const syntheticErr = {
-                message: pyResult.__pythonMessage || 'network error',
-                code: pyResult.__pythonCode || ''
+                message: svcResult.__serviceMessage || 'network error',
+                code: svcResult.__serviceCode || ''
             };
-            logRecommendationProviderFailure('FastAPI', PYTHON_URL, syntheticErr);
+            logRecommendationProviderFailure(RECOMMENDATION_SERVICE_URL, syntheticErr);
         }
         logRecommendationPath(userId, 'fallback_scored', {
-            reason: pyResult.__networkError ? 'python_network_error' : 'python_url_missing'
+            reason: svcResult.__networkError ? 'recommendation_network_error' : 'recommendation_url_missing'
         });
         return getScoredFallbackJobs(userId, Math.min(limit, 5), { aiOffline: true });
     }
 
-    if (pyResult.__pythonError) {
+    if (svcResult.__serviceError) {
         if (process.env.NODE_ENV !== 'test') {
             const syntheticErr = {
                 response: {
-                    status: pyResult.__pythonStatus,
-                    data: pyResult.__pythonBody
+                    status: svcResult.__serviceStatus,
+                    data: svcResult.__serviceBody
                 },
-                message: formatPythonServiceMessage(pyResult)
+                message: formatRecommendationServiceMessage(svcResult)
             };
-            logRecommendationProviderFailure('FastAPI', PYTHON_URL, syntheticErr);
+            logRecommendationProviderFailure(RECOMMENDATION_SERVICE_URL, syntheticErr);
         }
-        if (shouldForceBasicFallback) {
-            logRecommendationPath(userId, 'fallback_scored', {
-                reason: 'python_error_after_missing_flask_url'
-            });
-            return getScoredFallbackJobs(userId, Math.min(limit, 5), { aiOffline: true });
-        }
-        return {
-            jobs: [],
-            isComplete: false,
-            message: formatPythonServiceMessage(pyResult),
-            source: 'python_error'
-        };
-    }
-
-    if (shouldForceBasicFallback) {
         logRecommendationPath(userId, 'fallback_scored', {
-            reason: 'final_basic_fallback_no_flask_url'
+            reason: 'recommendation_service_error'
         });
         return getScoredFallbackJobs(userId, Math.min(limit, 5), { aiOffline: true });
     }
 
-    return {
-        jobs: [],
-        isComplete: false,
-        message:
-            'No personalized matches from the embedding service yet. Complete your profile or try again later.',
-        source: 'python_empty'
-    };
+    logRecommendationPath(userId, 'fallback_scored', {
+        reason: 'recommendation_empty'
+    });
+    return getScoredFallbackJobs(userId, Math.min(limit, 5), { aiOffline: true });
+}
+
+/** UI + label gating: recommendation_service counts as "AI"; fallback_scored is honest fallback. */
+export function getRecommendationProviderFromSource(source) {
+    if (
+        source === 'recommendation_service' ||
+        source === 'python' ||
+        source === 'flask_tfidf'
+    ) {
+        return 'ai';
+    }
+    return 'fallback';
 }
 
 export async function hydrateSimilarJobsResponse(pythonPayload) {
     const recs = pythonPayload?.similar_jobs || [];
-    const hydrated = await hydratePythonJobCards(recs);
+    const hydrated = await hydrateRecommendationJobCards(recs);
     return {
         job_id: pythonPayload?.job_id,
         similar_jobs: hydrated,

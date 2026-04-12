@@ -7,6 +7,15 @@ import CompanyLogo from '../common/CompanyLogo';
 import { getMatchStrengthDisplay } from '../../utils/recommendationFriendly';
 import { JobMatchProgressBar, JobMatchScoreCorner, JobMatchWhyBlock } from '../jobs/JobMatchUi';
 
+const DEFAULT_REC_META = {
+    provider: 'fallback',
+    source: 'unknown',
+    overallStrength: 0,
+    kycVerified: false,
+    showMatchScores: false,
+    professionCategories: []
+};
+
 const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, toggleSaveJob: propToggleSave }) => {
     const [jobs, setJobs] = useState([]);
     const [isCompleteProfile, setIsCompleteProfile] = useState(true);
@@ -15,6 +24,7 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
     const [serverMessage, setServerMessage] = useState('');
     const [loading, setLoading] = useState(true);
     const [usingFallbackJobs, setUsingFallbackJobs] = useState(false);
+    const [recommendationMeta, setRecommendationMeta] = useState(() => ({ ...DEFAULT_REC_META }));
     const hookSaver = useJobSaver();
     const savedJobIds = propSavedIds ?? hookSaver.savedJobIds;
     const toggleSaveJob = propToggleSave ?? hookSaver.toggleSaveJob;
@@ -33,6 +43,7 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
             setUsingFallbackJobs(true);
             setRecommendationNotice('');
             setServerMessage('');
+            setRecommendationMeta({ ...DEFAULT_REC_META });
         };
 
         const fetchRecommendations = async () => {
@@ -51,6 +62,13 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                     setIsCompleteProfile(response.data.isComplete !== false);
                     setRecommendationNotice(response.data.recommendationNotice || '');
                     setServerMessage(response.data.message || '');
+                    setRecommendationMeta({
+                        ...DEFAULT_REC_META,
+                        ...(response.data.recommendationMeta &&
+                        typeof response.data.recommendationMeta === 'object'
+                            ? response.data.recommendationMeta
+                            : {})
+                    });
                 } else if (Array.isArray(response.data)) {
                     if (response.data.length === 0) {
                         await fetchLatestJobsFallback();
@@ -59,6 +77,7 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                     setJobs(response.data);
                     setUsingFallbackJobs(false);
                     setHasPersonalizationData(true);
+                    setRecommendationMeta({ ...DEFAULT_REC_META });
                 } else {
                     await fetchLatestJobsFallback();
                 }
@@ -126,12 +145,20 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                         <div className="p-1.5 bg-[#29a08e]/10 rounded-lg">
                             <Sparkles className="w-5 h-5 text-[#29a08e] fill-[#29a08e]/20" />
                         </div>
-                        {usingFallbackJobs ? 'Recommended Jobs' : 'AI Recommended For You'}
+                        {usingFallbackJobs
+                            ? 'Recommended Jobs'
+                            : recommendationMeta.provider === 'ai'
+                              ? 'AI Recommended For You'
+                              : 'Jobs Matching Your Profile'}
                     </h3>
                     <p className="text-xs text-gray-500 font-medium mt-1">
                         {usingFallbackJobs
                             ? 'Latest opportunities selected for you'
-                            : 'Curated matches based on your skills, experience, and location'}
+                            : recommendationMeta.provider === 'ai'
+                              ? 'Curated matches based on your skills, experience, and location'
+                              : recommendationMeta.source === 'fallback_scored'
+                                ? 'Ranked using your field, skills, and preferences (AI offline)'
+                                : 'Opportunities aligned with your profile'}
                     </p>
                 </div>
                 <Link
@@ -171,7 +198,7 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                     const jobId = job._id?.toString?.() || job._id;
                     const isSaved = savedJobIds.some((sid) => (sid?.toString?.() || sid) === jobId);
                     const hasApplied = appliedJobIds.includes(job._id);
-                    const strength = getMatchStrengthDisplay(job);
+                    const strength = getMatchStrengthDisplay(job, recommendationMeta);
                     const rawReason = String(job.matchReason || job.reason || '').trim();
                     const companyName = job.company_id?.name || job.company_name || 'Company';
                     const whyOverride =
@@ -186,7 +213,7 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
                             )}
 
-                            <JobMatchScoreCorner job={job} />
+                            <JobMatchScoreCorner job={job} recMeta={recommendationMeta} />
 
                             <div className="flex flex-col sm:flex-row sm:items-start gap-4 mb-3 pr-24 sm:pr-28 relative z-10">
                                 <div className="flex gap-4 min-w-0 flex-1">
@@ -223,10 +250,11 @@ const RecommendedJobsWidget = ({ appliedJobIds = [], savedJobIds: propSavedIds, 
                                 </div>
                             </div>
 
-                            <JobMatchProgressBar job={job} className="relative z-10 mb-3" />
+                            <JobMatchProgressBar job={job} recMeta={recommendationMeta} className="relative z-10 mb-3" />
 
                             <JobMatchWhyBlock
                                 job={job}
+                                recMeta={recommendationMeta}
                                 friendlyOverride={whyOverride}
                                 className="relative z-10 mb-4"
                             />

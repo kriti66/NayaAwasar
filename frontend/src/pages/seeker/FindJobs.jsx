@@ -16,7 +16,7 @@ import FeaturedJobs from '../../components/jobs/FeaturedJobs';
 import PromotionBadge from '../../components/jobs/PromotionBadge';
 import { JOB_CATEGORIES } from '../../constants/jobCategories';
 import { applyVisibleBadgeLimits, BADGE_CONFIG } from '../../utils/jobLabelDisplay';
-import { jobHasRecommendationScore } from '../../utils/recommendationFriendly';
+import { getListPageMatchPresentation } from '../../utils/recommendationFriendly';
 import { JobMatchProgressBar, JobMatchScoreCorner, JobMatchWhyBlock } from '../../components/jobs/JobMatchUi';
 
 /** Sidebar experience labels → Job.experience_level values (exact match) */
@@ -176,12 +176,26 @@ const timeAgo = (date) => {
     return 'Just now';
 };
 
-const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
+const DEFAULT_REC_META = {
+    provider: 'fallback',
+    source: 'unknown',
+    overallStrength: 0,
+    kycVerified: false,
+    showMatchScores: false,
+    professionCategories: [],
+    categoryGateActive: false,
+    allowedCategories: [],
+    adjacentCategories: [],
+    blockedCategories: []
+};
+
+const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode, recMeta }) => {
     const badgeCfg = job.visibleLabel ? BADGE_CONFIG[job.visibleLabel] : null;
-    const hasRecScore = jobHasRecommendationScore(job);
+    const listMatch = getListPageMatchPresentation(job, recMeta);
+    const showMatchChrome = listMatch.showMatchUi;
     const showLegacyPromoBadge =
         badgeCfg &&
-        (!hasRecScore ||
+        (!showMatchChrome ||
             job.visibleLabel === 'SPONSORED' ||
             job.visibleLabel === 'FEATURED');
     const isAiStyle = ['AI_SUGGESTED', 'GOOD_MATCH'].includes(job.visibleLabel || '');
@@ -199,9 +213,17 @@ const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
                     ? 'bg-gradient-to-br from-white to-amber-50/30 border-amber-200/50 ring-1 ring-amber-200/30 shadow-sm'
                     : 'bg-white border-gray-100 shadow-sm hover:border-[#29a08e]/20'
     }`}>
-        {(hasRecScore || showLegacyPromoBadge) && (
+        {(showMatchChrome || showLegacyPromoBadge) && (
             <div className="absolute top-4 right-6 z-[1] flex flex-col items-end gap-2 max-w-[58%] text-right">
-                {hasRecScore && <JobMatchScoreCorner job={job} layout="inline" />}
+                {showMatchChrome && (
+                    <JobMatchScoreCorner
+                        job={job}
+                        recMeta={recMeta}
+                        layout="inline"
+                        matchUi={listMatch.showMatchUi}
+                        matchStrength={listMatch.strength}
+                    />
+                )}
                 {showLegacyPromoBadge && (
                     <span
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-md ${badgeCfg.className}`}
@@ -212,10 +234,10 @@ const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
             </div>
         )}
 
-        <div className={`flex flex-col ${viewMode === 'grid' ? '' : 'md:flex-row'} gap-5 ${hasRecScore || showLegacyPromoBadge ? 'pt-2' : ''}`}>
+        <div className={`flex flex-col ${viewMode === 'grid' ? '' : 'md:flex-row'} gap-5 ${showMatchChrome || showLegacyPromoBadge ? 'pt-2' : ''}`}>
             <CompanyLogo job={job} className="w-14 h-14 rounded-xl p-2 group-hover:scale-105 transition-transform duration-300 shadow-inner" imgClassName="w-full h-full" fallbackClassName="text-xl" />
 
-            <div className={`flex-1 min-w-0 ${hasRecScore ? 'pr-2 sm:pr-28' : showLegacyPromoBadge ? 'pr-2 sm:pr-24' : ''}`}>
+            <div className={`flex-1 min-w-0 ${showMatchChrome ? 'pr-2 sm:pr-28' : showLegacyPromoBadge ? 'pr-2 sm:pr-24' : ''}`}>
                 <div className="flex justify-between items-start mb-2">
                     <div className="min-w-0 pr-2">
                         <div className="flex flex-wrap items-center gap-2 mb-0.5">
@@ -245,9 +267,21 @@ const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
                     ))}
                 </div>
 
-                <JobMatchProgressBar job={job} className="mb-3" />
+                <JobMatchProgressBar
+                    job={job}
+                    recMeta={recMeta}
+                    className="mb-3"
+                    matchUi={listMatch.showMatchUi}
+                    matchStrength={listMatch.strength}
+                />
 
-                <JobMatchWhyBlock job={job} className="mb-4" />
+                <JobMatchWhyBlock
+                    job={job}
+                    recMeta={recMeta}
+                    className="mb-4"
+                    matchUi={listMatch.showMatchUi}
+                    matchStrength={listMatch.strength}
+                />
 
                 <div className="flex items-center justify-between pt-4 border-t border-gray-50">
                     <div className="flex items-center gap-1 text-gray-700 font-bold text-xs">
@@ -272,9 +306,13 @@ const JobCard = memo(({ job, savedJobIds, toggleSaveJob, viewMode }) => {
     </div>
     );
 }, (prevProps, nextProps) => {
-    return prevProps.job === nextProps.job &&
-           prevProps.savedJobIds.includes(prevProps.job.id || prevProps.job._id) === nextProps.savedJobIds.includes(nextProps.job.id || nextProps.job._id) &&
-           prevProps.viewMode === nextProps.viewMode;
+    return (
+        prevProps.job === nextProps.job &&
+        prevProps.savedJobIds.includes(prevProps.job.id || prevProps.job._id) ===
+            nextProps.savedJobIds.includes(nextProps.job.id || nextProps.job._id) &&
+        prevProps.viewMode === nextProps.viewMode &&
+        prevProps.recMeta === nextProps.recMeta
+    );
 });
 
 const FilterContent = ({
@@ -378,6 +416,7 @@ const FindJobs = () => {
     const showSavedOnly = searchParams.get('saved') === 'true';
     const [jobs, setJobs] = useState([]);
     const [hasPersonalizationData, setHasPersonalizationData] = useState(true);
+    const [recommendationMeta, setRecommendationMeta] = useState(() => ({ ...DEFAULT_REC_META }));
     /** List fetch in progress (scoped to results — does not unmount the page). */
     const [listLoading, setListLoading] = useState(true);
     const listFetchGen = useRef(0);
@@ -492,6 +531,12 @@ const FindJobs = () => {
                           : [];
                     setJobs(list);
                     setHasPersonalizationData(payload?.hasPersonalizationData !== false);
+                    setRecommendationMeta({
+                        ...DEFAULT_REC_META,
+                        ...(payload?.recommendationMeta && typeof payload.recommendationMeta === 'object'
+                            ? payload.recommendationMeta
+                            : {})
+                    });
                 } else {
                     const err = jobsOutcome.reason;
                     if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return;
@@ -735,10 +780,39 @@ const FindJobs = () => {
                     <div className="lg:col-span-9 space-y-5 order-1 lg:order-2">
                         {user &&
                             (user.role === 'jobseeker' || user.role === 'job_seeker') &&
-                            !showSavedOnly &&
-                            hasPersonalizationData === false && (
-                                <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 font-medium">
-                                    Complete your profile to get personalized job suggestions.
+                            !showSavedOnly && (
+                                <div className="space-y-3">
+                                    {recommendationMeta.kycVerified === false && (
+                                        <div className="rounded-2xl border border-sky-200 bg-sky-50/90 px-4 py-3 text-sm text-sky-950 font-medium">
+                                            Verify your identity to get better matches.{' '}
+                                            <Link
+                                                to="/seeker/profile"
+                                                className="font-bold text-[#29a08e] underline underline-offset-2"
+                                            >
+                                                Verify KYC
+                                            </Link>
+                                        </div>
+                                    )}
+                                    {recommendationMeta.kycVerified === true &&
+                                        typeof recommendationMeta.overallStrength === 'number' &&
+                                        recommendationMeta.overallStrength < 40 && (
+                                            <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 font-medium">
+                                                Complete your profile to unlock job match scores.{' '}
+                                                <Link
+                                                    to="/seeker/profile"
+                                                    className="font-bold text-[#29a08e] underline underline-offset-2"
+                                                >
+                                                    Improve profile
+                                                </Link>
+                                            </div>
+                                        )}
+                                    {recommendationMeta.kycVerified === true &&
+                                        recommendationMeta.overallStrength >= 40 &&
+                                        hasPersonalizationData === false && (
+                                            <div className="rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950 font-medium">
+                                                Complete your profile to get personalized job suggestions.
+                                            </div>
+                                        )}
                                 </div>
                             )}
                         {/* Results Header */}
@@ -769,12 +843,26 @@ const FindJobs = () => {
                             )}
                             {!listLoading && currentJobsWithBadges.length > 0 &&
                                 currentJobsWithBadges.map((job) => (
-                                    <JobCard key={job._id || job.id} job={job} savedJobIds={savedJobIds} toggleSaveJob={toggleSaveJob} viewMode={viewMode} />
+                                    <JobCard
+                                        key={job._id || job.id}
+                                        job={job}
+                                        savedJobIds={savedJobIds}
+                                        toggleSaveJob={toggleSaveJob}
+                                        viewMode={viewMode}
+                                        recMeta={recommendationMeta}
+                                    />
                                 ))}
                             {listLoading && jobs.length > 0 && (
                                 <>
                                     {currentJobsWithBadges.map((job) => (
-                                        <JobCard key={job._id || job.id} job={job} savedJobIds={savedJobIds} toggleSaveJob={toggleSaveJob} viewMode={viewMode} />
+                                        <JobCard
+                                        key={job._id || job.id}
+                                        job={job}
+                                        savedJobIds={savedJobIds}
+                                        toggleSaveJob={toggleSaveJob}
+                                        viewMode={viewMode}
+                                        recMeta={recommendationMeta}
+                                    />
                                     ))}
                                     <div
                                         className="absolute inset-0 rounded-2xl bg-white/55 backdrop-blur-[1px] flex items-start justify-center pt-24 z-10 pointer-events-none"

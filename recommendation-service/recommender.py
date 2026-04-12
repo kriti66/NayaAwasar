@@ -141,27 +141,131 @@ def _extract_seeker_skills_from_payload(seeker_profile: Dict[str, Any]) -> List[
     return [s for s in skills if s]
 
 
-def _build_job_blob_from_payload(job: Dict[str, Any]) -> str:
+def build_seeker_text_from_payload(p: Dict[str, Any]) -> str:
+    """Flatten Node `loadSeekerProfilePayload` into one string for embedding."""
+    if not p or not isinstance(p, dict):
+        return ""
+    parts: List[str] = []
+
+    def add_str(*keys: str) -> None:
+        for k in keys:
+            v = p.get(k)
+            if isinstance(v, str) and v.strip():
+                parts.append(v.strip())
+
+    add_str(
+        "jobTitle",
+        "professionalHeadline",
+        "headline",
+        "userProfileText",
+        "bio",
+        "summary",
+        "location",
+        "profileLocation",
+    )
+    cv = p.get("cvText")
+    if isinstance(cv, str) and cv.strip():
+        parts.append(cv.strip()[:8000])
+
+    skills = p.get("skills") or []
+    if isinstance(skills, list):
+        parts.append(" ".join(str(s).strip() for s in skills if s))
+
+    for jp_key in ("jobPreferences", "profileJobPreferences"):
+        jp = p.get(jp_key)
+        if isinstance(jp, dict):
+            bits = [
+                str(jp.get("jobType") or jp.get("preferredJobType") or ""),
+                str(jp.get("workMode") or ""),
+                str(jp.get("location") or jp.get("preferredLocation") or ""),
+                str(jp.get("seniority") or jp.get("experienceLevel") or ""),
+                str(jp.get("category") or ""),
+            ]
+            parts.extend(b for b in bits if b)
+
+    top_exp = str(p.get("experienceLevel") or "").strip()
+    if top_exp:
+        parts.append(top_exp)
+    top_pjt = str(p.get("preferredJobType") or "").strip()
+    if top_pjt:
+        parts.append(top_pjt)
+
+    wet = p.get("workExperienceTitles") or []
+    if isinstance(wet, list):
+        parts.append(" ".join(str(x) for x in wet if x))
+
+    for w in p.get("workExperience") or []:
+        if isinstance(w, dict):
+            parts.append(
+                " ".join(
+                    str(w.get(k) or "")
+                    for k in ("title", "company", "duration", "description")
+                )
+            )
+
+    for e in p.get("education") or []:
+        if isinstance(e, dict):
+            parts.append(
+                " ".join(
+                    str(e.get(k) or "")
+                    for k in ("degree", "institution", "field", "description")
+                )
+            )
+
+    for proj in p.get("projects") or []:
+        if isinstance(proj, dict):
+            parts.append(
+                " ".join(
+                    str(proj.get(k) or "")
+                    for k in ("title", "name", "description")
+                )
+            )
+
+    return " ".join(x for x in parts if x and str(x).strip()).strip()
+
+
+def _build_job_text_from_payload(job: Dict[str, Any]) -> str:
     parts = [
-        job.get("title"),
-        job.get("job_title"),
-        job.get("description"),
-        job.get("job_description"),
-        job.get("requirements"),
-        job.get("company_name"),
-        job.get("location"),
-        job.get("type"),
-        job.get("job_type"),
-        job.get("experience_level"),
-        job.get("category"),
+        job.get("title") or "",
+        job.get("job_title") or "",
+        job.get("description") or "",
+        job.get("job_description") or "",
+        job.get("requirements") or "",
+        job.get("company_name") or "",
+        job.get("location") or "",
+        str(job.get("type") or job.get("job_type") or ""),
+        job.get("experience_level") or "",
+        job.get("category") or "",
     ]
     tags = job.get("tags") or []
     if isinstance(tags, list):
-        parts.extend([str(x) for x in tags if x])
+        parts.extend(str(t) for t in tags if t)
     req_skills = job.get("requiredSkills") or []
     if isinstance(req_skills, list):
-        parts.extend([str(x) for x in req_skills if x])
-    return " ".join(str(x) for x in parts if x).lower()
+        parts.extend(str(x) for x in req_skills if x)
+    return " ".join(p for p in parts if p).strip()
+
+
+def _semantic_reason_tier(score: float) -> str:
+    if score >= 0.55:
+        return "Strong semantic match to your profile"
+    if score >= 0.40:
+        return "Good match to your profile and experience"
+    return "Related to your profile based on overall fit"
+
+
+def _semantic_reason_with_skills(
+    score: float, seeker_profile: Dict[str, Any], job: Dict[str, Any]
+) -> str:
+    base = _semantic_reason_tier(score)
+    skills = _extract_seeker_skills_from_payload(seeker_profile)
+    if not skills:
+        return base
+    blob = _build_job_text_from_payload(job).lower()
+    matched = [s for s in skills if s.strip() and s.lower() in blob][:3]
+    if not matched:
+        return base
+    return f"{base}. Skills aligned: {', '.join(matched)}"
 
 
 def recommend_from_payload(
@@ -170,48 +274,54 @@ def recommend_from_payload(
     jobs: List[Dict[str, Any]],
     top_n: int = 10,
 ) -> List[Dict[str, Any]]:
+    import numpy as np
+    from sklearn.metrics.pairwise import cosine_similarity
+
+    from embeddings import generate_embedding, get_model
+
     if not seeker_profile or not isinstance(seeker_profile, dict):
         return []
     if not jobs or not isinstance(jobs, list):
         return []
 
-    seeker_skill_values = _extract_seeker_skills_from_payload(seeker_profile)
-    seeker_tokens = _normalize_skill_tokens(seeker_skill_values)
-    if not seeker_tokens:
+    seeker_text = build_seeker_text_from_payload(seeker_profile).strip()
+    if not seeker_text:
         return []
 
-    ranked: List[Tuple[float, Dict[str, Any], str]] = []
+    job_rows: List[Tuple[Dict[str, Any], str]] = []
     for job in jobs:
         if not isinstance(job, dict):
             continue
-        blob = _build_job_blob_from_payload(job)
-        if not blob.strip():
+        jt = _build_job_text_from_payload(job)
+        if not jt.strip():
             continue
+        job_rows.append((job, jt))
 
-        matched: List[str] = []
-        for sk in seeker_skill_values:
-            s = sk.lower()
-            if s and s in blob:
-                matched.append(sk)
+    if not job_rows:
+        return []
 
-        score = min(1.0, 0.18 * len(set(x.lower() for x in matched)))
-        if score <= 0:
-            continue
+    user_emb = np.array(generate_embedding(seeker_text), dtype=np.float64).reshape(1, -1)
+    model = get_model()
+    texts = [t for _, t in job_rows]
+    job_mat = model.encode(texts, convert_to_numpy=True)
+    if job_mat.ndim == 1:
+        job_mat = job_mat.reshape(1, -1)
+    sims = cosine_similarity(user_emb, job_mat)[0]
 
-        reason_skills = matched[:3]
-        reason = (
-            f"Matched with your skills: {', '.join(reason_skills)}"
-            if reason_skills
-            else "Matched based on your profile and job content overlap"
-        )
-        ranked.append((score, job, reason))
+    ranked_idx = sorted(
+        range(len(job_rows)),
+        key=lambda i: sims[i],
+        reverse=True,
+    )[:top_n]
 
-    ranked.sort(key=lambda x: x[0], reverse=True)
     out: List[Dict[str, Any]] = []
-    for score, job, reason in ranked[:top_n]:
+    for i in ranked_idx:
+        job, _jt = job_rows[i]
         jid = job.get("_id") or job.get("id")
         if jid is None:
             continue
+        score = float(sims[i])
+        score_clamped = max(0.0, min(1.0, score))
         out.append(
             {
                 "job_id": str(jid),
@@ -219,10 +329,15 @@ def recommend_from_payload(
                 "company": job.get("company_name") or "",
                 "location": job.get("location") or "",
                 "salary": job.get("salary_range"),
-                "similarity_score": float(score),
-                "reason": reason,
+                "similarity_score": score_clamped,
+                "reason": _semantic_reason_with_skills(score_clamped, seeker_profile, job),
             }
         )
+
+    del user_emb
+    del job_mat
+    del sims
+    gc.collect()
     return out
 
 

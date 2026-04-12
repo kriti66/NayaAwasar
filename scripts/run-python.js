@@ -3,8 +3,7 @@
  * on Windows not inheriting an activated virtualenv).
  *
  * Usage: node scripts/run-python.js <cwd-relative-to-repo-root> <...python args>
- * Example: node scripts/run-python.js ai-service app.py
- * Example: node scripts/run-python.js recommendation-service -m uvicorn main:app --reload --port 8000
+ * Example: node scripts/run-python.js recommendation-service -m uvicorn main:app --reload --port 8001
  */
 const { spawnSync } = require('child_process');
 const path = require('path');
@@ -31,7 +30,9 @@ if (!fs.existsSync(venvPython)) {
     console.warn(
         '[run-python] No .venv found at repo root. Using system Python. Create venv: python -m venv .venv'
     );
-    console.warn('[run-python] Then run: npm run setup:ai');
+    console.warn(
+        '[run-python] Install deps: python -m pip install -r recommendation-service/requirements.txt'
+    );
 }
 
 const result = spawnSync(python, pyArgs, { cwd, stdio: 'inherit', env: process.env });

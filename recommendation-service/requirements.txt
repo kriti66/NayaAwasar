@@ -6,3 +6,5 @@ scikit-learn
 numpy
 python-dotenv
 pydantic
+sentence-transformers==2.2.2
+huggingface_hub>=0.16.0,<0.26.0

@@ -38,19 +38,63 @@ export function normalizeLabelOverride(raw) {
  * @param {boolean} p.isFeatured
  * @param {boolean} p.hasProfileData
  * @param {string|null|undefined} p.labelOverride — from Job.labelOverride
+ * @param {'ai'|'fallback'|undefined} p.recommendationProvider — feed-level provider
+ * @param {number|undefined} p.overallStrength — seeker profile strength 0–100
+ * @param {boolean|undefined} p.kycVerified — seeker KYC approved
+ * @param {string|undefined} p.jobCategory — job.category
+ * @param {string[]|undefined} p.professionCategories — seeker field / inferred categories
+ * @param {'primary'|'cross_category'|undefined} p.recommendationMatchScope — offline fallback row scope
+ * @param {string[]|undefined} p.matchTierCategories — when set (e.g. job browse list), AI_SUGGESTED / GOOD_MATCH only if job category is in this list
  * @returns {'AI_SUGGESTED'|'SPONSORED'|'FEATURED'|'GOOD_MATCH'|null}
  */
-export function getJobLabel({ score, isSponsored, isFeatured, hasProfileData, labelOverride }) {
+export function getJobLabel({
+    score,
+    isSponsored,
+    isFeatured,
+    hasProfileData,
+    labelOverride,
+    recommendationProvider,
+    overallStrength,
+    kycVerified,
+    jobCategory,
+    professionCategories,
+    recommendationMatchScope,
+    matchTierCategories
+}) {
     const override = normalizeLabelOverride(labelOverride);
     if (override) return override;
 
     const { AI_SUGGESTED_THRESHOLD, GOOD_MATCH_THRESHOLD } = parseLabelThresholdsFromEnv();
     const s = typeof score === 'number' && Number.isFinite(score) ? Math.min(1, Math.max(0, score)) : 0;
 
+    const allowPersonalizationBadges =
+        recommendationProvider === 'ai' &&
+        kycVerified === true &&
+        typeof overallStrength === 'number' &&
+        overallStrength >= 40;
+
+    const profList = Array.isArray(professionCategories) ? professionCategories : [];
+    const jc = String(jobCategory || '').trim().toLowerCase();
+    const categoryAligned =
+        profList.length === 0 ||
+        profList.some((c) => String(c || '').trim().toLowerCase() === jc);
+
+    const categoryOkForPersonalTier =
+        matchTierCategories === undefined
+            ? categoryAligned
+            : Array.isArray(matchTierCategories) &&
+              matchTierCategories.length > 0 &&
+              matchTierCategories.some((c) => String(c || '').trim().toLowerCase() === jc);
+
+    const allowTierMatch =
+        allowPersonalizationBadges &&
+        recommendationMatchScope !== 'cross_category' &&
+        categoryOkForPersonalTier;
+
     if (isSponsored) return 'SPONSORED';
-    if (hasProfileData && s >= AI_SUGGESTED_THRESHOLD) return 'AI_SUGGESTED';
+    if (allowTierMatch && hasProfileData && s >= AI_SUGGESTED_THRESHOLD) return 'AI_SUGGESTED';
     if (isFeatured) return 'FEATURED';
-    if (hasProfileData && s >= GOOD_MATCH_THRESHOLD) return 'GOOD_MATCH';
+    if (allowTierMatch && hasProfileData && s >= GOOD_MATCH_THRESHOLD) return 'GOOD_MATCH';
     return null;
 }
 

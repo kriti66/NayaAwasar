@@ -6,10 +6,20 @@ import { BADGE_CONFIG } from '../../utils/jobLabelDisplay';
 import { jobHasRecommendationScore } from '../../utils/recommendationFriendly';
 import { JobMatchProgressBar, JobMatchScoreCorner, JobMatchWhyBlock } from '../jobs/JobMatchUi';
 
+const DEFAULT_REC_META = {
+    provider: 'fallback',
+    source: 'unknown',
+    overallStrength: 0,
+    kycVerified: false,
+    showMatchScores: false,
+    professionCategories: []
+};
+
 const RecommendedJobs = () => {
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [hasPersonalizationData, setHasPersonalizationData] = useState(true);
+    const [recommendationMeta, setRecommendationMeta] = useState(() => ({ ...DEFAULT_REC_META }));
 
     useEffect(() => {
         const fetchJobs = async () => {
@@ -21,6 +31,12 @@ const RecommendedJobs = () => {
                 } else if (res.data.jobs) {
                     setJobs(res.data.jobs.slice(0, 3));
                     setHasPersonalizationData(res.data.hasPersonalizationData !== false);
+                    setRecommendationMeta({
+                        ...DEFAULT_REC_META,
+                        ...(res.data.recommendationMeta && typeof res.data.recommendationMeta === 'object'
+                            ? res.data.recommendationMeta
+                            : {})
+                    });
                 }
             } catch (err) {
                 console.error('Error fetching recommended jobs:', err);
@@ -48,15 +64,27 @@ const RecommendedJobs = () => {
         <section className="mt-12">
             <div className="flex items-center justify-between mb-8">
                 <div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-1">Recommended Jobs</h3>
+                    <h3 className="text-xl font-bold text-gray-900 mb-1">
+                        {recommendationMeta.provider === 'ai'
+                            ? 'AI Recommended For You'
+                            : recommendationMeta.source === 'fallback_scored'
+                              ? 'Jobs Matching Your Profile'
+                              : 'Recommended Jobs'}
+                    </h3>
                     <div className="flex items-center gap-2">
                         <svg className="w-3.5 h-3.5 text-[#29a08e]" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
                         </svg>
                         <p className="text-xs font-semibold text-gray-400">
-                            {hasPersonalizationData
+                            {recommendationMeta.provider === 'ai' && recommendationMeta.showMatchScores
                                 ? 'Based on your profile and preferences'
-                                : 'Complete your profile to get personalized job suggestions'}
+                                : recommendationMeta.source === 'fallback_scored' && recommendationMeta.showMatchScores
+                                  ? 'Field and skill–matched picks while AI is offline'
+                                  : recommendationMeta.provider === 'fallback' && recommendationMeta.showMatchScores
+                                    ? 'Popular and trending openings for you'
+                                    : hasPersonalizationData
+                                      ? 'Add more detail to unlock match scores and smarter picks'
+                                      : 'Complete your profile to get personalized job suggestions'}
                         </p>
                     </div>
                 </div>
@@ -68,7 +96,7 @@ const RecommendedJobs = () => {
             <div className="space-y-4">
                 {jobs.length > 0 ? jobs.map((job, idx) => (
                     <div key={job._id || idx} className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
-                        <JobMatchScoreCorner job={job} />
+                        <JobMatchScoreCorner job={job} recMeta={recommendationMeta} />
                         <div className="flex flex-col md:flex-row gap-6 pr-0 sm:pr-28">
                             {/* Company Logo/Icon */}
                             <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden ${idx === 0 ? 'bg-pink-100 text-pink-500' :
@@ -89,7 +117,7 @@ const RecommendedJobs = () => {
                                     </div>
                                     {(() => {
                                         const cfg = job.visibleLabel ? BADGE_CONFIG[job.visibleLabel] : null;
-                                        const hasRec = jobHasRecommendationScore(job);
+                                        const hasRec = jobHasRecommendationScore(job, recommendationMeta);
                                         const showPromo =
                                             cfg &&
                                             (!hasRec ||
@@ -116,8 +144,8 @@ const RecommendedJobs = () => {
                                     })()}
                                 </div>
 
-                                <JobMatchProgressBar job={job} className="mb-3" />
-                                <JobMatchWhyBlock job={job} className="mb-3" />
+                                <JobMatchProgressBar job={job} recMeta={recommendationMeta} className="mb-3" />
+                                <JobMatchWhyBlock job={job} recMeta={recommendationMeta} className="mb-3" />
 
                                 <div className="flex flex-wrap gap-2 mb-6">
                                     <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-xs font-semibold border border-gray-100 flex items-center gap-1.5">

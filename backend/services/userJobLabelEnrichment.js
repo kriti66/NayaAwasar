@@ -2,14 +2,19 @@ import mongoose from 'mongoose';
 import User from '../models/User.js';
 import Profile from '../models/Profile.js';
 import UserJobLabelCache from '../models/UserJobLabelCache.js';
-import { mergeSeekerDataForScoring } from '../utils/seekerProfileScoring.js';
+import {
+    computeSeekerProfileMetrics,
+    mergeSeekerDataForScoring
+} from '../utils/seekerProfileScoring.js';
 import {
     getJobLabel,
     seekerHasPersonalizationData,
     computeMatchedAndMissingSkills,
     getRecommendationModelVersion
 } from '../utils/jobLabel.js';
+import { buildFallbackFilterContext } from '../utils/recommendationFallback.js';
 import { deriveSponsoredFeaturedFlags } from '../utils/jobPromotionUtils.js';
+import { getNormalizedSkills } from '../utils/seekerProfileScoring.js';
 
 const CACHE_TTL_MS = Math.max(
     60000,
@@ -33,7 +38,7 @@ async function loadSeekerMerged(userId) {
     const [user, profile] = await Promise.all([
         User.findById(userId)
             .select(
-                'fullName email phoneNumber location bio profileImage professionalHeadline linkedinUrl portfolioUrl skills workExperience education resume resume_url kycStatus isKycVerified jobPreferences'
+                'fullName email phoneNumber location bio profileImage professionalHeadline linkedinUrl portfolioUrl skills workExperience education resume resume_url kycStatus isKycVerified jobPreferences profession category'
             )
             .lean(),
         Profile.findOne({ userId })
@@ -45,6 +50,64 @@ async function loadSeekerMerged(userId) {
     return {
         merged,
         hasPersonalizationData: seekerHasPersonalizationData(merged)
+    };
+}
+
+/**
+ * Seeker gates for match % / GOOD_MATCH (KYC + profile strength).
+ */
+export async function loadSeekerRecommendationContext(userId) {
+    const { merged, hasPersonalizationData } = await loadSeekerMerged(userId);
+    if (!merged) {
+        return {
+            overallStrength: 0,
+            kycVerified: false,
+            hasPersonalizationData: false,
+            professionCategories: [],
+            matchAllowedCategories: [],
+            adjacentCategories: [],
+            blockedCategories: [],
+            categoryGateActive: false
+        };
+    }
+    const m = computeSeekerProfileMetrics(merged);
+    const fc = buildFallbackFilterContext({
+        jobTitle: merged.jobTitle || '',
+        professionalHeadline: merged.professionalHeadline || '',
+        headline: '',
+        skills: getNormalizedSkills(merged.skills),
+        workExperience: merged.workExperience || [],
+        workExperienceTitles: [],
+        profession: merged.profession || merged.category || '',
+        userCategory: merged.category || '',
+        jobPreferences: merged.jobPreferences || {},
+        profileJobPreferences: merged.jobPreferences || {}
+    });
+    const professionStrings = [
+        merged.profession,
+        merged.category,
+        merged.jobPreferences?.category
+    ]
+        .map((x) => String(x || '').trim())
+        .filter(Boolean);
+    const professionCategories = [
+        ...new Set([
+            ...fc.matchAllowedCategories,
+            ...fc.adjacentCategories,
+            ...[...fc.categoryHints],
+            ...professionStrings
+        ])
+    ].filter(Boolean);
+
+    return {
+        overallStrength: m.overallStrength,
+        kycVerified: m.kycVerified,
+        hasPersonalizationData,
+        professionCategories,
+        matchAllowedCategories: fc.matchAllowedCategories,
+        adjacentCategories: fc.adjacentCategories,
+        blockedCategories: fc.blockedCategories,
+        categoryGateActive: fc.blockedCategories.length > 0
     };
 }
 
@@ -63,10 +126,19 @@ function resolveAiScore(job) {
  * Attach label (always recomputed from live job promotion flags), aiScore, reason, skills.
  * Caches AI-derived fields per (userId, jobId) with TTL so feeds stay consistent.
  */
-export async function applyUserJobLabels(userId, jobs) {
+export async function applyUserJobLabels(userId, jobs, recOptions = {}) {
     if (!userId || !Array.isArray(jobs) || jobs.length === 0) {
         return { jobs: jobs || [], hasPersonalizationData: false };
     }
+
+    const recommendationProvider = recOptions.recommendationProvider;
+    const overallStrength = recOptions.overallStrength;
+    const kycVerified = recOptions.kycVerified;
+    const professionCategories = Array.isArray(recOptions.professionCategories)
+        ? recOptions.professionCategories
+        : [];
+    const matchTierCategories = recOptions.matchTierCategories;
+    const categoryGate = recOptions.categoryGate;
 
     const { merged, hasPersonalizationData } = await loadSeekerMerged(userId);
     const modelVersion = getRecommendationModelVersion();
@@ -89,7 +161,14 @@ export async function applyUserJobLabels(userId, jobs) {
                 isSponsored,
                 isFeatured,
                 hasProfileData: false,
-                labelOverride: job.labelOverride
+                labelOverride: job.labelOverride,
+                recommendationProvider,
+                overallStrength,
+                kycVerified,
+                jobCategory: job.category,
+                professionCategories,
+                recommendationMatchScope: job.recommendationMatchScope,
+                matchTierCategories
             });
             delete job.isRecommended;
         }
@@ -142,13 +221,30 @@ export async function applyUserJobLabels(userId, jobs) {
         job.isSponsored = isSponsored;
         job.isFeatured = isFeatured;
 
+        const jCat = String(job.category || '').trim();
+        if (categoryGate?.blocked?.has(jCat)) {
+            job.aiScore = null;
+            job.matchScore = null;
+            job.matchReason = null;
+            job.reason = null;
+            job.recommendationType = null;
+            job.recommendationMatchScope = null;
+        }
+
         job.label = getJobLabel({
-            score: job.aiScore ?? 0,
-            isSponsored,
-            isFeatured,
-            hasProfileData: hasPersonalizationData,
-            labelOverride: job.labelOverride
-        });
+                score: job.aiScore ?? 0,
+                isSponsored,
+                isFeatured,
+                hasProfileData: hasPersonalizationData,
+                labelOverride: job.labelOverride,
+                recommendationProvider,
+                overallStrength,
+                kycVerified,
+                jobCategory: job.category,
+                professionCategories,
+                recommendationMatchScope: job.recommendationMatchScope,
+                matchTierCategories
+            });
 
         if (!cacheOk) {
             bulkOps.push({

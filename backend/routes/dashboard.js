@@ -17,8 +17,14 @@ import {
     getNormalizedSkills,
     mergeSeekerDataForScoring
 } from '../utils/seekerProfileScoring.js';
-import { getRecommendedJobs } from '../services/recommendationService.js';
-import { applyUserJobLabels } from '../services/userJobLabelEnrichment.js';
+import {
+    getRecommendedJobs,
+    getRecommendationProviderFromSource
+} from '../services/recommendationService.js';
+import {
+    applyUserJobLabels,
+    loadSeekerRecommendationContext
+} from '../services/userJobLabelEnrichment.js';
 import { RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED } from '../utils/jobModeration.js';
 
 const router = express.Router();
@@ -175,9 +181,18 @@ router.get('/', async (req, res) => {
             const normalizedSkills = getNormalizedSkills(mergedProfileSource.skills);
 
             // Recommended jobs: same pipeline as /api/recommendations + shared labels
-            const recPack = await getRecommendedJobs(userId, { limit: 3 });
+            const [recPack, dashRecCtx] = await Promise.all([
+                getRecommendedJobs(userId, { limit: 3 }),
+                loadSeekerRecommendationContext(userId)
+            ]);
             let recommendedJobs = (recPack.jobs || []).slice(0, 3);
-            await applyUserJobLabels(userId, recommendedJobs);
+            const dashProvider = getRecommendationProviderFromSource(recPack.source || 'unknown');
+            await applyUserJobLabels(userId, recommendedJobs, {
+                recommendationProvider: dashProvider,
+                overallStrength: dashRecCtx.overallStrength,
+                kycVerified: dashRecCtx.kycVerified,
+                professionCategories: dashRecCtx.professionCategories
+            });
 
 
             // Recommended Actions

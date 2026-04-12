@@ -63,9 +63,10 @@ export const TITLE_KEYWORD_RULES = [
 ];
 
 /**
- * Allowed job categories from seeker title/headline. null = do not filter (unknown role).
+ * Title-only keyword inference (headline), no skills — same rules as before.
+ * @returns {string[]|null}
  */
-export function getAllowedJobCategoriesForSeeker(jobTitleBlob) {
+function getTitleKeywordAllowedCategories(jobTitleBlob) {
     const t = String(jobTitleBlob || '').toLowerCase();
     if (!t.trim()) return null;
     const allowed = new Set();
@@ -76,6 +77,88 @@ export function getAllowedJobCategoriesForSeeker(jobTitleBlob) {
     }
     if (allowed.size === 0) return null;
     return [...allowed].filter((c) => JOB_CATEGORIES.includes(c));
+}
+
+function keywordsForCategory(cat) {
+    const set = new Set();
+    for (const rule of TITLE_KEYWORD_RULES) {
+        if (rule.categories.includes(cat)) {
+            for (const kw of rule.keywords) {
+                const k = String(kw).toLowerCase().trim();
+                if (k.length >= 2) set.add(k);
+            }
+        }
+    }
+    return set;
+}
+
+function unionKeywordsForCategories(categorySet) {
+    const u = new Set();
+    for (const c of categorySet) {
+        keywordsForCategory(c).forEach((k) => u.add(k));
+    }
+    return u;
+}
+
+function keywordSetsIntersect(a, b) {
+    for (const x of a) {
+        if (b.has(x)) return true;
+    }
+    return false;
+}
+
+function anyCategoryKeywordInBlob(keywordSet, blobLower) {
+    if (!blobLower || !keywordSet.size) return false;
+    for (const k of keywordSet) {
+        if (k.length >= 2 && blobLower.includes(k)) return true;
+    }
+    return false;
+}
+
+/**
+ * Allowed categories from headline + blocked/adjacent sets for hard gating and fill-in.
+ * @returns {{ allowed: string[]|null; blockedCategories: string[]; adjacentCategories: string[] }}
+ */
+export function getAllowedJobCategoriesForSeeker(jobTitleBlob, skills = []) {
+    const titleAllowed = getTitleKeywordAllowedCategories(jobTitleBlob);
+    const hints = inferSeekerCategoryHints(jobTitleBlob, skills);
+    const seekerCore = new Set(hints);
+    if (titleAllowed !== null) {
+        for (const c of titleAllowed) seekerCore.add(c);
+    }
+
+    if (seekerCore.size === 0) {
+        return {
+            allowed: titleAllowed,
+            blockedCategories: [],
+            adjacentCategories: []
+        };
+    }
+
+    const blobLower = [
+        String(jobTitleBlob || ''),
+        ...(Array.isArray(skills) ? skills : []).map((s) => String(s))
+    ]
+        .join(' ')
+        .toLowerCase();
+
+    const ks = unionKeywordsForCategories(seekerCore);
+    const adjacent = new Set(seekerCore);
+    for (const c of JOB_CATEGORIES) {
+        if (adjacent.has(c)) continue;
+        const kc = keywordsForCategory(c);
+        if (keywordSetsIntersect(kc, ks)) adjacent.add(c);
+        else if (anyCategoryKeywordInBlob(kc, blobLower)) adjacent.add(c);
+    }
+
+    const adjacentCategories = [...adjacent];
+    const blockedCategories = JOB_CATEGORIES.filter((c) => !adjacent.has(c));
+
+    return {
+        allowed: titleAllowed,
+        blockedCategories,
+        adjacentCategories
+    };
 }
 
 /**
@@ -278,4 +361,138 @@ export function joinFallbackReasons(reasons) {
         (a, b) => (REASON_ORDER[a.type] ?? 99) - (REASON_ORDER[b.type] ?? 99)
     );
     return sorted.map((r) => r.label).join(' | ');
+}
+
+/** When primary (field-matched) pool yields fewer than this, add cross-category fill rows. */
+export const FALLBACK_CROSS_FILL_THRESHOLD = 5;
+
+/**
+ * Build seeker signals for pre-filtering fallback jobs (before scoreFallbackJob).
+ * @param {object} profilePayload — from loadSeekerProfilePayload
+ */
+export function buildFallbackFilterContext(profilePayload) {
+    if (!profilePayload || typeof profilePayload !== 'object') {
+        return {
+            titleBlob: '',
+            skills: [],
+            workTitles: [],
+            professionStrings: [],
+            allowed: null,
+            blockedCategories: [],
+            adjacentCategories: [],
+            matchAllowedCategories: [],
+            categoryHints: new Set()
+        };
+    }
+
+    const titleBlob = [
+        profilePayload.jobTitle,
+        profilePayload.professionalHeadline,
+        profilePayload.headline
+    ]
+        .filter((x) => x && String(x).trim())
+        .join(' ')
+        .trim();
+
+    const skills = Array.isArray(profilePayload.skills) ? profilePayload.skills : [];
+    const workTitles = [
+        ...(Array.isArray(profilePayload.workExperienceTitles) ? profilePayload.workExperienceTitles : []),
+        ...(Array.isArray(profilePayload.workExperience)
+            ? profilePayload.workExperience.map((w) => w?.title).filter(Boolean)
+            : [])
+    ];
+
+    const professionStrings = [
+        profilePayload.profession,
+        profilePayload.userCategory,
+        profilePayload.jobPreferences?.category,
+        profilePayload.profileJobPreferences?.category
+    ]
+        .map((x) => String(x || '').trim())
+        .filter(Boolean);
+
+    const gateSkillsBlob = [...skills, ...professionStrings, ...workTitles];
+    const gate = getAllowedJobCategoriesForSeeker(titleBlob, gateSkillsBlob);
+    const categoryHints = inferSeekerCategoryHints(titleBlob, skills);
+
+    const hintsForCore = inferSeekerCategoryHints(titleBlob, gateSkillsBlob);
+    const seekerCoreSet = new Set(hintsForCore);
+    if (gate.allowed !== null) {
+        gate.allowed.forEach((c) => seekerCoreSet.add(c));
+    }
+    const matchAllowedCategories = [...seekerCoreSet].filter((c) => JOB_CATEGORIES.includes(c));
+
+    return {
+        titleBlob,
+        skills,
+        workTitles,
+        professionStrings,
+        allowed: gate.allowed,
+        blockedCategories: gate.blockedCategories,
+        adjacentCategories: gate.adjacentCategories,
+        matchAllowedCategories,
+        categoryHints
+    };
+}
+
+export function hasFallbackFilterSignals(ctx) {
+    if (!ctx) return false;
+    if ((ctx.skills || []).length > 0) return true;
+    if (String(ctx.titleBlob || '').trim()) return true;
+    if ((ctx.professionStrings || []).length > 0) return true;
+    if (ctx.allowed != null && ctx.allowed.length > 0) return true;
+    if (ctx.categoryHints && ctx.categoryHints.size > 0) return true;
+    return false;
+}
+
+/**
+ * Job matches seeker field (category/profession, inferred categories, skill/tag/title, work titles).
+ */
+export function jobPassesPrimaryFallbackFilter(job, ctx) {
+    if (!job || !ctx) return false;
+
+    const jcat = String(job.category || '').trim();
+    if (
+        Array.isArray(ctx.blockedCategories) &&
+        ctx.blockedCategories.length > 0 &&
+        jcat &&
+        ctx.blockedCategories.includes(jcat)
+    ) {
+        return false;
+    }
+    const jcatLower = jcat.toLowerCase();
+    const titleLower = String(job.title || '').toLowerCase();
+    const tags = Array.isArray(job.tags) ? job.tags.map((t) => String(t).toLowerCase()) : [];
+
+    for (const p of ctx.professionStrings || []) {
+        const pl = p.toLowerCase();
+        if (!pl) continue;
+        if (jcatLower === pl) return true;
+        for (const jc of JOB_CATEGORIES) {
+            if (jc.toLowerCase() === pl && jcat === jc) return true;
+        }
+    }
+
+    if (ctx.allowed != null && ctx.allowed.length > 0 && jcat && ctx.allowed.includes(jcat)) {
+        return true;
+    }
+
+    if (ctx.categoryHints && ctx.categoryHints.size > 0 && jcat && ctx.categoryHints.has(jcat)) {
+        return true;
+    }
+
+    for (const sk of ctx.skills || []) {
+        const sl = String(sk).toLowerCase().trim();
+        if (sl.length < 2) continue;
+        if (tags.some((t) => t.includes(sl) || sl.includes(t))) return true;
+        if (titleLower.includes(sl)) return true;
+    }
+
+    for (const wt of ctx.workTitles || []) {
+        const w = String(wt).toLowerCase().trim();
+        if (w.length < 3) continue;
+        if (titleLower.includes(w)) return true;
+    }
+
+    return false;
 }
