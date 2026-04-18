@@ -43,12 +43,15 @@ export { notify, notifyAdmins, notifyUser } from '../services/notificationServic
 // API: Get user's notifications
 export const getNotifications = async (req, res) => {
     try {
+        // Notification model field: `recipient` (ObjectId). Use JWT user id only — never email.
+        const recipientId = req.user._id ?? req.user.id;
+
         const page = Math.max(1, parseInt(req.query.page, 10) || 1);
         const rawLimit = parseInt(req.query.limit, 10) || 10;
         const limit = Math.min(Math.max(1, rawLimit), 100);
         const skip = (page - 1) * limit;
 
-        const filter = { recipient: req.user.id };
+        const filter = { recipient: recipientId };
         if (req.query.filter && req.query.filter !== 'all') {
             if (req.query.filter === 'unread') {
                 filter.isRead = false;
@@ -67,7 +70,7 @@ export const getNotifications = async (req, res) => {
             .lean();
 
         const total = await Notification.countDocuments(filter);
-        const unreadCount = await Notification.countDocuments({ recipient: req.user.id, isRead: false });
+        const unreadCount = await Notification.countDocuments({ recipient: recipientId, isRead: false });
 
         res.json({
             notifications,
@@ -85,7 +88,8 @@ export const getNotifications = async (req, res) => {
 // API: Get unread count only (for badge)
 export const getUnreadCount = async (req, res) => {
     try {
-        const count = await Notification.countDocuments({ recipient: req.user.id, isRead: false });
+        const recipientId = req.user._id ?? req.user.id;
+        const count = await Notification.countDocuments({ recipient: recipientId, isRead: false });
         res.json({ count });
     } catch (error) {
         console.error("Unread Count Error:", error);
@@ -96,8 +100,9 @@ export const getUnreadCount = async (req, res) => {
 // API: Mark single as read
 export const markAsRead = async (req, res) => {
     try {
+        const recipientId = req.user._id ?? req.user.id;
         const notification = await Notification.findOneAndUpdate(
-            { _id: req.params.id, recipient: req.user.id },
+            { _id: req.params.id, recipient: recipientId },
             { isRead: true, readAt: new Date() },
             { new: true }
         );
@@ -112,8 +117,9 @@ export const markAsRead = async (req, res) => {
 // API: Mark all as read
 export const markAllAsRead = async (req, res) => {
     try {
+        const recipientId = req.user._id ?? req.user.id;
         await Notification.updateMany(
-            { recipient: req.user.id, isRead: false },
+            { recipient: recipientId, isRead: false },
             { isRead: true, readAt: new Date() }
         );
         res.json({ message: 'All notifications marked as read' });
@@ -126,7 +132,8 @@ export const markAllAsRead = async (req, res) => {
 // API: Delete notification
 export const deleteNotification = async (req, res) => {
     try {
-        await Notification.findOneAndDelete({ _id: req.params.id, recipient: req.user.id });
+        const recipientId = req.user._id ?? req.user.id;
+        await Notification.findOneAndDelete({ _id: req.params.id, recipient: recipientId });
         res.json({ message: 'Notification deleted' });
     } catch (error) {
         console.error("Delete Notification Error:", error);

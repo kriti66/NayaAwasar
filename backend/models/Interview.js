@@ -21,11 +21,7 @@ const interviewSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
-    roomId: {
-        type: String,
-        unique: true,
-        sparse: true // Allows null/undefined if Onsite
-    },
+    roomId: { type: String, unique: true, sparse: true },
     status: {
         type: String,
         enum: ['Scheduled', 'Completed', 'Cancelled', 'Missed'],

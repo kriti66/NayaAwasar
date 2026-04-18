@@ -8,6 +8,7 @@ import { getJwtSecret } from '../middleware/auth.js';
 import { logActivity } from '../utils/activityLogger.js';
 import { syncSeekerProfileScoresToUser } from '../utils/seekerProfileScoring.js';
 import PendingSignup from '../models/PendingSignup.js';
+import { cleanupDeletedUser } from '../services/cleanupDeletedUser.js';
 
 // Generate a secure 6-digit OTP
 const generateOTP = () => {
@@ -152,60 +153,41 @@ export const verifySignupOTP = async (req, res) => {
             });
         }
 
-        const existingUser = await User.findOne({ email: normalizedEmail });
-        if (existingUser && !existingUser.isDeleted && !existingUser.isRemoved) {
+        const activeUser = await User.findOne({ email: normalizedEmail });
+        if (activeUser && !activeUser.isDeleted && !activeUser.isRemoved) {
             await PendingSignup.deleteOne({ _id: pending._id });
             return res.status(409).json({ success: false, message: 'Email already exists. Please login.' });
         }
 
-        let user;
-        let restored = false;
-        if (existingUser && (existingUser.isDeleted || existingUser.isRemoved)) {
-            existingUser.fullName = pending.fullName;
-            existingUser.password = pending.passwordHash;
-            existingUser.role = normalizeRole(pending.role);
-            existingUser.isDeleted = false;
-            existingUser.deletedAt = null;
-            existingUser.deletedBy = null;
-            existingUser.isRemoved = false;
-            existingUser.removedAt = null;
-            existingUser.isSuspended = false;
-            existingUser.suspendedAt = null;
-            existingUser.suspendReason = '';
-            existingUser.isActive = true;
-            existingUser.provider = 'local';
-            existingUser.providerId = null;
-            syncSeekerProfileScoresToUser(existingUser);
-            await existingUser.save();
-            user = existingUser;
-            restored = true;
-        } else {
-            user = new User({
-                fullName: pending.fullName,
-                email: pending.email,
-                password: pending.passwordHash,
-                role: normalizeRole(pending.role),
-                kycStatus: 'not_submitted'
-            });
-            syncSeekerProfileScoresToUser(user);
-            await user.save();
+        const oldUser = await User.findOne({
+            email: normalizedEmail,
+            $or: [{ isDeleted: true }, { isRemoved: true }]
+        });
+        if (oldUser) {
+            await cleanupDeletedUser(oldUser._id);
         }
+
+        const user = new User({
+            fullName: pending.fullName,
+            email: pending.email,
+            password: pending.passwordHash,
+            role: normalizeRole(pending.role),
+            kycStatus: 'not_submitted'
+        });
+        syncSeekerProfileScoresToUser(user);
+        await user.save();
+
         await PendingSignup.deleteOne({ _id: pending._id });
 
-        await logActivity(
-            user._id,
-            restored ? 'USER_RESTORED' : 'USER_REGISTERED',
-            restored
-                ? `User '${user.fullName}' restored via registration (same email).`
-                : `New user '${user.fullName}' registered.`,
-            { role: user.role, via: restored ? 'signup_otp_restore' : 'signup_otp' }
-        );
+        await logActivity(user._id, 'USER_REGISTERED', `New user '${user.fullName}' registered.`, {
+            role: user.role,
+            via: 'signup_otp',
+            replacedDeletedAccount: Boolean(oldUser)
+        });
 
-        return res.status(restored ? 200 : 201).json({
+        return res.status(201).json({
             success: true,
-            message: restored
-                ? 'Account restored successfully. Please login.'
-                : 'Account created successfully. Please login.'
+            message: 'Account created successfully. Please login.'
         });
     } catch (error) {
         console.error('verifySignupOTP error:', error);
@@ -294,7 +276,8 @@ export const sendOtp = async (req, res) => {
         if (user.isDeleted || user.isRemoved) {
             return res.status(403).json({
                 success: false,
-                message: 'This account has been removed. Register again with the same email to restore it, or contact support.'
+                message:
+                    'This account has been removed. Register again with the same email to create a new account, or contact support.'
             });
         }
         if (user.isSuspended) {
@@ -493,7 +476,8 @@ export const googleLogin = async (req, res) => {
             if (user.isDeleted || user.isRemoved) {
                 return res.status(403).json({
                     success: false,
-                    message: 'This account has been removed. Use email registration with the same address to restore your account, or contact support.'
+                    message:
+                        'This account has been removed. Use email registration with the same address to create a new account, or contact support.'
                 });
             }
             if (user.isSuspended) {
@@ -590,7 +574,8 @@ export const facebookLogin = async (req, res) => {
             if (user.isDeleted || user.isRemoved) {
                 return res.status(403).json({
                     success: false,
-                    message: 'This account has been removed. Use email registration with the same address to restore your account, or contact support.'
+                    message:
+                        'This account has been removed. Use email registration with the same address to create a new account, or contact support.'
                 });
             }
             if (user.isSuspended) {

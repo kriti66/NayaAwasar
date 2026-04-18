@@ -13,7 +13,11 @@ import {
 import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { getApiErrorMessage } from '../../utils/apiErrorMessage';
-import { combineDateAndTimeNepal } from '../../utils/interviewDateTime';
+import {
+    combineDateAndTimeNepal,
+    formatCalendarInterviewCardTimeWithZone,
+    formatNepalWallTimeAmPm
+} from '../../utils/interviewDateTime';
 import InterviewStatusBadge from '../../components/interviews/InterviewStatusBadge';
 
 function isUpcomingInterview(inv) {
@@ -191,7 +195,7 @@ export default function RecruiterInterviews() {
                                                 <Clock size={12} /> Time
                                             </p>
                                             <p className="text-sm font-semibold text-slate-900 mt-1">
-                                                {inv.time} {inv.timezone ? `(${inv.timezone})` : '(GMT +5:45)'}
+                                                {formatCalendarInterviewCardTimeWithZone(inv)}
                                             </p>
                                         </div>
                                         <div>
@@ -213,10 +217,6 @@ export default function RecruiterInterviews() {
                                             <p className="text-sm font-semibold text-slate-900 mt-1">
                                                 {inv.interviewer || 'Hiring Manager'}
                                             </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Interview ID</p>
-                                            <p className="text-xs font-semibold text-slate-700 mt-1 break-all">{interviewId}</p>
                                         </div>
                                     </div>
 
@@ -262,7 +262,13 @@ export default function RecruiterInterviews() {
                                                 {inv.reschedule_request.new_date
                                                     ? new Date(inv.reschedule_request.new_date).toLocaleDateString()
                                                     : 'date not set'}{' '}
-                                                at {inv.reschedule_request.new_time || 'time not set'}
+                                                at{' '}
+                                                {inv.reschedule_request.new_date && inv.reschedule_request.new_time
+                                                    ? formatNepalWallTimeAmPm(
+                                                          inv.reschedule_request.new_date,
+                                                          inv.reschedule_request.new_time
+                                                      )
+                                                    : inv.reschedule_request.new_time || 'time not set'}
                                             </p>
                                             {inv.reschedule_request.reason && (
                                                 <p className="text-xs text-sky-900 mt-1">Reason: {inv.reschedule_request.reason}</p>
@@ -280,18 +286,10 @@ export default function RecruiterInterviews() {
                                             </Link>
                                         )}
                                         <Link
-                                            to={`/recruiter/calendar?date=${encodeURIComponent(
-                                                new Date(inv.date).toISOString().slice(0, 10)
-                                            )}&interviewId=${encodeURIComponent(interviewId)}`}
-                                            className="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50"
-                                        >
-                                            Open in Calendar
-                                        </Link>
-                                        <Link
                                             to="/recruiter/calendar"
                                             className="inline-flex items-center gap-1.5 text-xs sm:text-sm px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50"
                                         >
-                                            Back to Calendar
+                                            ← Back to Calendar
                                         </Link>
                                     </div>
                                 </article>

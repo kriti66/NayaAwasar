@@ -6,6 +6,8 @@ import {
     acceptInterviewBySeeker,
     requestInterviewReschedule,
     acceptInterviewReschedule,
+    patchInterviewRescheduleAccept,
+    patchInterviewRescheduleReject,
     completeInterview,
     cancelInterview,
     recordInterviewCallEvent
@@ -21,6 +23,8 @@ router.get('/calendar/seeker', requireAuth, seekerOnly, getSeekerInterviewCalend
 
 router.patch('/:id/accept', requireAuth, seekerOnly, acceptInterviewBySeeker);
 router.patch('/:id/request-reschedule', requireAuth, requestInterviewReschedule);
+router.patch('/:id/reschedule/accept', requireAuth, patchInterviewRescheduleAccept);
+router.patch('/:id/reschedule/reject', requireAuth, patchInterviewRescheduleReject);
 router.patch('/:id/accept-reschedule', requireAuth, acceptInterviewReschedule);
 router.patch('/:id/complete', requireAuth, requireRecruiter, completeInterview);
 router.patch('/:id/cancel', requireAuth, cancelInterview);

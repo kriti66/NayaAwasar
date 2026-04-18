@@ -33,7 +33,8 @@ export const requireAuth = (req, res, next) => {
                 if (u.isDeleted || u.isRemoved) {
                     return res.status(401).json({
                         code: 'ACCOUNT_REMOVED',
-                        message: 'This account is no longer active. If you believe this is a mistake, contact support or register again with the same email to restore your account.'
+                        message:
+                            'This account is no longer active. If you believe this is a mistake, contact support or register again with the same email to create a new account.'
                     });
                 }
                 if (u.isSuspended) {

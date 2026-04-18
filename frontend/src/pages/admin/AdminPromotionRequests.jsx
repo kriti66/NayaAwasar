@@ -9,18 +9,14 @@ import {
 import { resolveAssetUrl } from '../../utils/assetUrl';
 import { toast } from 'react-hot-toast';
 import { Search, CheckCircle, XCircle, Eye, RefreshCw } from 'lucide-react';
-import { API_BASE_URL } from '../../config/api';
-
-const API_BASE = API_BASE_URL;
 
 const AdminPromotionRequests = () => {
     const [promotions, setPromotions] = useState([]);
-    const [payments, setPayments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('');
     const [filterType, setFilterType] = useState('');
     const [search, setSearch] = useState('');
-    const [activeTab, setActiveTab] = useState('promotions'); // promotions | payments | manual
+    const [activeTab, setActiveTab] = useState('promotions'); // promotions | manual
     const [manualPending, setManualPending] = useState([]);
     const [rejectReason, setRejectReason] = useState('');
     const [rejectModal, setRejectModal] = useState({ open: false, id: null, type: 'promotion' });
@@ -33,13 +29,11 @@ const AdminPromotionRequests = () => {
             if (filterType) params.type = filterType;
             if (search) params.search = search;
 
-            const [promRes, payRes, manualRes] = await Promise.all([
+            const [promRes, manualRes] = await Promise.all([
                 promotionService.adminGetAll(params),
-                promotionService.adminGetPayments({ status: 'pending_verification' }),
                 promotionService.adminListPendingManualPromotionRequests()
             ]);
             setPromotions(promRes.data);
-            setPayments(payRes.data);
             setManualPending(Array.isArray(manualRes.data) ? manualRes.data : []);
         } catch (err) {
             toast.error(err.response?.data?.message || 'Failed to load data');
@@ -84,29 +78,6 @@ const AdminPromotionRequests = () => {
         }
     };
 
-    const handleApprovePayment = async (paymentId) => {
-        try {
-            await promotionService.adminApprovePayment(paymentId);
-            toast.success('Payment approved. You can now approve the promotion.');
-            fetchData();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to approve');
-        }
-    };
-
-    const handleRejectPayment = async () => {
-        if (!rejectModal.id) return;
-        try {
-            await promotionService.adminRejectPayment(rejectModal.id, rejectReason);
-            toast.success('Payment rejected');
-            setRejectModal({ open: false, id: null, type: 'payment' });
-            setRejectReason('');
-            fetchData();
-        } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to reject');
-        }
-    };
-
     const handleApproveManual = async (requestId) => {
         try {
             await promotionService.adminApproveManualPromotionRequest(requestId);
@@ -136,11 +107,6 @@ const AdminPromotionRequests = () => {
         return isNaN(x.getTime()) ? '—' : x.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     };
 
-    const approvablePromotions = promotions.filter(p =>
-        ['pending', 'payment_submitted'].includes(p.status)
-    );
-    const paymentsPending = payments.filter(p => p.paymentStatus === 'pending_verification');
-
     return (
         <div className="min-h-screen bg-slate-50">
             <div className="px-4 sm:px-6 lg:px-8 py-8">
@@ -165,12 +131,6 @@ const AdminPromotionRequests = () => {
                         className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors ${activeTab === 'promotions' ? 'bg-[#29a08e] text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'}`}
                     >
                         Promotion Requests
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('payments')}
-                        className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-colors ${activeTab === 'payments' ? 'bg-[#29a08e] text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300'}`}
-                    >
-                        Payment Verification ({paymentsPending.length})
                     </button>
                     <button
                         onClick={() => setActiveTab('manual')}
@@ -306,7 +266,7 @@ const AdminPromotionRequests = () => {
                             </div>
                         )}
                     </div>
-                ) : activeTab === 'promotions' ? (
+                ) : (
                     <div className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full">
@@ -394,87 +354,6 @@ const AdminPromotionRequests = () => {
                             </div>
                         )}
                     </div>
-                ) : (
-                    <div className="bg-white rounded-2xl shadow-md border border-slate-200 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="bg-slate-800">
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-200 uppercase tracking-wider">Company / Job</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-200 uppercase tracking-wider">Amount</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-200 uppercase tracking-wider">Transaction ID</th>
-                                        <th className="px-6 py-4 text-left text-xs font-bold text-slate-200 uppercase tracking-wider">Receipt</th>
-                                        <th className="px-6 py-4 text-right text-xs font-bold text-slate-200 uppercase tracking-wider">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-200">
-                                    {payments.map((pay) => {
-                                        const promo = pay.promotionId;
-                                        const job = promo?.jobId;
-                                        const company = promo?.companyId;
-                                        return (
-                                            <tr
-                                                key={pay._id}
-                                                className="bg-white hover:bg-slate-50 transition-colors duration-150"
-                                            >
-                                                <td className="px-6 py-4">
-                                                    <p className="font-semibold text-slate-900">{company?.name || '—'}</p>
-                                                    <p className="text-sm text-slate-600 mt-0.5">{job?.title || '—'}</p>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className="font-bold text-slate-900">Rs. {pay.amount}</span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className="text-sm font-mono text-slate-700 bg-slate-100 px-2 py-1 rounded">{pay.transactionId || '—'}</span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {pay.receiptImage ? (
-                                                        <a
-                                                            href={`${API_BASE}${pay.receiptImage}`}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#29a08e] hover:text-[#238276] focus:outline-none focus:ring-2 focus:ring-[#29a08e] focus:ring-offset-2 rounded px-2 py-1"
-                                                        >
-                                                            <Eye size={16} />
-                                                            View Receipt
-                                                        </a>
-                                                    ) : (
-                                                        <span className="text-slate-400 text-sm">—</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex gap-2 justify-end">
-                                                        <button
-                                                            onClick={() => handleApprovePayment(pay._id)}
-                                                            className="p-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-colors"
-                                                            title="Approve"
-                                                            aria-label="Approve"
-                                                        >
-                                                            <CheckCircle size={18} strokeWidth={2.5} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setRejectModal({ open: true, id: pay._id, type: 'payment' })}
-                                                            className="p-2.5 rounded-lg bg-red-600 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
-                                                            title="Reject"
-                                                            aria-label="Reject"
-                                                        >
-                                                            <XCircle size={18} strokeWidth={2.5} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                        {payments.length === 0 && (
-                            <div className="p-16 text-center">
-                                <p className="text-slate-600 font-medium">No payments pending verification.</p>
-                                <p className="text-sm text-slate-500 mt-1">Payment submissions will appear here when companies upload proof.</p>
-                            </div>
-                        )}
-                    </div>
                 )}
             </div>
 
@@ -486,9 +365,7 @@ const AdminPromotionRequests = () => {
                             Reject{' '}
                             {rejectModal.type === 'promotion'
                                 ? 'Promotion'
-                                : rejectModal.type === 'manual'
-                                    ? 'manual payment request'
-                                    : 'Payment'}
+                                : 'manual payment request'}
                         </h3>
                         <textarea
                             value={rejectReason}
@@ -510,8 +387,7 @@ const AdminPromotionRequests = () => {
                             <button
                                 onClick={() => {
                                     if (rejectModal.type === 'promotion') handleRejectPromotion();
-                                    else if (rejectModal.type === 'manual') handleRejectManual();
-                                    else handleRejectPayment();
+                                    else handleRejectManual();
                                 }}
                                 className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors"
                             >

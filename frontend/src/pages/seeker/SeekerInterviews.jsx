@@ -3,7 +3,11 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import applicationService from '../../services/applicationService';
 import { useInterviews } from '../../hooks/useInterviews';
 import InterviewStatusBadge from '../../components/interviews/InterviewStatusBadge';
-import { msUntilInterviewStart } from '../../utils/interviewDateTime';
+import {
+    msUntilInterviewStart,
+    formatApplicationInterviewTimeWithZone,
+    formatNepalWallTimeAmPm
+} from '../../utils/interviewDateTime';
 import {
     getInterviewBuckets,
     getInterviewStatusBadgeKeyFromApp,
@@ -250,7 +254,7 @@ const SeekerInterviews = () => {
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                                 <Clock className="w-3 h-3 text-[#29a08e]" /> Time
                             </p>
-                            <p className="text-sm font-bold text-gray-800">{app.interview?.time} (GMT +5:45)</p>
+                            <p className="text-sm font-bold text-gray-800">{formatApplicationInterviewTimeWithZone(app)}</p>
                         </div>
                         <div className="space-y-1.5">
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -344,7 +348,13 @@ const SeekerInterviews = () => {
                                         {app.interview?.interviewId?.proposedDate
                                             ? new Date(app.interview?.interviewId?.proposedDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
                                             : 'No date'}{" "}
-                                        at {app.interview?.interviewId?.proposedTime || 'No time'}
+                                        at{' '}
+                                        {app.interview?.interviewId?.proposedDate && app.interview?.interviewId?.proposedTime
+                                            ? formatNepalWallTimeAmPm(
+                                                  app.interview.interviewId.proposedDate,
+                                                  app.interview.interviewId.proposedTime
+                                              )
+                                            : app.interview?.interviewId?.proposedTime || 'No time'}
                                     </div>
                                     {app.interview?.interviewId?.rescheduleReason && (
                                         <div className="text-xs text-amber-800/90 leading-relaxed">

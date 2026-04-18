@@ -8,6 +8,7 @@ import applicationService from '../../services/applicationService';
 import ScheduleInterviewModal from './ScheduleInterviewModal';
 import RecruiterRescheduleModal from './RecruiterRescheduleModal';
 import { API_BASE_URL } from '../../config/api';
+import { formatNepalWallTimeAmPm } from '../../utils/interviewDateTime';
 
 function notifyRecruiterCalendarRefetch() {
     window.dispatchEvent(new Event('recruiter:calendarRefetch'));
@@ -21,12 +22,171 @@ function resolveUserPhotoUrl(path) {
     return `${API_BASE_URL}${p.startsWith('/') ? '' : '/'}${p}`;
 }
 
+/** Interview id on application row (embedded or populated). */
+function getApplicationRowInterviewId(app) {
+    const inv = app?.interview?.interviewId;
+    if (inv == null) return null;
+    if (typeof inv === 'string' || typeof inv === 'number') return String(inv);
+    if (typeof inv === 'object' && inv._id != null) return String(inv._id);
+    return null;
+}
+
+function formatInterviewDateLong(dateVal) {
+    if (!dateVal) return '—';
+    const d = new Date(dateVal);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    });
+}
+
+function interviewModeLabel(modeRaw) {
+    const s = String(modeRaw || 'Online').trim().toLowerCase();
+    return s === 'onsite' ? 'Onsite' : 'Online';
+}
+
+function AcceptRescheduleReviewModal({ app, onClose, onConfirm, acceptBusy }) {
+    const rd = app.reschedule || {};
+    const candidateName = app.personalInfo?.fullName || app.seeker_id?.fullName || 'Anonymous';
+    const jobTitle = app.job_id?.title || '—';
+    const origDate = formatInterviewDateLong(app.interview?.date);
+    const origTime =
+        app.interview?.date && app.interview?.time
+            ? formatNepalWallTimeAmPm(app.interview.date, app.interview.time)
+            : String(app.interview?.time ?? '').trim() || '—';
+    const propDate = formatInterviewDateLong(rd.preferredDate);
+    const propTime =
+        rd.preferredDate && rd.preferredTime
+            ? formatNepalWallTimeAmPm(rd.preferredDate, rd.preferredTime)
+            : String(rd.preferredTime ?? '').trim() || '—';
+    const reasonText = String(rd.reason ?? '').trim() || '—';
+    const modeLabel = interviewModeLabel(app.interview?.mode);
+
+    return (
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reschedule-review-title"
+        >
+            <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
+                <div className="px-5 pt-5 pb-3 border-b border-gray-100">
+                    <h2 id="reschedule-review-title" className="text-lg font-black text-gray-900 tracking-tight">
+                        Review Reschedule Request
+                    </h2>
+                </div>
+                <div className="px-5 py-4 space-y-3 text-sm text-gray-800">
+                    <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Candidate</span>
+                        <p className="font-semibold text-gray-900">{candidateName}</p>
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Job title</span>
+                        <p className="font-semibold text-gray-900">{jobTitle}</p>
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                            Original interview date and time
+                        </span>
+                        <p className="font-semibold text-gray-900">
+                            {origDate} at {origTime}
+                        </p>
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                            Proposed new date and time
+                        </span>
+                        <p className="font-semibold text-amber-900">
+                            {propDate} at {propTime}
+                        </p>
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                            Reason given by jobseeker
+                        </span>
+                        <p className="text-gray-700 leading-snug whitespace-pre-wrap">{reasonText}</p>
+                    </div>
+                    <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                            Interview mode
+                        </span>
+                        <p className="font-semibold text-gray-900">{modeLabel}</p>
+                    </div>
+                </div>
+                <div className="px-5 py-4 bg-gray-50/80 border-t border-gray-100 flex justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={acceptBusy}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        disabled={acceptBusy}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold bg-[#29a08e] text-white hover:bg-[#238276] disabled:opacity-50"
+                    >
+                        {acceptBusy ? 'Accepting…' : 'Confirm Accept'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function RejectRescheduleConfirmModal({ onClose, onConfirm, rejectBusy }) {
+    return (
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reschedule-reject-confirm-title"
+        >
+            <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-xl overflow-hidden">
+                <div className="px-5 pt-5 pb-3">
+                    <h2 id="reschedule-reject-confirm-title" className="text-base font-black text-gray-900 tracking-tight">
+                        Reject reschedule?
+                    </h2>
+                    <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                        Are you sure you want to reject this reschedule request? The original interview time will be
+                        kept.
+                    </p>
+                </div>
+                <div className="px-5 py-4 bg-gray-50/80 border-t border-gray-100 flex justify-end gap-2">
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled={rejectBusy}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        disabled={rejectBusy}
+                        className="px-4 py-2 rounded-xl text-sm font-semibold bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50"
+                    >
+                        {rejectBusy ? 'Rejecting…' : 'Yes, Reject'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 const RecruiterApplicants = () => {
     const { user } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const applicationIdToScroll = searchParams.get('applicationId');
+    const interviewIdFromUrl = searchParams.get('interviewId');
     const [jobs, setJobs] = useState([]);
     const [selectedJobId, setSelectedJobId] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -44,6 +204,12 @@ const RecruiterApplicants = () => {
     const [recruiterRescheduleApplicationId, setRecruiterRescheduleApplicationId] = useState(null);
     const [recruiterRescheduleInitialData, setRecruiterRescheduleInitialData] = useState(null);
     const [isRecruiterRescheduleSubmitting, setIsRecruiterRescheduleSubmitting] = useState(false);
+    const [approvingRescheduleAppId, setApprovingRescheduleAppId] = useState(null);
+    const [acceptRescheduleReviewApp, setAcceptRescheduleReviewApp] = useState(null);
+    const [rejectRescheduleConfirmApp, setRejectRescheduleConfirmApp] = useState(null);
+    const [rejectingRescheduleAppId, setRejectingRescheduleAppId] = useState(null);
+    /** Matches Notification metadata / URL interviewId; drives brief row highlight. */
+    const [interviewHighlightId, setInterviewHighlightId] = useState(null);
 
     const [stats, setStats] = useState({
         total: 0,
@@ -155,6 +321,34 @@ const RecruiterApplicants = () => {
         return () => clearTimeout(t);
     }, [applicationIdToScroll, loading, applicants.length, searchParams, navigate]);
 
+    useEffect(() => {
+        if (!interviewIdFromUrl || loading) return;
+        const idNeedle = String(interviewIdFromUrl);
+        const paramsSnapshot = searchParams.toString();
+        const clearInterviewParam = () => {
+            const next = new URLSearchParams(paramsSnapshot);
+            next.delete('interviewId');
+            const qs = next.toString();
+            navigate(`/recruiter/applications${qs ? `?${qs}` : ''}`, { replace: true });
+        };
+        const match = applicants.find((app) => getApplicationRowInterviewId(app) === idNeedle);
+        if (!match) {
+            const tMiss = window.setTimeout(clearInterviewParam, 500);
+            return () => clearTimeout(tMiss);
+        }
+        const appKey = String(match._id || match.id);
+        const t = window.setTimeout(() => {
+            const el = document.getElementById(`recruiter-application-${appKey}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setInterviewHighlightId(idNeedle);
+                window.setTimeout(() => setInterviewHighlightId(null), 2000);
+            }
+            clearInterviewParam();
+        }, 350);
+        return () => clearTimeout(t);
+    }, [interviewIdFromUrl, loading, applicants, searchParams, navigate]);
+
     const handleStatusChange = async (appId, newStatus) => {
         if (newStatus === 'interview') {
             setSelectedApplicantId(appId);
@@ -186,35 +380,81 @@ const RecruiterApplicants = () => {
         }
     };
 
-    const handleApproveReschedule = (app) => {
-        setSelectedApplicantId(app._id || app.id);
-        const rescheduleData = app.reschedule || {};
-        const preferredDate = rescheduleData.preferredDate ? new Date(rescheduleData.preferredDate) : null;
+    const executeAcceptRescheduleDirect = async (app) => {
+        const appId = app._id || app.id;
+        const rd = app.reschedule || {};
+        const preferredDate = rd.preferredDate ? new Date(rd.preferredDate) : null;
+        const timeStr = String(rd.preferredTime ?? '').trim();
+        if (!preferredDate || Number.isNaN(preferredDate.getTime()) || !timeStr) {
+            toast.error('Preferred date or time is missing for this request.');
+            return false;
+        }
+        const dateStr = preferredDate.toISOString().split('T')[0];
+        const mode = app.interview?.mode || 'Online';
+        const nestedInv = app.interview?.interviewId;
+        const preservedNotes =
+            nestedInv && typeof nestedInv === 'object' && nestedInv.notes != null
+                ? String(nestedInv.notes).trim()
+                : String(app.interview?.notes ?? '').trim();
+        const interviewData = {
+            date: dateStr,
+            time: timeStr,
+            mode,
+            location: mode === 'Onsite' ? String(app.interview?.location || '').trim() : '',
+            duration: Number(app.interview?.duration) > 0 ? Number(app.interview.duration) : 30,
+            interviewer: String(app.interview?.interviewer || '').trim(),
+            notes: preservedNotes,
+            timezone: app.interview?.timezone || ''
+        };
 
-        setRescheduleModalData({
-            date: preferredDate,
-            time: rescheduleData.preferredTime,
-            notes: `Candidate reschedule request: "${rescheduleData.reason}"`
-        });
-        setIsInterviewModalOpen(true);
-    };
-
-    const handleRejectReschedule = async (app) => {
-        const reason = window.prompt("Enter a reason for rejecting the reschedule request (Optional):");
-        if (reason === null) return; // User cancelled
-
+        setApprovingRescheduleAppId(appId);
         try {
-            const appId = app._id || app.id;
-            await api.put(`/applications/${appId}/reject-reschedule-request`, {
-                reason: reason || 'Declined'
-            });
-            toast.success("Reschedule request rejected.");
+            await api.put(`/applications/${appId}/approve-reschedule-request`, interviewData);
+            toast.success('Reschedule request accepted; interview updated.');
             notifyRecruiterCalendarRefetch();
             await refreshApplicantsAndStats();
+            return true;
         } catch (error) {
-            console.error("Reject reschedule error:", error);
-            toast.error("Failed to reject reschedule request");
+            console.error('[RecruiterApplicants] Accept reschedule error:', error);
+            toast.error(error.response?.data?.message || 'Failed to accept reschedule request');
+            return false;
+        } finally {
+            setApprovingRescheduleAppId(null);
         }
+    };
+
+    const handleConfirmAcceptReschedule = async () => {
+        const app = acceptRescheduleReviewApp;
+        if (!app) return;
+        const ok = await executeAcceptRescheduleDirect(app);
+        if (ok) setAcceptRescheduleReviewApp(null);
+    };
+
+    const executeRejectRescheduleRequest = async (app) => {
+        const appId = app._id || app.id;
+        setRejectingRescheduleAppId(appId);
+        try {
+            await api.put(`/applications/${appId}/reject-reschedule-request`, {
+                reason: 'Declined'
+            });
+            toast.success('Reschedule request rejected.');
+            notifyRecruiterCalendarRefetch();
+            await refreshApplicantsAndStats();
+            return true;
+        } catch (error) {
+            console.error('Reject reschedule error:', error);
+            toast.error('Failed to reject reschedule request');
+            return false;
+        } finally {
+            setRejectingRescheduleAppId(null);
+        }
+    };
+
+    const handleConfirmRejectReschedule = async () => {
+        const app = rejectRescheduleConfirmApp;
+        if (!app) return;
+        const ok = await executeRejectRescheduleRequest(app);
+        if (ok) setRejectRescheduleConfirmApp(null);
     };
 
     const updateApplicationStatus = async (appId, status, payload = {}) => {
@@ -483,14 +723,22 @@ const RecruiterApplicants = () => {
                                         String(interviewDoc?.rescheduleStatus || '').toUpperCase()
                                     ) && interviewDoc?.rescheduleRequestedBy === 'recruiter';
                                 const jobseekerReschedulePending = app.reschedule?.requested && !app.reschedule?.reviewed;
+                                const rescheduleReasonDisplay = String(app.reschedule?.reason ?? '').trim();
+                                const rowInterviewId = getApplicationRowInterviewId(app);
+                                const interviewRowFlash =
+                                    interviewHighlightId && rowInterviewId === interviewHighlightId;
 
                                 return (
                                     <div
                                         id={(app._id || app.id) ? `recruiter-application-${app._id || app.id}` : undefined}
                                         key={app._id || app.id}
-                                        className={`p-6 hover:bg-gray-50/50 transition-colors flex flex-col gap-5 ${
+                                        className={`p-6 hover:bg-gray-50/50 transition-[box-shadow,background-color] duration-700 ease-out flex flex-col gap-5 rounded-xl ${
                                             String(app._id || app.id) === String(applicationIdToScroll || '')
-                                                ? 'ring-2 ring-[#29a08e]/35 rounded-xl'
+                                                ? 'ring-2 ring-[#29a08e]/35'
+                                                : ''
+                                        } ${
+                                            interviewRowFlash
+                                                ? 'ring-2 ring-amber-400 bg-amber-50/60 shadow-sm'
                                                 : ''
                                         }`}
                                     >
@@ -558,14 +806,18 @@ const RecruiterApplicants = () => {
                                                         )
                                                     )}
 
-                                                    {/* Recruiter Reschedule Proposal */}
-                                                    {app.status === 'interview' && (
+                                                    {/* Recruiter Reschedule Proposal — hidden while candidate reschedule is pending (banner handles that) */}
+                                                    {app.status === 'interview' && !jobseekerReschedulePending && (
                                                         <button
                                                             type="button"
                                                             onClick={() => handleRecruiterProposalClick(app)}
-                                                            disabled={recruiterProposalPending || jobseekerReschedulePending}
-                                                            title={recruiterProposalPending ? 'A reschedule proposal is already pending' : jobseekerReschedulePending ? 'Candidate reschedule request is already pending' : 'Propose a new interview date/time'}
-                                                            className={`px-4 py-2.5 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-amber-600 transition-colors shadow-lg shadow-amber-500/20 flex items-center gap-1.5 ${recruiterProposalPending || jobseekerReschedulePending ? 'opacity-50 cursor-not-allowed hover:bg-amber-500' : ''}`}
+                                                            disabled={recruiterProposalPending}
+                                                            title={
+                                                                recruiterProposalPending
+                                                                    ? 'A reschedule proposal is already pending'
+                                                                    : 'Propose a new interview date/time'
+                                                            }
+                                                            className={`px-4 py-2.5 bg-amber-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-amber-600 transition-colors shadow-lg shadow-amber-500/20 flex items-center gap-1.5 ${recruiterProposalPending ? 'opacity-50 cursor-not-allowed hover:bg-amber-500' : ''}`}
                                                         >
                                                             Reschedule
                                                         </button>
@@ -602,38 +854,47 @@ const RecruiterApplicants = () => {
 
                                         {/* Reschedule Request Banner */}
                                         {app.reschedule?.requested && (
-                                            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 w-full animate-in fade-in slide-in-from-top-2">
-                                                <div className="flex gap-4">
-                                                    <div className="p-3 bg-amber-100 rounded-xl text-amber-600 shrink-0">
-                                                        <AlertCircle size={22} />
-                                                    </div>
-                                                    <div>
-                                                        <h5 className="text-sm font-black text-amber-900 tracking-tight">Reschedule Requested</h5>
-                                                        <div className="mt-1.5 space-y-1.5">
-                                                            <p className="text-xs text-amber-800/80 leading-relaxed max-w-md">
-                                                                Reason: <span className="font-bold italic text-amber-900">"{app.reschedule.reason}"</span>
-                                                            </p>
-                                                            <div className="flex items-center gap-2 text-[10px] font-black text-amber-900 bg-amber-100/50 px-3 py-1.5 rounded-lg w-fit uppercase tracking-wider">
-                                                                <span>Preferred:</span>
-                                                                <span>{app.reschedule.preferredDate ? new Date(app.reschedule.preferredDate).toLocaleDateString() : 'No date'}</span>
-                                                                <span className="opacity-50">•</span>
-                                                                <span>{app.reschedule.preferredTime || 'No time'}</span>
-                                                            </div>
-                                                        </div>
+                                            <div className="w-full rounded-lg border border-amber-200/90 bg-amber-50/90 px-2.5 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+                                                <div className="flex items-start gap-2 min-w-0 flex-1">
+                                                    <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" aria-hidden />
+                                                    <div className="min-w-0 text-xs text-amber-900 leading-snug">
+                                                        <span className="font-semibold text-amber-950">Reschedule requested</span>
+                                                        <span className="text-amber-700/90"> · </span>
+                                                        {rescheduleReasonDisplay ? (
+                                                            <span className="text-amber-900/90">
+                                                                Reason: <span className="font-medium italic">"{rescheduleReasonDisplay}"</span>
+                                                                <span className="text-amber-700/90"> · </span>
+                                                            </span>
+                                                        ) : null}
+                                                        <span className="text-amber-800 font-medium">
+                                                            {app.reschedule.preferredDate
+                                                                ? new Date(app.reschedule.preferredDate).toLocaleDateString()
+                                                                : 'No date'}{' '}
+                                                            at{' '}
+                                                            {app.reschedule.preferredDate && app.reschedule.preferredTime
+                                                                ? formatNepalWallTimeAmPm(
+                                                                      app.reschedule.preferredDate,
+                                                                      app.reschedule.preferredTime
+                                                                  )
+                                                                : String(app.reschedule.preferredTime ?? '').trim() || '—'}
+                                                        </span>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-3 w-full sm:w-auto pl-12 sm:pl-0">
+                                                <div className="flex items-center gap-2 shrink-0 pl-[22px] sm:pl-0">
                                                     <button
-                                                        onClick={() => handleRejectReschedule(app)}
-                                                        className="flex-1 sm:flex-none px-4 py-2.5 bg-white border border-amber-200 text-amber-700 text-xs font-bold rounded-xl hover:bg-amber-50 hover:border-amber-300 transition-all shadow-sm"
+                                                        type="button"
+                                                        onClick={() => setRejectRescheduleConfirmApp(app)}
+                                                        className="px-3 py-1.5 bg-white border border-amber-200 text-amber-800 text-xs font-semibold rounded-lg hover:bg-amber-50/80 transition-colors"
                                                     >
                                                         Reject
                                                     </button>
                                                     <button
-                                                        onClick={() => handleApproveReschedule(app)}
-                                                        className="flex-1 sm:flex-none px-4 py-2.5 bg-amber-500 text-white text-xs font-bold rounded-xl hover:bg-amber-600 shadow-lg shadow-amber-500/20 transition-all"
+                                                        type="button"
+                                                        onClick={() => setAcceptRescheduleReviewApp(app)}
+                                                        disabled={approvingRescheduleAppId === (app._id || app.id)}
+                                                        className="px-3 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50"
                                                     >
-                                                        Review & Reschedule
+                                                        Accept
                                                     </button>
                                                 </div>
                                             </div>
@@ -796,6 +1057,26 @@ const RecruiterApplicants = () => {
                     )}
                 </div>
             </div>
+
+            {acceptRescheduleReviewApp && (
+                <AcceptRescheduleReviewModal
+                    app={acceptRescheduleReviewApp}
+                    onClose={() => setAcceptRescheduleReviewApp(null)}
+                    onConfirm={() => void handleConfirmAcceptReschedule()}
+                    acceptBusy={approvingRescheduleAppId === (acceptRescheduleReviewApp._id || acceptRescheduleReviewApp.id)}
+                />
+            )}
+
+            {rejectRescheduleConfirmApp && (
+                <RejectRescheduleConfirmModal
+                    onClose={() => setRejectRescheduleConfirmApp(null)}
+                    onConfirm={() => void handleConfirmRejectReschedule()}
+                    rejectBusy={
+                        rejectingRescheduleAppId ===
+                        (rejectRescheduleConfirmApp._id || rejectRescheduleConfirmApp.id)
+                    }
+                />
+            )}
 
             <ScheduleInterviewModal
                 isOpen={isInterviewModalOpen}

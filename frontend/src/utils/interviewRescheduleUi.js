@@ -13,11 +13,17 @@ export function formatRescheduleInstantNepal(isoOrDate) {
     const d = new Date(isoOrDate);
     if (Number.isNaN(d.getTime())) return '—';
     try {
-        return new Intl.DateTimeFormat('en-GB', {
+        const datePart = new Intl.DateTimeFormat('en-GB', {
             timeZone: NEPAL_TZ,
-            dateStyle: 'medium',
-            timeStyle: 'short'
+            dateStyle: 'medium'
         }).format(d);
+        const timePart = d.toLocaleTimeString('en-US', {
+            timeZone: NEPAL_TZ,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+        });
+        return `${datePart}, ${timePart}`;
     } catch {
         return d.toISOString();
     }
@@ -83,7 +89,7 @@ export function getInterviewRescheduleUiState(interview, role) {
     if (legacy && cal === 'reschedule_requested') {
         const proposer = legacy.proposed_by;
         if (proposer && proposer !== role) {
-            return { ...empty, legacyAcceptOnly: true, showAccept: true };
+            return { ...empty, legacyAcceptOnly: true, showAccept: true, showDecline: true };
         }
         return {
             ...empty,

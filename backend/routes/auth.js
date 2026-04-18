@@ -46,7 +46,8 @@ router.post('/login', async (req, res) => {
         if (user.isDeleted || user.isRemoved) {
             return res.status(403).json({
                 code: 'ACCOUNT_REMOVED',
-                message: 'This account has been removed. You can register again with the same email to restore your account, or contact support.'
+                message:
+                    'This account has been removed. You can register again with the same email to create a new account, or contact support.'
             });
         }
 

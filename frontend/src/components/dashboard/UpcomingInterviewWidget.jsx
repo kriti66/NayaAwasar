@@ -15,6 +15,7 @@ import applicationService from '../../services/applicationService';
 import toast from 'react-hot-toast';
 import InterviewStatusBadge from '../interviews/InterviewStatusBadge';
 import { getInterviewStatusBadgeKeyFromApp } from '../../utils/seekerInterviewList';
+import { formatNepalWallTimeAmPm } from '../../utils/interviewDateTime';
 
 const formatDate = (date) => {
     if (!date) return 'Date TBD';
@@ -22,8 +23,6 @@ const formatDate = (date) => {
     if (Number.isNaN(d.getTime())) return 'Date TBD';
     return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 };
-
-const formatTime = (time) => time || 'Time TBD';
 
 /** Map Interview document `interviewStatus` to InterviewStatusBadge keys (not application status). */
 function interviewStatusToBadgeKey(dbStatus) {
@@ -153,7 +152,12 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
                                 <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
                                 <span>
                                     {formatDate(nextInterview.interview?.date)} at{' '}
-                                    {formatTime(nextInterview.interview?.time)}
+                                    {nextInterview.interview?.date && nextInterview.interview?.time
+                                        ? formatNepalWallTimeAmPm(
+                                              nextInterview.interview.date,
+                                              nextInterview.interview.time
+                                          )
+                                        : nextInterview.interview?.time || 'Time TBD'}
                                 </span>
                             </div>
 
@@ -165,7 +169,12 @@ const UpcomingInterviewWidget = ({ interviews, loading = false, onRescheduleActi
                                         <p className="font-bold text-amber-800 mb-0.5">Proposed new time:</p>
                                         <p className="text-amber-700">
                                             {formatDate(interviewDoc.proposedDate)} at{' '}
-                                            {formatTime(interviewDoc.proposedTime)}
+                                            {interviewDoc.proposedDate && interviewDoc.proposedTime
+                                                ? formatNepalWallTimeAmPm(
+                                                      interviewDoc.proposedDate,
+                                                      interviewDoc.proposedTime
+                                                  )
+                                                : interviewDoc.proposedTime || 'Time TBD'}
                                         </p>
                                         {interviewDoc.rescheduleReason && (
                                             <p className="text-amber-700/90 mt-1 italic">

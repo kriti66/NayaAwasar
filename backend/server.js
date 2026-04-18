@@ -3,6 +3,7 @@ import './utils/puppeteerCacheDir.js';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
+import { ensureInterviewRoomIdSparseIndex } from './services/ensureInterviewRoomIdIndex.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -34,7 +35,14 @@ if (!MONGO_URI) {
     console.warn('MONGO_URI not set. Set it in .env for JWT auth and KYC to work.');
 } else {
     mongoose.connect(MONGO_URI)
-        .then(() => console.log('MongoDB connected'))
+        .then(async () => {
+            console.log('MongoDB connected');
+            try {
+                await ensureInterviewRoomIdSparseIndex();
+            } catch (err) {
+                console.error('[ensureInterviewRoomIdSparseIndex]', err);
+            }
+        })
         .catch(err => {
             console.error('MongoDB connection error:', err);
             console.warn('Server will still start; auth/KYC will fail until MongoDB is reachable.');

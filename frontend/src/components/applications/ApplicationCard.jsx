@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, MapPin, Calendar, ChevronDown, ChevronUp, ExternalLink, MessageSquare, FileCheck, XCircle } from 'lucide-react';
+import { formatNepalWallTimeAmPm } from '../../utils/interviewDateTime';
 
 const ApplicationCard = ({ application }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -160,7 +161,10 @@ const ApplicationCard = ({ application }) => {
                                                 <div>
                                                     <p className="text-[10px] font-black uppercase opacity-40 mb-1">Schedule</p>
                                                     <p className="text-sm font-bold">
-                                                        {new Date(interview_details.date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} at {interview_details.time}
+                                                        {new Date(interview_details.date).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })} at{' '}
+                                                        {interview_details.date && interview_details.time
+                                                            ? formatNepalWallTimeAmPm(interview_details.date, interview_details.time)
+                                                            : interview_details.time}
                                                     </p>
                                                 </div>
                                                 {interview_details.location && (

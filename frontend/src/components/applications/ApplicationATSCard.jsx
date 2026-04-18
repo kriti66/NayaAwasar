@@ -8,6 +8,7 @@ import {
 import api from '../../services/api';
 import CompanyLogo from '../common/CompanyLogo';
 import { toast } from 'react-hot-toast';
+import { formatNepalWallTimeAmPm } from '../../utils/interviewDateTime';
 
 const ApplicationATSCard = ({ application: initialApp }) => {
     const [isExpanded, setIsExpanded] = useState(false);
@@ -207,7 +208,11 @@ const ApplicationATSCard = ({ application: initialApp }) => {
                                                 </div>
                                                 <div className="flex items-center gap-2 px-3 py-1 bg-white border border-gray-100 rounded-lg shadow-sm">
                                                     <Clock size={14} className="text-[#29a08e]" />
-                                                    <span>{interview?.time || 'TBD'}</span>
+                                                    <span>
+                                                        {interview?.date && interview?.time
+                                                            ? formatNepalWallTimeAmPm(interview.date, interview.time)
+                                                            : interview?.time || 'TBD'}
+                                                    </span>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 text-xs font-bold text-gray-400">

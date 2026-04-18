@@ -9,6 +9,7 @@ import {
     statusBadgeClasses,
     formatDisplayDayKey
 } from '../../utils/interviewCalendarUi';
+import { combineDateAndTimeNepal, formatTime, formatCalendarInterviewCardTime } from '../../utils/interviewDateTime';
 import InterviewCalendarGrid from '../../components/interviews/InterviewCalendarGrid';
 import InterviewCalendarLegend from '../../components/interviews/InterviewCalendarLegend';
 import RescheduleModal from '../../components/RescheduleModal';
@@ -249,6 +250,16 @@ export default function JobseekerCalendar() {
                                             const ui = getInterviewRescheduleUiState(inv, 'jobseeker');
                                             const fsm = inv.reschedule_fsm || {};
                                             const actions = getAvailableInterviewActions(inv, 'jobseeker');
+                                            const rq = inv.reschedule_request;
+                                            const proposedRescheduleSlot =
+                                                rq?.new_date && rq?.new_time
+                                                    ? combineDateAndTimeNepal(rq.new_date, rq.new_time)
+                                                    : null;
+                                            const proposedRescheduleTimeDisplay =
+                                                proposedRescheduleSlot &&
+                                                !Number.isNaN(proposedRescheduleSlot.getTime())
+                                                    ? formatTime(proposedRescheduleSlot.toISOString())
+                                                    : rq?.new_time || '—';
                                             return (
                                             <li
                                                 key={inv.id}
@@ -268,7 +279,8 @@ export default function JobseekerCalendar() {
                                                 <p className="text-sm text-slate-600">{inv.company_name}</p>
                                                 <p className="text-sm text-slate-600">Recruiter: {inv.recruiter_name}</p>
                                                 <p className="text-sm text-slate-600">
-                                                    {inv.time} · {inv.mode === 'onsite' ? 'Onsite' : 'Online'}
+                                                    {formatCalendarInterviewCardTime(inv)} ·{' '}
+                                                    {inv.mode === 'onsite' ? 'Onsite' : 'Online'}
                                                 </p>
 
                                                 {!ui.activeFsm && inv.reschedule_request && (
@@ -281,7 +293,7 @@ export default function JobseekerCalendar() {
                                                                   { timeZone: 'UTC' }
                                                               )
                                                             : '—'}{' '}
-                                                        at {inv.reschedule_request.new_time || '—'}
+                                                        at {proposedRescheduleTimeDisplay}
                                                     </div>
                                                 )}
 

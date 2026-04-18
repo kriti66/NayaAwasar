@@ -102,7 +102,7 @@ function mapByType(type, role) {
         interview_scheduled: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
         interview_update: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
         interview_rescheduled: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
-        reschedule_requested: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
+        reschedule_requested: normalized === 'recruiter' ? '/recruiter/applications' : '/seeker/calendar',
         interview_completed: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
         interview_cancelled: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
         interview_accepted: normalized === 'recruiter' ? '/recruiter/calendar' : '/seeker/calendar',
@@ -118,6 +118,10 @@ function mapByType(type, role) {
 export function resolveNotificationPath(notification, role) {
     const normalized = normalizeRole(role);
     const payload = extractInterviewCalendarPayload(notification);
+    // Recruiter: jobseeker-initiated reschedule should open Applicants Manager on the right row, not calendar.
+    if (normalized === 'recruiter' && notification?.type === 'reschedule_requested' && payload.interviewId) {
+        return `/recruiter/applications?interviewId=${encodeURIComponent(payload.interviewId)}`;
+    }
     const hasCalendarPayload = !!(payload.interviewId || payload.date);
     if (
         hasCalendarPayload &&

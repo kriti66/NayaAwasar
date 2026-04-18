@@ -174,13 +174,14 @@ export const requestReschedule = async (req, res) => {
     const otherId = role === 'recruiter' ? interview.seekerId : interview.recruiterId;
     const jobTitle = interview.jobId?.title || 'Interview';
     await interview.save();
+    const recruiterRescheduleAppsLink = `/recruiter/applications?interviewId=${encodeURIComponent(String(interview._id))}`;
     await createNotification({
         recipient: otherId,
         type: 'reschedule_requested',
         category: 'interview',
         title: 'Reschedule requested',
         message: `A new interview time was proposed for ${jobTitle}. Please respond in your calendar.`,
-        link: role === 'recruiter' ? '/seeker/calendar' : '/recruiter/calendar',
+        link: role === 'recruiter' ? '/seeker/calendar' : recruiterRescheduleAppsLink,
         sender: userId,
         metadata: interviewCalendarMetadata(interview, {
             scheduledAt: instant
@@ -351,13 +352,14 @@ export const counterReschedule = async (req, res) => {
     const otherId = role === 'recruiter' ? interview.seekerId : interview.recruiterId;
     const jobTitle = interview.jobId?.title || 'Interview';
     await interview.save();
+    const recruiterCounterAppsLink = `/recruiter/applications?interviewId=${encodeURIComponent(String(interview._id))}`;
     await createNotification({
         recipient: otherId,
         type: 'reschedule_requested',
         category: 'interview',
         title: 'Counter proposal',
         message: `A different time was proposed for ${jobTitle}. Please review in your calendar.`,
-        link: role === 'recruiter' ? '/seeker/calendar' : '/recruiter/calendar',
+        link: role === 'recruiter' ? '/seeker/calendar' : recruiterCounterAppsLink,
         sender: userId,
         metadata: interviewCalendarMetadata(interview, { scheduledAt: instant })
     });

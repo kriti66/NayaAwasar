@@ -261,12 +261,15 @@ export const adminRejectPromotionPaymentRequest = async (req, res) => {
         reqDoc.rejectionReason = (reason || '').trim() || 'No reason provided';
         await reqDoc.save();
 
+        const formattedReason =
+            reqDoc.rejectionReason.charAt(0).toUpperCase() + reqDoc.rejectionReason.slice(1);
+
         await createNotification({
             recipient: reqDoc.recruiterId,
             type: 'promotion_rejected',
             category: 'promotion',
             title: 'Paid promotion request rejected',
-            message: `Your request was rejected. ${reqDoc.rejectionReason}`,
+            message: `Your paid promotion request was rejected. Reason: ${formattedReason}. Please resubmit with the required corrections.`,
             link: '/promotion-payment',
             metadata: { requestId: reqDoc._id }
         });

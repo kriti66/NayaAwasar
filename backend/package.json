@@ -8,6 +8,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "postinstall": "node scripts/install-puppeteer-chrome.mjs",
+    "migrate:clear-reschedule-interview-notes": "node scripts/migrate-clear-reschedule-notes-from-interviews.mjs",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js"
   },
   "jest": {

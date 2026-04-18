@@ -92,12 +92,15 @@ const AdminSidebar = () => {
                                         key={item.path}
                                         to={item.path}
                                         title={collapsed ? item.label : undefined}
-                                        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${collapsed ? 'justify-center' : ''} ${active
-                                            ? 'bg-slate-100 text-slate-900'
-                                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                        className={`group flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${collapsed ? 'justify-center' : ''} ${active
+                                            ? 'bg-gray-100 text-teal-600 font-semibold'
+                                            : 'text-slate-600 hover:bg-gray-100 hover:text-teal-600'
                                             }`}
                                     >
-                                        <item.icon size={18} className="shrink-0 text-slate-500" />
+                                        <item.icon
+                                            size={18}
+                                            className={`shrink-0 transition-all ${active ? 'text-teal-600' : 'text-slate-500 group-hover:text-teal-600'}`}
+                                        />
                                         {!collapsed && <span className="truncate">{item.label}</span>}
                                     </Link>
                                 );

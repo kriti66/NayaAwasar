@@ -7,6 +7,10 @@ import { getInterviewJoinWindow, combineDateAndTimeNepal, getEffectiveInterviewS
 import { createNotification } from './notificationController.js';
 import { interviewCalendarMetadata } from '../utils/interviewNotificationMetadata.js';
 import { RESCHEDULE_FSM } from '../constants/reschedule.js';
+import {
+    acceptReschedule as fsmAcceptReschedule,
+    rejectReschedule as fsmRejectReschedule
+} from './interviewRescheduleController.js';
 import { normalizeModerationStatusForEdit } from '../utils/jobModeration.js';
 
 /** Hide calendar rows when the job was hidden or soft-removed by admin (even if interview doc was not updated). */
@@ -622,13 +626,14 @@ export const requestInterviewReschedule = async (req, res) => {
 
         const jobTitle = interview.jobId?.title || 'Interview';
         const otherId = isRec ? interview.seekerId : interview.recruiterId;
+        const recruiterRescheduleAppsLink = `/recruiter/applications?interviewId=${encodeURIComponent(String(interview._id))}`;
         await createNotification({
             recipient: otherId,
             type: 'reschedule_requested',
             category: 'interview',
             title: 'Reschedule requested',
             message: `${isRec ? 'The recruiter' : 'The candidate'} requested a new time for ${jobTitle}.`,
-            link: isRec ? '/seeker/calendar' : '/recruiter/calendar',
+            link: isRec ? '/seeker/calendar' : recruiterRescheduleAppsLink,
             sender: userId,
             metadata: interviewCalendarMetadata(interview, {
                 applicationId: interview.applicationId,
@@ -712,6 +717,7 @@ export const acceptInterviewReschedule = async (req, res) => {
             applicationId: interview.applicationId,
             scheduledAt: combineDateAndTimeNepal(interview.date, interview.time)
         });
+        const wasJobseekerProposal = proposer === 'jobseeker';
         await createNotification({
             recipient: interview.recruiterId,
             type: 'interview_rescheduled',
@@ -727,7 +733,9 @@ export const acceptInterviewReschedule = async (req, res) => {
             type: 'interview_rescheduled',
             category: 'interview',
             title: 'Reschedule accepted',
-            message: `The new interview time for ${jobTitle} is confirmed.`,
+            message: wasJobseekerProposal
+                ? `Your reschedule request for ${jobTitle} was accepted. The interview is scheduled for the new time.`
+                : `The new interview time for ${jobTitle} is confirmed.`,
             link: '/seeker/calendar',
             sender: userId,
             metadata: metaAfter
@@ -738,6 +746,124 @@ export const acceptInterviewReschedule = async (req, res) => {
         console.error('acceptInterviewReschedule', e);
         res.status(500).json({ message: 'Failed to accept reschedule' });
     }
+};
+
+/** Legacy reschedule: reject proposed slot, keep interview.date/time, notify proposer. */
+export const rejectInterviewReschedule = async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = normalizeSeekerRole(req.user.role);
+    const reason = String(req.body?.reason ?? '').trim();
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid interview id' });
+    }
+
+    try {
+        const interview = await Interview.findById(id).populate('jobId', 'title');
+        if (!interview) return res.status(404).json({ message: 'Interview not found' });
+
+        const isRec = interview.recruiterId.toString() === userId;
+        const isSeek = interview.seekerId.toString() === userId;
+        if (!isRec && !isSeek) return res.status(403).json({ message: 'Unauthorized' });
+
+        const wf = String(interview.workflowRescheduleStatus || RESCHEDULE_FSM.NONE).toLowerCase();
+        if (wf === RESCHEDULE_FSM.PENDING || wf === RESCHEDULE_FSM.COUNTERED) {
+            return res.status(400).json({
+                message: 'Use the calendar reschedule actions for this request.'
+            });
+        }
+
+        const rq = interview.rescheduleRequest;
+        if (!rq || !rq.newDate) {
+            return res.status(400).json({ message: 'No pending reschedule request on this interview' });
+        }
+
+        const proposer = rq.proposedBy;
+        if (proposer === 'jobseeker' && !isRec) {
+            return res.status(403).json({ message: 'Only the recruiter can reject this reschedule request' });
+        }
+        if (proposer === 'recruiter' && !isSeek) {
+            return res.status(403).json({ message: 'Only the candidate can reject this reschedule request' });
+        }
+        if ((proposer === 'jobseeker' && role !== 'recruiter') || (proposer === 'recruiter' && role !== 'jobseeker')) {
+            return res.status(403).json({ message: 'You cannot reject your own reschedule request' });
+        }
+
+        interview.set('rescheduleRequest', undefined);
+        interview.rescheduleStatus = 'REJECTED';
+        interview.requestedDate = undefined;
+        interview.requestedTime = undefined;
+        interview.proposedDate = undefined;
+        interview.proposedTime = undefined;
+        interview.rescheduleReason = '';
+        interview.rescheduleRejectedReason = reason;
+        interview.calendarStatus = 'scheduled';
+        interview.interviewStatus = 'scheduled';
+
+        await interview.save();
+
+        const jobTitle = interview.jobId?.title || 'Interview';
+        const meta = interviewCalendarMetadata(interview, { applicationId: interview.applicationId });
+        const recipient = proposer === 'jobseeker' ? interview.seekerId : interview.recruiterId;
+        const recipientLink = proposer === 'jobseeker' ? '/seeker/calendar' : '/recruiter/calendar';
+        const declineMessage =
+            proposer === 'jobseeker'
+                ? `Your reschedule request for ${jobTitle} was rejected. The original interview time remains.`
+                : `The proposed new time for ${jobTitle} was declined. The original interview time remains.`;
+
+        await createNotification({
+            recipient,
+            type: 'reschedule_rejected',
+            category: 'interview',
+            title: 'Reschedule declined',
+            message: declineMessage,
+            link: recipientLink,
+            sender: userId,
+            metadata: meta
+        });
+
+        res.json({ success: true, message: 'Reschedule rejected' });
+    } catch (e) {
+        console.error('rejectInterviewReschedule', e);
+        res.status(500).json({ message: 'Failed to reject reschedule' });
+    }
+};
+
+/**
+ * PATCH /api/interviews/:id/reschedule/accept — workflow (FSM) or legacy reschedule accept.
+ */
+export const patchInterviewRescheduleAccept = async (req, res) => {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid interview id' });
+    }
+    const row = await Interview.findById(id).select('workflowRescheduleStatus').lean();
+    if (!row) return res.status(404).json({ message: 'Interview not found' });
+    const wf = String(row.workflowRescheduleStatus || RESCHEDULE_FSM.NONE).toLowerCase();
+    if (wf === RESCHEDULE_FSM.PENDING || wf === RESCHEDULE_FSM.COUNTERED) {
+        req.params.interviewId = id;
+        return fsmAcceptReschedule(req, res);
+    }
+    return acceptInterviewReschedule(req, res);
+};
+
+/**
+ * PATCH /api/interviews/:id/reschedule/reject — workflow (FSM) or legacy reschedule reject.
+ */
+export const patchInterviewRescheduleReject = async (req, res) => {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: 'Invalid interview id' });
+    }
+    const row = await Interview.findById(id).select('workflowRescheduleStatus').lean();
+    if (!row) return res.status(404).json({ message: 'Interview not found' });
+    const wf = String(row.workflowRescheduleStatus || RESCHEDULE_FSM.NONE).toLowerCase();
+    if (wf === RESCHEDULE_FSM.PENDING || wf === RESCHEDULE_FSM.COUNTERED) {
+        req.params.interviewId = id;
+        return fsmRejectReschedule(req, res);
+    }
+    return rejectInterviewReschedule(req, res);
 };
 
 export const completeInterview = async (req, res) => {

@@ -816,7 +816,9 @@ export const getMyInterviews = async (req, res) => {
         const interviewDocs = await Interview.find({
             seekerId,
             status: 'Scheduled',
-            interviewStatus: 'scheduled',
+            interviewStatus: {
+                $in: ['scheduled', 'pending_acceptance', 'reschedule_pending', 'confirmed']
+            },
             date: { $gte: startOfToday }
         })
             .populate('applicationId')
@@ -1076,13 +1078,16 @@ export const requestReschedule = async (req, res) => {
             }
         }
 
+        const recruiterRescheduleLink = interviewId
+            ? `/recruiter/applications?interviewId=${encodeURIComponent(String(interviewId))}`
+            : '/recruiter/applications';
         await createNotification({
             recipient: application.job_id.recruiter_id,
             type: 'reschedule_requested',
             category: 'interview',
             title: 'Reschedule Requested',
             message: `Reschedule requested for ${application.job_id.title}`,
-            link: '/recruiter/calendar',
+            link: recruiterRescheduleLink,
             sender: seekerId,
             metadata: interviewDocAfter
                 ? interviewCalendarMetadata(interviewDocAfter, {
@@ -1545,37 +1550,65 @@ export const rejectRecruiterReschedule = async (req, res) => {
             return res.status(400).json({ message: 'No pending recruiter reschedule request' });
         }
 
-        // Reject proposal: keep original interview.date/time unchanged; original schedule remains active.
-        interviewDoc.rescheduleStatus = 'REJECTED';
-        interviewDoc.interviewStatus = 'scheduled';
-        interviewDoc.proposedDate = undefined;
-        interviewDoc.proposedTime = undefined;
-        interviewDoc.rescheduleReason = undefined;
-        await interviewDoc.save();
+        const proposalReasonSnapshot = interviewDoc.rescheduleReason;
+
+        // Reject proposal: restore calendar to plain scheduled state. Do not change date, time, or startTime.
+        await Interview.findByIdAndUpdate(
+            interviewDoc._id,
+            {
+                $set: {
+                    rescheduleStatus: 'NONE',
+                    interviewStatus: 'scheduled',
+                    calendarStatus: 'scheduled',
+                    proposedDate: null,
+                    proposedTime: null,
+                    rescheduleReason: null,
+                    workflowRescheduleStatus: 'none',
+                    workflowProposedDateTime: null,
+                    workflowCounterProposedDateTime: null,
+                    workflowRescheduleExpiresAt: null,
+                    workflowRescheduleRequestedBy: null
+                },
+                $unset: {
+                    rescheduleRequestedBy: '',
+                    recruiterDecisionAt: ''
+                }
+            },
+            { runValidators: false }
+        );
 
         application.interviewHistory = Array.isArray(application.interviewHistory) ? application.interviewHistory : [];
         application.interviewHistory.push({
             action: 'Recruiter Reschedule Rejected',
-            reason: reason || interviewDoc.rescheduleReason,
+            reason: reason || proposalReasonSnapshot,
             timestamp: new Date()
         });
         await application.save();
+
+        const updatedInterview = await Interview.findById(interviewDoc._id);
+        const metaDoc = updatedInterview || interviewDoc;
+        const jobTitle = application.job_id.title;
 
         await createNotification({
             recipient: application.job_id.recruiter_id,
             type: 'reschedule_rejected',
             category: 'interview',
             title: 'Reschedule Rejected',
-            message: `${application.seeker_id.fullName} rejected the reschedule for ${application.job_id.title}.`,
+            message: `Your reschedule request for ${jobTitle} was declined. The original interview time is kept.`,
             link: '/recruiter/calendar',
             sender: seekerId,
-            metadata: interviewCalendarMetadata(interviewDoc, {
+            metadata: interviewCalendarMetadata(metaDoc, {
                 applicationId: application._id,
-                scheduledAt: combineDateAndTimeNepal(interviewDoc.date, interviewDoc.time)
+                scheduledAt: combineDateAndTimeNepal(metaDoc.date, metaDoc.time)
             })
         });
 
-        res.json({ success: true, message: 'Reschedule rejected', application });
+        const freshApplication = await Application.findById(id)
+            .populate('job_id', 'title recruiter_id')
+            .populate('seeker_id', 'fullName email')
+            .populate('interview.interviewId');
+
+        res.json({ success: true, message: 'Reschedule rejected', application: freshApplication });
     } catch (error) {
         console.error('Reject recruiter reschedule error:', error);
         res.status(500).json({ message: 'Error rejecting reschedule request' });

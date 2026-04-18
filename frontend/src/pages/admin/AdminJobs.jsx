@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import api from '../../services/api';
-import { Search, Briefcase, X, RefreshCw, MoreVertical } from 'lucide-react';
+import { Search, Briefcase, X, RefreshCw, MoreVertical, Building2, MapPin, DollarSign, Clock } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 const STATUS_TABS = [
@@ -46,6 +46,110 @@ const menuItemNeutral = `${menuItemBase} text-gray-700 hover:bg-gray-50`;
 const menuItemDanger = `${menuItemBase} text-red-700 hover:bg-red-50`;
 const menuItemSuccess = `${menuItemBase} text-emerald-800 hover:bg-emerald-50`;
 
+function JobPreviewModal({ job, loading, onClose }) {
+    const badge = statusBadge(effectiveModerationStatus(job || {}));
+
+    const valueOrFallback = (value, fallback = 'Not specified') => {
+        if (value === null || value === undefined) return fallback;
+        const cleaned = String(value).trim();
+        return cleaned || fallback;
+    };
+
+    if (!job && !loading) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-[#0f172a]/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative w-full max-w-3xl max-h-[85vh] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl">
+                <header className="flex items-start justify-between gap-4 border-b border-gray-100 p-5">
+                    <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-gray-400">Job preview</p>
+                        <h3 className="mt-1 text-xl font-black text-gray-900">
+                            {loading ? 'Loading listing…' : valueOrFallback(job?.title)}
+                        </h3>
+                        {!loading && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span
+                                    className={`inline-flex items-center rounded-lg border px-2.5 py-1 text-xs font-bold ${badge.className}`}
+                                >
+                                    {badge.label}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:text-gray-700">
+                        <X className="h-5 w-5" />
+                    </button>
+                </header>
+
+                <div className="max-h-[calc(85vh-88px)] overflow-y-auto p-5">
+                    {loading ? (
+                        <div className="space-y-3 animate-pulse">
+                            <div className="h-4 w-1/2 rounded bg-gray-100" />
+                            <div className="h-20 rounded-xl bg-gray-50" />
+                            <div className="h-32 rounded-xl bg-gray-50" />
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Company</p>
+                                    <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                                        <Building2 className="h-4 w-4 text-[#29a08e]" />
+                                        {valueOrFallback(job?.company_name || job?.companyName)}
+                                    </p>
+                                </div>
+                                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Job type</p>
+                                    <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                                        <Briefcase className="h-4 w-4 text-[#29a08e]" />
+                                        {valueOrFallback(job?.type)}
+                                    </p>
+                                </div>
+                                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Location</p>
+                                    <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                                        <MapPin className="h-4 w-4 text-[#29a08e]" />
+                                        {valueOrFallback(job?.location)}
+                                    </p>
+                                </div>
+                                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Salary</p>
+                                    <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                                        <DollarSign className="h-4 w-4 text-[#29a08e]" />
+                                        {valueOrFallback(job?.salary_range || job?.salaryRange || 'Negotiable', 'Negotiable')}
+                                    </p>
+                                </div>
+                                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                                    <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Experience</p>
+                                    <p className="mt-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
+                                        <Clock className="h-4 w-4 text-[#29a08e]" />
+                                        {valueOrFallback(job?.experience_level || job?.experienceLevel)}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <section>
+                                <h4 className="text-sm font-black uppercase tracking-wide text-gray-900">Job description</h4>
+                                <div className="mt-2 rounded-xl border border-gray-100 bg-white p-4 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                                    {valueOrFallback(job?.description)}
+                                </div>
+                            </section>
+
+                            <section>
+                                <h4 className="text-sm font-black uppercase tracking-wide text-gray-900">Key requirements</h4>
+                                <div className="mt-2 rounded-xl border border-gray-100 bg-white p-4 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                                    {valueOrFallback(job?.requirements)}
+                                </div>
+                            </section>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 function ModerationActionsMenu({
     job,
     eff,
@@ -57,7 +161,8 @@ function ModerationActionsMenu({
     onHide,
     onDelete,
     onApprove,
-    onBadge
+    onBadge,
+    onViewListing
 }) {
     const triggerRef = useRef(null);
     const menuRef = useRef(null);
@@ -123,16 +228,17 @@ function ModerationActionsMenu({
             }}
             className="rounded-xl border border-gray-200 bg-white py-1.5 shadow-xl ring-1 ring-black/5"
         >
-            <a
-                href={`/jobs/${jobId}`}
-                target="_blank"
-                rel="noopener noreferrer"
+            <button
+                type="button"
                 role="menuitem"
                 className={menuItemNeutral}
-                onClick={onClose}
+                onClick={() => {
+                    onClose();
+                    onViewListing(job);
+                }}
             >
                 View listing
-            </a>
+            </button>
             {!isDeleted && (
                 <>
                     <button
@@ -179,7 +285,7 @@ function ModerationActionsMenu({
                             onBadge(job);
                         }}
                     >
-                        Badge override
+                        Mark as Featured
                     </button>
                     <div className="my-1 border-t border-gray-100" />
                     <button
@@ -205,7 +311,7 @@ function ModerationActionsMenu({
                         onBadge(job);
                     }}
                 >
-                    Badge override
+                    Mark as Featured
                 </button>
             )}
         </div>
@@ -250,6 +356,9 @@ const AdminJobs = () => {
     const [labelSaving, setLabelSaving] = useState(false);
 
     const [openActionsJobId, setOpenActionsJobId] = useState(null);
+    const [previewJob, setPreviewJob] = useState(null);
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewLoading, setPreviewLoading] = useState(false);
 
     const fetchJobs = useCallback(async () => {
         setLoading(true);
@@ -346,6 +455,28 @@ const AdminJobs = () => {
     const openLabelModal = (job) => {
         setLabelModalJob(job);
         setLabelOverrideDraft(job.labelOverride || '');
+    };
+
+    const closePreviewModal = () => {
+        setPreviewOpen(false);
+        setPreviewLoading(false);
+        setPreviewJob(null);
+    };
+
+    const handleViewListing = async (job) => {
+        if (!job?._id) return;
+        setPreviewOpen(true);
+        setPreviewLoading(true);
+        try {
+            const res = await api.get(`/jobs/${job._id}`);
+            setPreviewJob(res.data || job);
+        } catch (error) {
+            console.error('Failed to fetch job preview:', error);
+            toast.error(error.response?.data?.message || 'Failed to load job preview');
+            setPreviewOpen(false);
+        } finally {
+            setPreviewLoading(false);
+        }
     };
 
     const handleSaveLabelOverride = async (e) => {
@@ -469,9 +600,6 @@ const AdminJobs = () => {
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-[0.15em]">
                                         Status
                                     </th>
-                                    <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-[0.15em]">
-                                        Notes
-                                    </th>
                                     <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-[0.15em] text-right w-px whitespace-nowrap">
                                         Actions
                                     </th>
@@ -481,14 +609,14 @@ const AdminJobs = () => {
                                 {loading ? (
                                     [1, 2, 3, 4, 5].map((i) => (
                                         <tr key={i} className="animate-pulse">
-                                            <td colSpan={5} className="px-6 py-5">
+                                            <td colSpan={4} className="px-6 py-5">
                                                 <div className="h-10 bg-gray-50 rounded-xl w-full" />
                                             </td>
                                         </tr>
                                     ))
                                 ) : filteredJobs.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-16 text-center text-sm text-gray-500">
+                                        <td colSpan={4} className="px-6 py-16 text-center text-sm text-gray-500">
                                             No jobs in this view.
                                         </td>
                                     </tr>
@@ -528,14 +656,6 @@ const AdminJobs = () => {
                                                         {badge.label}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4 align-top max-w-[220px]">
-                                                    <p className="text-xs text-gray-500 line-clamp-2">
-                                                        {job.moderationNote ||
-                                                            job.warningMessage ||
-                                                            job.flagReason ||
-                                                            '—'}
-                                                    </p>
-                                                </td>
                                                 <td className="px-6 py-4 align-top text-right">
                                                     <ModerationActionsMenu
                                                         job={job}
@@ -551,6 +671,7 @@ const AdminJobs = () => {
                                                         onDelete={(j) => openModal('delete', j)}
                                                         onApprove={handleApprove}
                                                         onBadge={openLabelModal}
+                                                        onViewListing={handleViewListing}
                                                     />
                                                 </td>
                                             </tr>
@@ -727,6 +848,10 @@ const AdminJobs = () => {
                         </button>
                     </form>
                 </div>
+            )}
+
+            {(previewOpen || previewLoading) && (
+                <JobPreviewModal job={previewJob} loading={previewLoading} onClose={closePreviewModal} />
             )}
         </div>
     );

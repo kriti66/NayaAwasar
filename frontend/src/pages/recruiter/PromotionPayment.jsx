@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useSearchParams, useLocation } from 'react-router-dom';
 import api from '../../services/api';
-import { promotionService, PROMOTION_TYPE_LABELS } from '../../services/promotionService';
+import { promotionService, PROMOTION_TYPE_LABELS, PROMOTION_TYPES } from '../../services/promotionService';
 import { toast } from 'react-hot-toast';
 import { Megaphone, ArrowLeft } from 'lucide-react';
 
@@ -12,12 +12,17 @@ const PromotionPayment = () => {
     const location = useLocation();
     const initialJobId =
         searchParams.get('jobId') || location.state?.jobId || '';
+    const initialPromotionType = searchParams.get('promotionType') || '';
+    const initialDurationDaysParam = searchParams.get('durationDays');
 
     const [pricing, setPricing] = useState(null);
     const [jobs, setJobs] = useState([]);
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [submitSuccess, setSubmitSuccess] = useState(false);
+    const [successJobTitle, setSuccessJobTitle] = useState('');
+    const [submitError, setSubmitError] = useState(null);
 
     const [form, setForm] = useState({
         jobId: initialJobId,
@@ -48,13 +53,23 @@ const PromotionPayment = () => {
                 setProfile(profRes.data);
                 const u = profRes.data?.user;
                 const co = profRes.data?.company;
+                const dur = Number(initialDurationDaysParam);
+                const durationFromUrl = [7, 15, 30].includes(dur) ? dur : null;
+                const typeFromUrl =
+                    initialPromotionType &&
+                    Object.values(PROMOTION_TYPES).includes(initialPromotionType)
+                        ? initialPromotionType
+                        : null;
+
                 setForm((f) => ({
                     ...f,
-                    jobId: f.jobId || initialJobId,
+                    jobId: initialJobId || f.jobId,
                     recruiterName: u?.fullName || f.recruiterName,
                     email: u?.email || f.email,
                     phone: u?.phone || f.phone || '',
-                    companyName: co?.name || f.companyName
+                    companyName: co?.name || f.companyName,
+                    ...(typeFromUrl ? { promotionType: typeFromUrl } : {}),
+                    ...(durationFromUrl != null ? { durationDays: durationFromUrl } : {})
                 }));
             } catch (e) {
                 toast.error(e.response?.data?.message || 'Failed to load form data');
@@ -63,7 +78,7 @@ const PromotionPayment = () => {
             }
         };
         run();
-    }, [initialJobId]);
+    }, [initialJobId, initialPromotionType, initialDurationDaysParam]);
 
     const activeJobs = useMemo(
         () => (jobs || []).filter((j) => j.status === 'Active'),
@@ -90,6 +105,7 @@ const PromotionPayment = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setSubmitError(null);
         if (!form.jobId) {
             toast.error('Please select a job');
             return;
@@ -116,15 +132,18 @@ const PromotionPayment = () => {
             fd.append('paymentScreenshot', screenshot);
 
             await promotionService.submitPromotionPaymentRequest(fd);
-            toast.success('Request submitted. We will review your payment and notify you.');
-            setForm((f) => ({
-                ...f,
-                transactionId: '',
-                note: ''
-            }));
-            setScreenshot(null);
+
+            const selectedJob = activeJobs.find((x) => String(x._id || x.id) === String(form.jobId));
+            const title =
+                form.jobTitle.trim() || selectedJob?.title || 'your job';
+            setSuccessJobTitle(title);
+            setSubmitSuccess(true);
         } catch (err) {
-            toast.error(err.response?.data?.message || 'Failed to submit request');
+            const msg =
+                err.response?.data?.message ||
+                err.message ||
+                'Failed to submit request';
+            setSubmitError(msg);
         } finally {
             setSubmitting(false);
         }
@@ -167,6 +186,32 @@ const PromotionPayment = () => {
             </div>
 
             <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-10">
+                {submitSuccess ? (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 space-y-6 text-center">
+                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                            <Megaphone size={28} />
+                        </div>
+                        <p className="text-gray-800 text-base sm:text-lg font-medium leading-relaxed">
+                            Your promotion request for{' '}
+                            <span className="font-black text-gray-900">{successJobTitle}</span> has been submitted. Admin
+                            will review and activate it within 24 hours. You will be notified once approved.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+                            <Link
+                                to="/recruiter/dashboard"
+                                className="inline-flex justify-center items-center px-6 py-3 rounded-xl font-bold bg-[#29a08e] text-white hover:bg-[#228377] transition-colors"
+                            >
+                                Dashboard
+                            </Link>
+                            <Link
+                                to="/recruiter/promotions"
+                                className="inline-flex justify-center items-center px-6 py-3 rounded-xl font-bold border-2 border-gray-200 text-gray-800 hover:bg-gray-50 transition-colors"
+                            >
+                                My Promotions
+                            </Link>
+                        </div>
+                    </div>
+                ) : (
                 <form
                     onSubmit={handleSubmit}
                     className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sm:p-8 space-y-5"
@@ -351,11 +396,18 @@ const PromotionPayment = () => {
                     <button
                         type="submit"
                         disabled={submitting || !profile?.isVerified}
+                        aria-busy={submitting}
                         className="w-full py-3.5 bg-[#29a08e] text-white rounded-xl font-bold hover:bg-[#228377] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {submitting ? 'Submitting…' : 'Submit payment request'}
                     </button>
+                    {submitError && (
+                        <p className="text-sm font-semibold text-red-600 text-center" role="alert">
+                            {submitError}
+                        </p>
+                    )}
                 </form>
+                )}
             </div>
         </div>
     );
