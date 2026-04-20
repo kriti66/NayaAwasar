@@ -124,8 +124,14 @@ router.get('/jobs/stats', requireAuth, async (req, res) => {
 
         const jobListFilter = { recruiter_id: userId, ...RECRUITER_JOB_EXCLUDE_ADMIN_REMOVED };
         const totalJobs = await Job.countDocuments(jobListFilter);
-        const activeJobs = await Job.countDocuments({ ...jobListFilter, status: 'Active' });
-        const closedJobs = await Job.countDocuments({ ...jobListFilter, status: 'Closed' });
+        const activeJobs = await Job.countDocuments({
+            ...jobListFilter,
+            $expr: { $eq: [{ $toLower: '$status' }, 'active'] }
+        });
+        const closedJobs = await Job.countDocuments({
+            ...jobListFilter,
+            $expr: { $eq: [{ $toLower: '$status' }, 'closed'] }
+        });
 
         // Calculate total applicants across all jobs
         const recruiterJobs = await Job.find(jobListFilter).select('_id');

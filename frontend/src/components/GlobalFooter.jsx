@@ -1,8 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 
 const GlobalFooter = () => {
+    const { pathname } = useLocation();
+
     return (
         <footer className="bg-white border-t border-gray-100">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -20,15 +22,18 @@ const GlobalFooter = () => {
 
                     <div className="flex items-center gap-6">
                         {[
-                            { label: 'Terms', path: '/terms' },
-                            { label: 'Privacy', path: '/privacy' },
-                            { label: 'Cookies', path: '/cookies' },
-                            { label: 'Help', path: '/contact' },
+                            { label: 'Terms', path: '/user/terms' },
+                            { label: 'Privacy', path: '/user/privacy' },
+                            { label: 'Cookies', path: '/user/cookies' },
+                            { label: 'Help', path: '/user/help' },
                         ].map((l) => (
                             <Link
                                 key={l.path}
                                 to={l.path}
-                                className="text-xs font-medium text-gray-400 hover:text-[#29a08e] transition-colors"
+                                className={`text-xs transition-colors ${pathname === l.path
+                                        ? 'text-teal-500 font-semibold'
+                                        : 'text-gray-500 hover:text-teal-500'
+                                    }`}
                             >
                                 {l.label}
                             </Link>

@@ -86,7 +86,16 @@ function tryOptionalAuthPayload(req) {
 // Get all jobs (Public - only approved, promotion-aware sort)
 router.get('/', async (req, res) => {
     try {
+        const viewer = tryOptionalAuthPayload(req);
         const jobs = await getPublicJobsWithPromotionSort(req.query);
+
+        // Defense-in-depth for seeker-facing requests:
+        // only expose jobs with active status.
+        if (viewer?.role === 'jobseeker' || viewer?.role === 'job_seeker') {
+            const seekerJobs = jobs.filter((job) => String(job?.status || '').toLowerCase() === 'active');
+            return res.json(seekerJobs);
+        }
+
         res.json(jobs);
     } catch (error) {
         console.error("Fetch jobs error:", error);
@@ -167,7 +176,11 @@ router.get('/recruiter/my-jobs', requireAuth, requireRole('recruiter'), async (r
             activeCandidates = activeCandidates.filter((j) => j.status === status);
         }
         if (type && type !== 'All Types') {
-            activeCandidates = activeCandidates.filter((j) => j.type === type);
+            activeCandidates = activeCandidates.filter(
+                (j) =>
+                    String(j.type || '').toLowerCase().replace(/-/g, ' ') ===
+                    String(type || '').toLowerCase().replace(/-/g, ' ')
+            );
         }
 
         activeCandidates.sort((a, b) => {
@@ -529,6 +542,26 @@ router.get('/:id', async (req, res) => {
     } catch (error) {
         console.error("Fetch specific job error:", error);
         res.status(500).json({ message: 'Error fetching job' });
+    }
+});
+
+// Recruiter: close/deactivate own job
+router.patch('/:id/close', requireAuth, requireRole('recruiter'), async (req, res) => {
+    const { id } = req.params;
+    try {
+        const job = await Job.findById(id);
+        if (!job) return res.status(404).json({ message: 'Job not found' });
+        if (job.recruiter_id.toString() !== req.user.id) {
+            return res.status(403).json({ message: 'Unauthorized' });
+        }
+
+        job.status = 'Closed';
+        await job.save();
+
+        res.json(job);
+    } catch (error) {
+        console.error('close job error:', error);
+        res.status(500).json({ message: 'Error closing job' });
     }
 });
 

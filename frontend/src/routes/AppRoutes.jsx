@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 import GuestOnlyRoute from './GuestOnlyRoute';
 import RoleRoute from './RoleRoute';
@@ -9,6 +9,8 @@ import SeekerLayout from '../components/layouts/SeekerLayout';
 import RecruiterLayout from '../components/layouts/RecruiterLayout';
 import AdminLayout from '../components/layouts/AdminLayout';
 import KycLayout from '../components/layouts/KycLayout';
+import DashboardNavbar from '../components/dashboard/DashboardNavbar';
+import GlobalFooter from '../components/GlobalFooter';
 
 // Public Pages
 import Home from '../pages/public/Home';
@@ -25,6 +27,10 @@ import About from '../pages/public/About';
 import Contact from '../pages/public/Contact';
 import HelpCenter from '../pages/public/HelpCenter';
 import CompanyProfile from '../pages/shared/CompanyProfile';
+import TermsPage from '../pages/TermsPage';
+import PrivacyPage from '../pages/PrivacyPage';
+import CookiesPage from '../pages/CookiesPage';
+import HelpPage from '../pages/HelpPage';
 
 // KYC Pages
 import KYCStatus from '../pages/shared/KYC/KYCStatus';
@@ -65,6 +71,18 @@ import AdminPromotionRequests from '../pages/admin/AdminPromotionRequests';
 import Notifications from '../pages/shared/Notifications';
 import InterviewCall from '../pages/shared/InterviewCall';
 
+const UserInfoLayout = () => (
+    <div className="min-h-screen flex flex-col bg-[#F3F4F6] font-sans text-gray-900">
+        <DashboardNavbar />
+        <div className="flex-1 w-full">
+            <main className="w-full">
+                <Outlet />
+            </main>
+        </div>
+        <GlobalFooter />
+    </div>
+);
+
 const AppRoutes = () => {
     return (
         <Routes>
@@ -103,6 +121,10 @@ const AppRoutes = () => {
                 <Route path="/jobs" element={<JobListing />} />
                 <Route path="/jobs/:id" element={<JobDetails />} />
                 <Route path="/help-center" element={<HelpCenter />} />
+                <Route path="/terms" element={<TermsPage />} />
+                <Route path="/privacy" element={<PrivacyPage />} />
+                <Route path="/cookies" element={<CookiesPage />} />
+                <Route path="/help" element={<HelpPage />} />
             </Route>
 
             {/* 
@@ -133,6 +155,16 @@ const AppRoutes = () => {
                 {/* SHARED INTERVIEW ROUTE */}
                 <Route element={<RoleRoute allowedRoles={['jobseeker', 'recruiter', 'admin']} />}>
                     <Route path="/interview/call/:id" element={<InterviewCall />} />
+                </Route>
+
+                {/* SHARED USER INFO ROUTES (Seeker + Recruiter only) */}
+                <Route element={<RoleRoute allowedRoles={['jobseeker', 'job_seeker', 'recruiter']} />}>
+                    <Route element={<UserInfoLayout />}>
+                        <Route path="/user/terms" element={<TermsPage />} />
+                        <Route path="/user/privacy" element={<PrivacyPage />} />
+                        <Route path="/user/cookies" element={<CookiesPage />} />
+                        <Route path="/user/help" element={<HelpPage />} />
+                    </Route>
                 </Route>
 
                 {/* 

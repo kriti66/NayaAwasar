@@ -138,20 +138,10 @@ const RecruiterJobs = () => {
     const [jobs, setJobs] = useState([]);
     const [adminActions, setAdminActions] = useState([]);
     const [dismissedAdminAlertIds, setDismissedAdminAlertIds] = useState(() => new Set());
-    const [stats, setStats] = useState({ total: 0, active: 0, applicants: 0, closed: 0 });
     const [loading, setLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState('All Status');
     const [filterType, setFilterType] = useState('All Types');
     const [sortBy, setSortBy] = useState('Most Recent');
-
-    const fetchStats = async () => {
-        try {
-            const res = await api.get('/recruiter/jobs/stats');
-            setStats(res.data);
-        } catch (error) {
-            console.error("Error loading stats:", error);
-        }
-    };
 
     const fetchJobs = async () => {
         try {
@@ -181,7 +171,6 @@ const RecruiterJobs = () => {
 
     useEffect(() => {
         if (user) {
-            fetchStats();
             fetchJobs();
         }
     }, [user, filterStatus, filterType, sortBy]);
@@ -218,12 +207,27 @@ const RecruiterJobs = () => {
             try {
                 await api.delete(`/recruiter/jobs/${jobId}`);
                 toast.success("Job deleted successfully");
-                fetchStats();
                 fetchJobs();
             } catch (error) {
                 console.error("Error deleting job:", error);
                 toast.error(error.response?.data?.message || "Failed to delete job");
             }
+        }
+    };
+
+    const handleCloseJob = async (jobId) => {
+        const confirmed = window.confirm(
+            'Are you sure you want to close this job? It will no longer be visible to job seekers.'
+        );
+        if (!confirmed) return;
+
+        try {
+            await api.patch(`/jobs/${jobId}/close`);
+            toast.success('Job closed successfully');
+            fetchJobs();
+        } catch (error) {
+            console.error('Error closing job:', error);
+            toast.error(error.response?.data?.message || 'Failed to close job');
         }
     };
 
@@ -245,6 +249,20 @@ const RecruiterJobs = () => {
             year: 'numeric', month: 'short', day: 'numeric'
         });
     };
+
+    const stats = {
+        total: jobs.length,
+        active: jobs.filter((j) => String(j.status || '').toLowerCase() === 'active').length,
+        closed: jobs.filter((j) => String(j.status || '').toLowerCase() === 'closed').length,
+        applicants: jobs.reduce((sum, j) => sum + (Number(j.applicants_count) || 0), 0)
+    };
+
+    const sortedJobs = [...jobs].sort((a, b) => {
+        if (sortBy === 'Oldest') {
+            return new Date(a.createdAt) - new Date(b.createdAt);
+        }
+        return new Date(b.createdAt) - new Date(a.createdAt);
+    });
 
     return (
         <>
@@ -418,11 +436,12 @@ const RecruiterJobs = () => {
                             <div className="inline-block animate-spin rounded-full h-10 w-10 border-4 border-[#29a08e] border-t-transparent"></div>
                             <p className="mt-4 text-sm text-gray-500 font-bold">Loading Jobs...</p>
                         </div>
-                    ) : jobs.length > 0 ? (
-                        jobs.map((job) => {
+                    ) : sortedJobs.length > 0 ? (
+                        sortedJobs.map((job) => {
                             const jid = job.id || job._id;
                             const mod = effectiveModerationStatus(job);
                             const showPublicPromote = mod === 'active';
+                            const normalizedStatus = String(job.status || '').toLowerCase();
                             const statusBadge = primaryJobStatusBadge(job);
 
                             return (
@@ -495,6 +514,14 @@ const RecruiterJobs = () => {
                                         <Edit size={14} />
                                         Edit
                                     </Link>
+                                    {normalizedStatus === 'active' && (
+                                        <button
+                                            onClick={() => handleCloseJob(jid)}
+                                            className="w-full md:w-auto px-5 py-2.5 bg-amber-50 text-amber-700 text-xs font-bold rounded-xl hover:bg-amber-100 border border-amber-200 flex items-center justify-center gap-2 transition-all"
+                                        >
+                                            Close Job
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => handleDelete(jid)}
                                         className="w-full md:w-auto px-5 py-2.5 bg-rose-50 text-rose-600 text-xs font-bold rounded-xl hover:bg-rose-100 hover:text-rose-700 border border-transparent hover:border-rose-200 flex items-center justify-center gap-2 transition-all"
@@ -527,7 +554,7 @@ const RecruiterJobs = () => {
                     )}
                 </div>
 
-                {jobs.length >= 100 && (
+                {sortedJobs.length >= 100 && (
                     <div className="mt-10 flex justify-center">
                         <button className="px-8 py-3 bg-white border border-gray-200 text-gray-600 text-sm font-bold rounded-xl hover:bg-gray-50 hover:text-gray-900 shadow-sm transition-all hover:shadow-md">
                             Load More Jobs
