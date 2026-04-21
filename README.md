@@ -4,7 +4,7 @@ Naya Awasar is a MERN-based job portal with a separate Python recommendation ser
 It supports job seekers, recruiters, and admins with role-based dashboards, KYC workflows, job posting and application management, interview scheduling, notifications, promotions, and AI-assisted recommendations.
 
 Developer: Kriti Bista  
-Project: Capstone Project 2026
+Project: Final year Project 
 
 ## Project Overview
 
